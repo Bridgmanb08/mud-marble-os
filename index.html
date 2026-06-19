@@ -654,14 +654,49 @@ async function dEstimate(ests,p){
   const tots=[pm,con,al].map(g=>g.reduce((s,i)=>s+(i.owner_price||0),0));
   const grand=tots.reduce((a,b)=>a+b,0);
   function bkt(title,rows,tot,key){
+    const dlTotal=rows.reduce((s,i)=>s+(i.day_labor_cost||0),0);
+    const matTotal=rows.reduce((s,i)=>s+(i.material_cost||0),0);
+    const subTotal=rows.reduce((s,i)=>s+(i.subcontractor_cost||0),0);
+    const contTotal=rows.reduce((s,i)=>s+(i.contingency||0),0);
     return`<div style="margin-bottom:20px">
       <div class="ebh"><span style="font-size:13px;font-weight:600">${title}</span>
       <div style="display:flex;align-items:center;gap:10px"><span style="font-size:13px;font-weight:600">${fmt(tot)}</span>
       <button class="btn btn-sm btn-ghost" onclick="mAddItem('${est.id}','${key}')"><i class="ti ti-plus"></i> Add</button></div></div>
-      ${rows.length?`<table class="tbl" style="table-layout:fixed">
-        <thead><tr><th style="width:35%">Description</th><th style="width:20%">Internal note</th><th style="width:12%;text-align:right">Cost</th><th style="width:10%;text-align:right">Markup</th><th style="width:13%;text-align:right">Client price</th></tr></thead>
-        <tbody>${rows.map(i=>`<tr><td style="font-weight:500">${i.description}</td><td style="font-size:11px;color:var(--t2)">${i.notes_internal||''}</td><td style="text-align:right">${fmt(i.builder_cost)}</td><td style="text-align:right;color:var(--t2)">${i.markup_type==='percent'?Math.round(i.markup_value)+'%':fmt(i.markup_value)}</td><td style="text-align:right;font-weight:500">${fmt(i.owner_price)}</td></tr>`).join('')}</tbody></table>`
-      :`<div style="font-size:12px;color:var(--t2);padding:8px 14px">No items yet.</div>`}
+      ${rows.length?`<div style="overflow-x:auto"><table class="tbl" style="min-width:900px">
+        <thead><tr>
+          <th style="width:22%">Line item</th>
+          <th style="width:14%">Internal notes</th>
+          <th style="width:9%;text-align:right"><i class="ti ti-hard-hat" style="font-size:11px;vertical-align:-1px;color:var(--blue)"></i> Labor</th>
+          <th style="width:9%;text-align:right"><i class="ti ti-package" style="font-size:11px;vertical-align:-1px;color:var(--amber)"></i> Materials</th>
+          <th style="width:9%;text-align:right"><i class="ti ti-tools" style="font-size:11px;vertical-align:-1px;color:var(--purple-tx)"></i> Sub</th>
+          <th style="width:8%;text-align:right"><i class="ti ti-shield" style="font-size:11px;vertical-align:-1px;color:var(--green)"></i> Contingency</th>
+          <th style="width:9%;text-align:right">Builder cost</th>
+          <th style="width:7%;text-align:right">Markup</th>
+          <th style="width:10%;text-align:right">Client price</th>
+        </tr></thead>
+        <tbody>${rows.map(i=>`<tr style="cursor:pointer" onclick='mAddItem("${est.id}","${i.bucket||key}",${JSON.stringify(i)})' title="Click to edit">
+          <td style="font-weight:500">${i.description}</td>
+          <td style="font-size:11px;color:var(--t2)">${i.notes_internal||''}</td>
+          <td style="text-align:right;font-size:12px;color:${i.day_labor_cost>0?'var(--blue)':'var(--t3)'}">${i.day_labor_cost>0?fmt(i.day_labor_cost):'—'}</td>
+          <td style="text-align:right;font-size:12px;color:${i.material_cost>0?'var(--amber)':'var(--t3)'}">${i.material_cost>0?fmt(i.material_cost):'—'}</td>
+          <td style="text-align:right;font-size:12px;color:${i.subcontractor_cost>0?'var(--purple-tx)':'var(--t3)'}">${i.subcontractor_cost>0?fmt(i.subcontractor_cost):'—'}</td>
+          <td style="text-align:right;font-size:12px;color:${i.contingency>0?'var(--green)':'var(--t3)'}">${i.contingency>0?fmt(i.contingency):'—'}</td>
+          <td style="text-align:right;font-size:12px;font-weight:500">${fmt(i.builder_cost)}</td>
+          <td style="text-align:right;font-size:12px;color:var(--t2)">${i.markup_type==='percent'?Math.round(i.markup_value)+'%':fmt(i.markup_value)}</td>
+          <td style="text-align:right;font-weight:600;color:var(--gtx)">${fmt(i.owner_price)}</td>
+        </tr>`).join('')}
+        <tr style="background:var(--bg);font-size:11px;color:var(--t2)">
+          <td colspan="2" style="font-weight:600;color:var(--text)">Subtotals</td>
+          <td style="text-align:right;color:var(--blue);font-weight:600">${fmt(dlTotal)}</td>
+          <td style="text-align:right;color:var(--amber);font-weight:600">${fmt(matTotal)}</td>
+          <td style="text-align:right;color:var(--purple-tx);font-weight:600">${fmt(subTotal)}</td>
+          <td style="text-align:right;color:var(--green);font-weight:600">${fmt(contTotal)}</td>
+          <td style="text-align:right;font-weight:600">${fmt(dlTotal+matTotal+subTotal+contTotal)}</td>
+          <td></td>
+          <td style="text-align:right;font-weight:700;color:var(--gtx)">${fmt(tot)}</td>
+        </tr>
+        </tbody></table></div>`
+      :`<div style="font-size:12px;color:var(--t2);padding:8px 14px">No items yet. Click Add to build this section.</div>`}
     </div>`;
   }
   b.innerHTML=`<div style="display:flex;justify-content:flex-end;gap:8px;margin-bottom:16px">
@@ -1220,28 +1255,172 @@ async function saveEst(){
   catch(e){document.getElementById('merr').innerHTML=`<div class="merr">${e.message}</div>`;}
 }
 
-async function mAddItem(estId,bucket){
+async function mAddItem(estId,bucket,existingItem=null){
   const codes=await db('cost_codes','?is_active=eq.true&order=code.asc&limit=200');
-  showM(`<div class="mo" onclick="if(event.target===this)closeM()"><div class="mb wide">
-    <div class="mt">Add line item</div><div id="merr"></div>
-    <div class="fg"><label class="fl">Description</label><input class="fi" id="lid" placeholder="e.g. Tile master bath — labor and materials"></div>
-    <div class="fr"><div class="fg"><label class="fl">Cost code</label><select class="fi" id="lcc"><option value="">— Select —</option>${codes.map(c=>`<option value="${c.id}">${c.code} — ${c.name}</option>`).join('')}</select></div>
-    <div class="fg"><label class="fl">Bucket</label><select class="fi" id="lbk"><option value="pm_fee"${bucket==='pm_fee'?' selected':''}>PM fee</option><option value="construction"${bucket==='construction'?' selected':''}>Construction</option><option value="allowance"${bucket==='allowance'?' selected':''}>Allowance</option></select></div></div>
-    <div class="fr3">
-      <div class="fg"><label class="fl">Builder cost ($)</label><input class="fi" id="lbc" type="number" placeholder="0" oninput="calcOP()"></div>
-      <div class="fg"><label class="fl">Markup type</label><select class="fi" id="lmt" onchange="calcOP()"><option value="percent">Percent (%)</option><option value="flat">Flat ($)</option></select></div>
-      <div class="fg"><label class="fl">Markup value</label><input class="fi" id="lmv" type="number" placeholder="0" oninput="calcOP()"></div>
+  const ei=existingItem||{};
+  const isEdit=!!existingItem;
+  showM(`<div class="mo" onclick="if(event.target===this)closeM()"><div class="mb xl">
+    <div class="mt">${isEdit?'Edit':'Add'} line item</div><div id="merr"></div>
+
+    <!-- Top section: description, cost code, bucket, notes — mirrors Buildertrend layout -->
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:16px">
+      <div>
+        <div class="fg"><label class="fl">Description <span style="color:var(--t3)">(client-facing)</span></label>
+          <textarea class="fi" id="lne" placeholder="What the client sees on the estimate..." style="min-height:80px">${ei.notes_external||''}</textarea>
+        </div>
+        <div class="fg"><label class="fl">Internal notes <span style="color:var(--t3)">(Shannon / Brent only)</span></label>
+          <textarea class="fi" id="lni" placeholder="Sub bids, material sources, reminders..." style="min-height:80px">${ei.notes_internal||''}</textarea>
+        </div>
+      </div>
+      <div>
+        <div class="fg"><label class="fl">Line item name</label>
+          <input class="fi" id="lid" placeholder="e.g. Tile master bath floor" value="${ei.description||''}">
+        </div>
+        <div class="fg"><label class="fl">Cost code</label>
+          <select class="fi" id="lcc">
+            <option value="">— Select —</option>
+            ${codes.map(c=>`<option value="${c.id}"${ei.cost_code_id===c.id?' selected':''}>${c.code} — ${c.name}</option>`).join('')}
+          </select>
+        </div>
+        <div class="fg"><label class="fl">Bucket</label>
+          <select class="fi" id="lbk">
+            <option value="pm_fee"${(ei.bucket||bucket)==='pm_fee'?' selected':''}>PM fee</option>
+            <option value="construction"${(ei.bucket||bucket)==='construction'?' selected':''}>Construction</option>
+            <option value="allowance"${(ei.bucket||bucket)==='allowance'?' selected':''}>Allowance</option>
+          </select>
+        </div>
+      </div>
     </div>
-    <div class="fg"><label class="fl">Owner / client price ($)</label><input class="fi" id="lop" type="number" placeholder="0"></div>
-    <div class="fr"><div class="fg"><label class="fl">Internal note</label><input class="fi" id="lni" placeholder="Internal only"></div><div class="fg"><label class="fl">Client note</label><input class="fi" id="lne" placeholder="Client-facing"></div></div>
-    <div class="ma"><button class="btn" onclick="closeM()">Cancel</button><button class="btn btn-p" onclick="saveItem('${estId}')"><i class="ti ti-check"></i> Add</button></div>
+
+    <!-- Cost information section — the 4 boxes -->
+    <div style="background:var(--bg);border-radius:var(--r);padding:16px;margin-bottom:16px">
+      <div style="font-size:12px;font-weight:600;color:var(--t2);text-transform:uppercase;letter-spacing:.5px;margin-bottom:12px">Cost breakdown <span style="font-weight:400;color:var(--t3)">(internal — not shown to client)</span></div>
+      <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-bottom:16px">
+        <div class="fg" style="margin:0">
+          <label class="fl" style="display:flex;align-items:center;gap:4px"><i class="ti ti-hard-hat" style="font-size:13px;color:var(--blue)"></i> Day labor ($)</label>
+          <input class="fi" id="ldl" type="number" placeholder="0" value="${ei.day_labor_cost||''}" oninput="calcBuilderCost()">
+          <div style="font-size:10px;color:var(--t3);margin-top:3px">Alex + crew hours</div>
+        </div>
+        <div class="fg" style="margin:0">
+          <label class="fl" style="display:flex;align-items:center;gap:4px"><i class="ti ti-package" style="font-size:13px;color:var(--amber)"></i> Materials ($)</label>
+          <input class="fi" id="lmat" type="number" placeholder="0" value="${ei.material_cost||''}" oninput="calcBuilderCost()">
+          <div style="font-size:10px;color:var(--t3);margin-top:3px">Materials + supplies</div>
+        </div>
+        <div class="fg" style="margin:0">
+          <label class="fl" style="display:flex;align-items:center;gap:4px"><i class="ti ti-tools" style="font-size:13px;color:var(--purple-tx)"></i> Subcontractor ($)</label>
+          <input class="fi" id="lsub" type="number" placeholder="0" value="${ei.subcontractor_cost||''}" oninput="calcBuilderCost()">
+          <div style="font-size:10px;color:var(--t3);margin-top:3px">Sub bid amount</div>
+        </div>
+        <div class="fg" style="margin:0">
+          <label class="fl" style="display:flex;align-items:center;gap:4px"><i class="ti ti-shield" style="font-size:13px;color:var(--green)"></i> Contingency ($)</label>
+          <input class="fi" id="lcont" type="number" placeholder="0" value="${ei.contingency||''}" oninput="calcBuilderCost()">
+          <div style="font-size:10px;color:var(--t3);margin-top:3px">Buffer / risk</div>
+        </div>
+      </div>
+
+      <!-- Builder cost + markup + client price row -->
+      <div style="display:grid;grid-template-columns:1fr 1fr 1fr 1fr;gap:12px;align-items:end">
+        <div class="fg" style="margin:0">
+          <label class="fl">Builder cost (auto)</label>
+          <input class="fi" id="lbc" type="number" placeholder="0" value="${ei.builder_cost||''}" oninput="calcOP()" style="background:var(--surface);font-weight:600">
+        </div>
+        <div class="fg" style="margin:0">
+          <label class="fl">Markup type</label>
+          <select class="fi" id="lmt" onchange="calcOP()">
+            <option value="percent"${(!ei.markup_type||ei.markup_type==='percent')?' selected':''}>Percent (%)</option>
+            <option value="flat"${ei.markup_type==='flat'?' selected':''}>Flat ($)</option>
+          </select>
+        </div>
+        <div class="fg" style="margin:0">
+          <label class="fl">Markup value</label>
+          <input class="fi" id="lmv" type="number" placeholder="0" value="${ei.markup_value||''}" oninput="calcOP()">
+        </div>
+        <div class="fg" style="margin:0">
+          <label class="fl" style="color:var(--gtx);font-weight:600">Client price ($)</label>
+          <input class="fi" id="lop" type="number" placeholder="0" value="${ei.owner_price||''}" style="font-weight:700;border-color:var(--green);background:var(--gbg)">
+        </div>
+      </div>
+
+      <!-- Live cost summary bar -->
+      <div id="cost-summary" style="margin-top:12px;padding:10px 14px;background:var(--surface);border-radius:var(--r);border:1px solid var(--border);font-size:12px;display:flex;gap:16px;flex-wrap:wrap">
+        <span style="color:var(--t2)">Builder cost: <strong id="cs-bc">$0</strong></span>
+        <span style="color:var(--t2)">Markup: <strong id="cs-mk">$0</strong></span>
+        <span style="color:var(--gtx)">Client price: <strong id="cs-cp">$0</strong></span>
+        <span style="color:var(--t2)">Margin: <strong id="cs-mg">0%</strong></span>
+      </div>
+    </div>
+
+    <div class="ma"><button class="btn" onclick="closeM()">Cancel</button><button class="btn btn-p" onclick="saveItem('${estId}'${isEdit?`,'${ei.id}'`:''})""><i class="ti ti-check"></i> ${isEdit?'Save changes':'Add line item'}</button></div>
   </div></div>`);
+
+  // Init calc if editing
+  if(isEdit){calcBuilderCost();calcOP();}
 }
-function calcOP(){const cost=parseFloat(document.getElementById('lbc').value)||0;const type=document.getElementById('lmt').value;const val=parseFloat(document.getElementById('lmv').value)||0;document.getElementById('lop').value=Math.round(type==='percent'?cost*(1+val/100):cost+val);}
-async function saveItem(estId){
-  const desc=document.getElementById('lid').value.trim();if(!desc){document.getElementById('merr').innerHTML='<div class="merr">Description required.</div>';return;}
-  try{await dbPost('estimate_line_items',{estimate_id:estId,cost_code_id:document.getElementById('lcc').value||null,bucket:document.getElementById('lbk').value,description:desc,builder_cost:parseFloat(document.getElementById('lbc').value)||0,markup_type:document.getElementById('lmt').value,markup_value:parseFloat(document.getElementById('lmv').value)||0,owner_price:parseFloat(document.getElementById('lop').value)||0,notes_internal:document.getElementById('lni').value.trim(),notes_external:document.getElementById('lne').value.trim()});closeM();toast('Line item added');const ests=await db('estimates',`?project_id=eq.${proj.id}&order=created_at.desc`);_d.ests=ests;dEstimate(ests,proj);}
-  catch(e){document.getElementById('merr').innerHTML=`<div class="merr">${e.message}</div>`;}
+
+function calcBuilderCost(){
+  const dl=parseFloat(document.getElementById('ldl').value)||0;
+  const mat=parseFloat(document.getElementById('lmat').value)||0;
+  const sub=parseFloat(document.getElementById('lsub').value)||0;
+  const cont=parseFloat(document.getElementById('lcont').value)||0;
+  const total=dl+mat+sub+cont;
+  document.getElementById('lbc').value=total||'';
+  calcOP();
+}
+
+function calcOP(){
+  const cost=parseFloat(document.getElementById('lbc').value)||0;
+  const type=document.getElementById('lmt').value;
+  const val=parseFloat(document.getElementById('lmv').value)||0;
+  const owner=Math.round(type==='percent'?cost*(1+val/100):cost+val);
+  document.getElementById('lop').value=owner||'';
+  // Update summary bar
+  const markup=owner-cost;
+  const margin=owner>0?Math.round((owner-cost)/owner*100):0;
+  const el=document.getElementById('cost-summary');
+  if(el){
+    document.getElementById('cs-bc').textContent='$'+cost.toLocaleString();
+    document.getElementById('cs-mk').textContent='$'+markup.toLocaleString();
+    document.getElementById('cs-cp').textContent='$'+owner.toLocaleString();
+    document.getElementById('cs-mg').textContent=margin+'%';
+  }
+}
+
+async function saveItem(estId,itemId=null){
+  const desc=document.getElementById('lid').value.trim();
+  if(!desc){document.getElementById('merr').innerHTML='<div class="merr">Line item name required.</div>';return;}
+  const dl=parseFloat(document.getElementById('ldl').value)||0;
+  const mat=parseFloat(document.getElementById('lmat').value)||0;
+  const sub=parseFloat(document.getElementById('lsub').value)||0;
+  const cont=parseFloat(document.getElementById('lcont').value)||0;
+  const bc=parseFloat(document.getElementById('lbc').value)||0;
+  const data={
+    estimate_id:estId,
+    cost_code_id:document.getElementById('lcc').value||null,
+    bucket:document.getElementById('lbk').value,
+    description:desc,
+    day_labor_cost:dl,
+    material_cost:mat,
+    subcontractor_cost:sub,
+    contingency:cont,
+    builder_cost:bc||(dl+mat+sub+cont),
+    markup_type:document.getElementById('lmt').value,
+    markup_value:parseFloat(document.getElementById('lmv').value)||0,
+    owner_price:parseFloat(document.getElementById('lop').value)||0,
+    notes_internal:document.getElementById('lni').value.trim(),
+    notes_external:document.getElementById('lne').value.trim(),
+  };
+  try{
+    if(itemId){
+      await fetch(`${SB}/rest/v1/estimate_line_items?id=eq.${itemId}`,{method:'PATCH',headers:H,body:JSON.stringify(data)});
+      toast('Line item updated');
+    } else {
+      await dbPost('estimate_line_items',data);
+      toast('Line item added');
+    }
+    closeM();
+    const ests=await db('estimates',`?project_id=eq.${proj.id}&order=created_at.desc`);
+    _d.ests=ests;dEstimate(ests,proj);
+  }catch(e){document.getElementById('merr').innerHTML=`<div class="merr">${e.message}</div>`;}
 }
 
 function mNote(){showM(`<div class="mo" onclick="if(event.target===this)closeM()"><div class="mb">
