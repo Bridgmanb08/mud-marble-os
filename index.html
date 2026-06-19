@@ -1,0 +1,1286 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Mud & Marble OS</title>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@3.x/dist/tabler-icons.min.css">
+<style>
+:root{
+  --bg:#F7F6F3;--surface:#FFF;--border:#E5E3DC;--border-md:#D1CFC7;
+  --text:#1A1A18;--t2:#6B6A65;--t3:#9E9C96;--accent:#1A1A18;
+  --green:#1D9E75;--gbg:#E1F5EE;--gtx:#0F6E56;
+  --amber:#EF9F27;--abg:#FAEEDA;--atx:#854F0B;
+  --red:#E24B4A;--rbg:#FCEBEB;--rtx:#A32D2D;
+  --blue:#378ADD;--bbg:#E6F1FB;--btx:#185FA5;
+  --gray-bg:#F1EFE8;--gray-tx:#5F5E5A;
+  --purple-bg:#EEEDFE;--purple-tx:#534AB7;
+  --r:8px;--rl:12px;--sb:200px;--tb:52px;
+  --font:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;
+}
+*{box-sizing:border-box;margin:0;padding:0;}
+body{font-family:var(--font);background:var(--bg);color:var(--text);font-size:14px;}
+/* Layout */
+.topbar{position:fixed;top:0;left:0;right:0;height:var(--tb);background:var(--surface);border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;padding:0 20px;z-index:100;}
+.logo{display:flex;align-items:center;gap:10px;}
+.logo-mark{width:28px;height:28px;background:var(--accent);border-radius:6px;display:flex;align-items:center;justify-content:center;color:#fff;font-size:10px;font-weight:700;}
+.logo-name{font-size:14px;font-weight:600;}
+.logo-sub{font-size:12px;color:var(--t2);}
+.topbar-right{display:flex;align-items:center;gap:8px;}
+.sidebar{position:fixed;top:var(--tb);left:0;bottom:0;width:var(--sb);background:var(--surface);border-right:1px solid var(--border);padding:12px 0;overflow-y:auto;z-index:90;}
+.nav-section{font-size:10px;font-weight:600;color:var(--t3);padding:14px 16px 4px;letter-spacing:.8px;text-transform:uppercase;}
+.nav-item{display:flex;align-items:center;gap:9px;padding:7px 16px;font-size:13px;color:var(--t2);cursor:pointer;border-left:2px solid transparent;transition:all .1s;}
+.nav-item:hover{color:var(--text);background:var(--bg);}
+.nav-item.active{color:var(--text);border-left-color:var(--accent);background:var(--bg);font-weight:500;}
+.nav-item i{font-size:16px;flex-shrink:0;}
+.main{margin-left:var(--sb);margin-top:var(--tb);padding:24px;min-height:calc(100vh - var(--tb));}
+/* Buttons */
+.btn{display:inline-flex;align-items:center;gap:6px;padding:7px 14px;font-size:13px;font-family:var(--font);border-radius:var(--r);cursor:pointer;border:1px solid var(--border-md);background:var(--surface);color:var(--text);transition:all .1s;white-space:nowrap;}
+.btn:hover{background:var(--bg);}
+.btn-p{background:var(--accent);color:#fff;border-color:var(--accent);}
+.btn-p:hover{background:#333;}
+.btn-sm{padding:5px 10px;font-size:12px;}
+.btn-ghost{border-color:transparent;background:transparent;}
+.btn-ghost:hover{background:var(--bg);border-color:var(--border);}
+/* Badges */
+.badge{display:inline-flex;align-items:center;padding:2px 8px;border-radius:20px;font-size:11px;font-weight:500;white-space:nowrap;}
+.bg-green{background:var(--gbg);color:var(--gtx);}
+.bg-amber{background:var(--abg);color:var(--atx);}
+.bg-red{background:var(--rbg);color:var(--rtx);}
+.bg-blue{background:var(--bbg);color:var(--btx);}
+.bg-gray{background:var(--gray-bg);color:var(--gray-tx);}
+.bg-purple{background:var(--purple-bg);color:var(--purple-tx);}
+.dot{width:8px;height:8px;border-radius:50%;display:inline-block;flex-shrink:0;}
+.dot-g{background:var(--green);}.dot-a{background:var(--amber);}.dot-r{background:var(--red);}
+/* Cards & metrics */
+.card{background:var(--surface);border:1px solid var(--border);border-radius:var(--rl);}
+.metrics{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px;margin-bottom:20px;}
+.metric{background:var(--surface);border:1px solid var(--border);border-radius:var(--rl);padding:16px 18px;}
+.m-label{font-size:11px;color:var(--t2);margin-bottom:6px;font-weight:500;}
+.m-val{font-size:22px;font-weight:600;color:var(--text);line-height:1;}
+.m-sub{font-size:11px;color:var(--t3);margin-top:4px;}
+/* Page header */
+.ph{display:flex;align-items:flex-start;justify-content:space-between;margin-bottom:20px;}
+.ph h1{font-size:18px;font-weight:600;}
+.ph p{font-size:13px;color:var(--t2);margin-top:2px;}
+/* Filters */
+.filters{display:flex;gap:6px;flex-wrap:wrap;}
+.fb{padding:4px 12px;font-size:12px;border-radius:20px;border:1px solid var(--border-md);background:var(--surface);color:var(--t2);cursor:pointer;transition:all .1s;}
+.fb:hover{color:var(--text);}
+.fb.on{background:var(--accent);color:#fff;border-color:var(--accent);}
+/* Section header */
+.sh{display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;}
+.st{font-size:13px;font-weight:600;}
+/* Table */
+.tbl{width:100%;border-collapse:collapse;font-size:13px;}
+.tbl th{text-align:left;padding:8px 12px;color:var(--t2);font-weight:500;font-size:11px;border-bottom:1px solid var(--border);white-space:nowrap;}
+.tbl td{padding:10px 12px;border-bottom:1px solid var(--border);vertical-align:middle;}
+.tbl tbody tr:last-child td{border-bottom:none;}
+.tbl tbody tr:hover td{background:var(--bg);cursor:pointer;}
+/* Project card */
+.pc{background:var(--surface);border:1px solid var(--border);border-radius:var(--rl);padding:14px 18px;cursor:pointer;display:flex;align-items:center;gap:14px;transition:border-color .1s;margin-bottom:6px;}
+.pc:hover{border-color:var(--border-md);}
+.pi{flex:1;min-width:0;}
+.pn{font-size:13px;font-weight:500;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+.ps{font-size:12px;color:var(--t2);margin-top:1px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+.pm{display:flex;align-items:center;gap:16px;flex-shrink:0;}
+/* Forms */
+.fg{margin-bottom:14px;}
+.fl{display:block;font-size:11px;font-weight:500;color:var(--t2);margin-bottom:5px;text-transform:uppercase;letter-spacing:.4px;}
+.fi{width:100%;padding:8px 10px;font-size:13px;font-family:var(--font);border:1px solid var(--border-md);border-radius:var(--r);background:var(--surface);color:var(--text);}
+.fi:focus{outline:none;border-color:var(--accent);}
+textarea.fi{resize:vertical;min-height:80px;}
+.fr{display:grid;grid-template-columns:1fr 1fr;gap:12px;}
+.fr3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px;}
+/* Modals */
+.mo{position:fixed;inset:0;background:rgba(0,0,0,.45);display:flex;align-items:center;justify-content:center;z-index:200;}
+.mb{background:var(--surface);border-radius:var(--rl);border:1px solid var(--border);width:500px;max-height:85vh;overflow-y:auto;padding:24px;}
+.mb.wide{width:680px;}
+.mb.xl{width:800px;}
+.mt{font-size:16px;font-weight:600;margin-bottom:20px;}
+.ma{display:flex;gap:8px;justify-content:flex-end;margin-top:20px;padding-top:16px;border-top:1px solid var(--border);}
+.merr{background:var(--rbg);color:var(--rtx);padding:8px 12px;border-radius:var(--r);font-size:12px;margin-bottom:14px;}
+/* Toasts */
+.tw{position:fixed;bottom:24px;right:24px;z-index:300;display:flex;flex-direction:column;gap:8px;}
+.toast{background:var(--accent);color:#fff;padding:10px 16px;border-radius:var(--r);font-size:13px;}
+/* Tabs */
+.tabs{display:flex;border-bottom:1px solid var(--border);background:var(--surface);padding:0 20px;}
+.tab{padding:11px 14px;font-size:13px;color:var(--t2);cursor:pointer;border-bottom:2px solid transparent;margin-bottom:-1px;white-space:nowrap;}
+.tab:hover{color:var(--text);}
+.tab.on{color:var(--text);font-weight:500;border-bottom-color:var(--accent);}
+.tb{background:var(--surface);border:1px solid var(--border);border-top:none;border-radius:0 0 var(--rl) var(--rl);padding:20px;min-height:200px;}
+/* Estimate */
+.ebh{display:flex;align-items:center;justify-content:space-between;padding:9px 14px;background:var(--bg);border-radius:var(--r);margin-bottom:6px;}
+.egrand{display:flex;justify-content:space-between;align-items:center;padding:14px 18px;background:var(--accent);border-radius:var(--rl);margin-top:16px;color:#fff;}
+/* Info grid */
+.ig{display:grid;grid-template-columns:1fr 1fr;gap:20px;}
+.ibt{font-size:11px;font-weight:600;color:var(--t2);text-transform:uppercase;letter-spacing:.5px;padding-bottom:8px;border-bottom:1px solid var(--border);margin-bottom:10px;}
+.ir{display:flex;justify-content:space-between;padding:5px 0;border-bottom:1px solid var(--border);}
+.ir:last-child{border-bottom:none;}
+.ik{font-size:12px;color:var(--t2);}
+.iv{font-size:12px;font-weight:500;text-align:right;}
+/* CO, invoice, sched rows */
+.coc{border:1px solid var(--border);border-radius:var(--rl);padding:14px 16px;margin-bottom:8px;}
+.coh{display:flex;align-items:center;justify-content:space-between;}
+.invr{display:flex;align-items:center;justify-content:space-between;padding:12px 16px;border:1px solid var(--border);border-radius:var(--rl);margin-bottom:8px;}
+.scr{display:flex;align-items:center;gap:12px;padding:10px 14px;border:1px solid var(--border);border-radius:var(--rl);margin-bottom:6px;}
+.sci{flex:1;}
+/* Task board */
+.board{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-top:4px;}
+.col{background:var(--bg);border-radius:var(--rl);padding:12px;}
+.col-hd{font-size:12px;font-weight:600;margin-bottom:10px;display:flex;align-items:center;justify-content:space-between;}
+.task-card{background:var(--surface);border:1px solid var(--border);border-radius:var(--r);padding:10px 12px;margin-bottom:8px;cursor:pointer;}
+.task-card:hover{border-color:var(--border-md);}
+.task-title{font-size:12px;font-weight:500;margin-bottom:4px;}
+.task-meta{font-size:11px;color:var(--t2);}
+.task-card.priority-high{border-left:3px solid var(--red);}
+.task-card.priority-medium{border-left:3px solid var(--amber);}
+.task-card.priority-low{border-left:3px solid var(--green);}
+/* Alerts */
+.alert{border-radius:var(--rl);padding:12px 16px;margin-bottom:16px;font-size:13px;}
+.alert-a{background:var(--abg);border:1px solid var(--amber);color:var(--atx);}
+.alert-r{background:var(--rbg);border:1px solid var(--red);color:var(--rtx);}
+/* Client/sub cards */
+.cc{background:var(--surface);border:1px solid var(--border);border-radius:var(--rl);padding:14px 18px;cursor:pointer;display:flex;align-items:center;gap:14px;margin-bottom:6px;}
+.cc:hover{border-color:var(--border-md);}
+.av{width:38px;height:38px;border-radius:50%;background:var(--bbg);display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:600;color:var(--btx);flex-shrink:0;}
+.lc{background:var(--surface);border:1px solid var(--border);border-radius:var(--rl);padding:14px 18px;margin-bottom:6px;cursor:pointer;}
+.lc:hover{border-color:var(--border-md);}
+/* Empty */
+.empty{text-align:center;padding:48px 20px;}
+.empty>i{font-size:32px;color:var(--t3);display:block;margin-bottom:12px;}
+.empty-t{font-size:14px;font-weight:500;}
+.empty-s{font-size:12px;color:var(--t2);margin-top:4px;margin-bottom:16px;}
+
+/* ═══ OWNER DASHBOARD ═══ */
+.owner-grid{display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:16px;}
+.owner-card{background:var(--surface);border:1px solid var(--border);border-radius:var(--rl);padding:20px;}
+.owner-card.full{grid-column:1/-1;}
+.garmin-wrap{display:flex;justify-content:center;align-items:center;padding:16px 0;}
+.ring-label{font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.6px;color:var(--t2);text-align:center;margin-top:8px;}
+.proj-timeline{display:flex;flex-direction:column;gap:8px;}
+.tl-row{display:flex;align-items:center;gap:10px;}
+.tl-name{font-size:12px;font-weight:500;width:160px;flex-shrink:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+.tl-bar-wrap{flex:1;height:18px;background:var(--bg);border-radius:4px;position:relative;overflow:hidden;}
+.tl-bar{height:100%;border-radius:4px;position:absolute;top:0;}
+.tl-today{position:absolute;top:0;bottom:0;width:2px;background:var(--red);z-index:2;}
+.tl-pct{font-size:11px;color:var(--t2);width:36px;text-align:right;flex-shrink:0;}
+.profit-ring{text-align:center;}
+.ring-center{position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);text-align:center;}
+.ring-big{font-size:28px;font-weight:700;line-height:1;}
+.ring-tiny{font-size:10px;color:var(--t2);margin-top:2px;}
+.kpi-row{display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin-top:12px;}
+.kpi{text-align:center;padding:12px;background:var(--bg);border-radius:var(--r);}
+.kpi-val{font-size:20px;font-weight:700;}
+.kpi-label{font-size:10px;color:var(--t2);margin-top:2px;text-transform:uppercase;letter-spacing:.4px;}
+.activity-feed{display:flex;flex-direction:column;gap:0;}
+.af-item{display:flex;gap:12px;padding:10px 0;border-bottom:1px solid var(--border);}
+.af-item:last-child{border-bottom:none;}
+.af-dot{width:8px;height:8px;border-radius:50%;flex-shrink:0;margin-top:4px;}
+.af-body{flex:1;}
+.af-text{font-size:12px;color:var(--text);line-height:1.4;}
+.af-time{font-size:11px;color:var(--t3);margin-top:2px;}
+.health-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;}
+.hg-card{border-radius:var(--r);padding:10px 12px;display:flex;align-items:center;gap:10px;border:1px solid var(--border);}
+.hg-info{flex:1;min-width:0;}
+.hg-name{font-size:12px;font-weight:500;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+.hg-detail{font-size:11px;color:var(--t2);margin-top:1px;}
+/* Garmin ring SVG */
+.gr-svg{overflow:visible;}
+.gr-track{fill:none;stroke-linecap:round;}
+.gr-prog{fill:none;stroke-linecap:round;transition:stroke-dashoffset .6s cubic-bezier(.4,0,.2,1);}
+@media(max-width:768px){
+  :root{--sb:52px;}
+  .nav-item span{display:none;}.nav-section{display:none;}
+  .metrics,.owner-grid{grid-template-columns:repeat(2,1fr);}
+  .board{grid-template-columns:1fr 1fr;}
+  .fr,.fr3,.ig,.kpi-row,.health-grid{grid-template-columns:1fr;}
+  .owner-card.full{grid-column:auto;}
+}
+</style>
+</head>
+<body>
+
+<div class="topbar">
+  <div class="logo">
+    <div class="logo-mark">M&M</div>
+    <span class="logo-name">Mud & Marble</span>
+    <span class="logo-sub" style="margin-left:4px">OS</span>
+  </div>
+  <div class="topbar-right">
+    <button class="btn btn-sm" id="btn-back" style="display:none" onclick="goBack()">
+      <i class="ti ti-arrow-left"></i> <span id="back-label">Back</span>
+    </button>
+    <button class="btn btn-p btn-sm" onclick="handleNew()">
+      <i class="ti ti-plus"></i> <span id="new-label">New project</span>
+    </button>
+  </div>
+</div>
+
+<div class="sidebar">
+  <div class="nav-section">Overview</div>
+  <div class="nav-item" data-p="dashboard" onclick="nav('dashboard')"><i class="ti ti-gauge"></i> <span>Dashboard</span></div>
+  <div class="nav-section">Operations</div>
+  <div class="nav-item" data-p="projects" onclick="nav('projects')"><i class="ti ti-building"></i> <span>Projects</span></div>
+  <div class="nav-item" data-p="leads" onclick="nav('leads')"><i class="ti ti-user-plus"></i> <span>Leads</span></div>
+  <div class="nav-item" data-p="clients" onclick="nav('clients')"><i class="ti ti-users"></i> <span>Clients</span></div>
+  <div class="nav-section">Finance</div>
+  <div class="nav-item" data-p="estimates" onclick="nav('estimates')"><i class="ti ti-file-dollar"></i> <span>Estimates</span></div>
+  <div class="nav-item" data-p="invoices" onclick="nav('invoices')"><i class="ti ti-receipt"></i> <span>Invoices</span></div>
+  <div class="nav-item" data-p="change-orders" onclick="nav('change-orders')"><i class="ti ti-git-branch"></i> <span>Change Orders</span></div>
+  <div class="nav-section">Team</div>
+  <div class="nav-item" data-p="tasks" onclick="nav('tasks')"><i class="ti ti-layout-kanban"></i> <span>Task Board</span></div>
+  <div class="nav-item" data-p="schedule" onclick="nav('schedule')"><i class="ti ti-calendar"></i> <span>Schedule</span></div>
+  <div class="nav-item" data-p="subcontractors" onclick="nav('subcontractors')"><i class="ti ti-tools"></i> <span>Subcontractors</span></div>
+</div>
+
+<div class="main" id="main"></div>
+<div class="tw" id="toasts"></div>
+<div id="modal-root"></div>
+
+<script>
+const SB='https://boekqzxgooinrhxlckbp.supabase.co';
+const KEY='eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImJvZWtxenhnb29pbnJoeGxja2JwIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODE3MzQzNzcsImV4cCI6MjA5NzMxMDM3N30.royGJdcO6Aqgol9E0Ldw-mgryq1MQ_SvwJH3cvBlDV8';
+const H={'apikey':KEY,'Authorization':`Bearer ${KEY}`,'Content-Type':'application/json','Prefer':'return=representation'};
+
+async function db(t,q=''){const r=await fetch(`${SB}/rest/v1/${t}${q}`,{headers:H});if(!r.ok)throw new Error(await r.text());return r.json();}
+async function dbPost(t,d){const r=await fetch(`${SB}/rest/v1/${t}`,{method:'POST',headers:H,body:JSON.stringify(d)});if(!r.ok)throw new Error(await r.text());return r.json();}
+async function dbPatch(t,id,d){const r=await fetch(`${SB}/rest/v1/${t}?id=eq.${id}`,{method:'PATCH',headers:H,body:JSON.stringify(d)});if(!r.ok)throw new Error(await r.text());return r.json();}
+
+const fmt=n=>!n&&n!==0?'—':'$'+Number(n).toLocaleString('en-US',{maximumFractionDigits:0});
+const fmtD=d=>d?new Date(d).toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'}):'—';
+const sl=s=>({lead:'Lead',vetting:'Vetting',estimating:'Estimating',proposed:'Proposed',active:'Active',punch_list:'Punch List',complete:'Complete',on_hold:'On Hold',lost:'Lost'})[s]||s;
+const sb=s=>{const m={active:'green',complete:'green',estimating:'amber',proposed:'blue',lead:'gray',vetting:'gray',punch_list:'purple',on_hold:'amber',lost:'red'};return`<span class="badge bg-${m[s]||'gray'}">${sl(s)}</span>`;};
+const hd=h=>`<span class="dot dot-${h==='yellow'?'a':h==='red'?'r':'g'}"></span>`;
+
+function toast(msg,err=false){const t=document.createElement('div');t.className='toast';t.style.background=err?'var(--red)':'var(--accent)';t.textContent=msg;document.getElementById('toasts').appendChild(t);setTimeout(()=>t.remove(),2800);}
+function showM(h){document.getElementById('modal-root').innerHTML=h;}
+function closeM(){document.getElementById('modal-root').innerHTML='';}
+
+let page='dashboard',proj=null,allP=[],_d={};
+
+function nav(p){
+  page=p;proj=null;
+  document.querySelectorAll('.nav-item').forEach(el=>el.classList.toggle('active',el.dataset.p===p));
+  const labels={dashboard:'Overview',projects:'New project',leads:'New lead',clients:'New client',estimates:'New estimate',invoices:'New invoice','change-orders':'New CO',tasks:'New task',schedule:'Add task',subcontractors:'Add sub'};
+  document.getElementById('new-label').textContent=labels[p]||'New';
+  document.getElementById('btn-back').style.display='none';
+  render();
+}
+function goBack(){nav('projects');}
+function handleNew(){
+  if(page==='projects'||page==='proj-detail')mNewProj();
+  else if(page==='leads')mNewLead();
+  else if(page==='clients')mNewClient();
+  else if(page==='change-orders')mNewCO();
+  else if(page==='invoices')mNewInv();
+  else if(page==='tasks'||page==='schedule')mNewTask();
+  else if(page==='subcontractors')mNewSub();
+  else if(page==='estimates')toast('Open a project to create an estimate');
+  else if(page==='dashboard')toast('Select a page to add items');
+}
+async function render(){
+  const m=document.getElementById('main');
+  m.innerHTML='<div class="empty"><i class="ti ti-loader"></i><div class="empty-t">Loading...</div></div>';
+  try{
+    if(page==='dashboard')await pDash();
+    else if(page==='projects')await pProjects();
+    else if(page==='proj-detail')await pDetail();
+    else if(page==='leads')await pLeads();
+    else if(page==='clients')await pClients();
+    else if(page==='estimates')await pEstimates();
+    else if(page==='invoices')await pInvoices();
+    else if(page==='change-orders')await pCOs();
+    else if(page==='tasks')await pTasks();
+    else if(page==='schedule')await pSchedule();
+    else if(page==='subcontractors')await pSubs();
+  }catch(e){m.innerHTML=`<div class="empty"><i class="ti ti-alert-circle" style="color:var(--red)"></i><div class="empty-t">Error loading</div><div class="empty-s">${e.message}</div></div>`;}
+}
+
+// ══════════════════════════════════════════════════
+// OWNER DASHBOARD
+// ══════════════════════════════════════════════════
+async function pDash(){
+  const [projs,invs,cos,tasks,notes]=await Promise.all([
+    db('projects','?is_archived=eq.false&order=created_at.desc&select=*,clients(first_name,last_name)'),
+    db('invoices','?order=created_at.desc'),
+    db('change_orders','?order=created_at.desc'),
+    db('schedule_items','?order=scheduled_start.asc&select=*,projects(name)'),
+    db('project_notes','?order=created_at.desc&limit=8&select=*,projects(name)'),
+  ]);
+  allP=projs;
+  const active=projs.filter(p=>p.status==='active');
+  const tInvoiced=invs.reduce((s,i)=>s+(i.amount_due||0),0);
+  const tPaid=invs.reduce((s,i)=>s+(i.amount_paid||0),0);
+  const tContract=projs.reduce((s,p)=>s+(p.contract_value||0),0);
+  const overdue=invs.filter(i=>i.status==='overdue');
+  const pendingCOs=cos.filter(c=>c.status==='pending'||c.status==='sent');
+  const now=new Date();
+  const breaches=cos.filter(c=>c.status==='sent'&&c.sent_at&&((now-new Date(c.sent_at))/36e5>24));
+  const openTasks=tasks.filter(t=>['upcoming','in_progress','delayed','blocked'].includes(t.status));
+  const pctCollected=tInvoiced>0?Math.round(tPaid/tInvoiced*100):0;
+  const pctProfitPulled=tContract>0?Math.round(tPaid/tContract*100):0;
+
+  document.getElementById('main').innerHTML=`
+    <div class="ph"><div><h1>Good morning, Brent.</h1><p>Here's where Mud & Marble stands today.</p></div>
+    <span style="font-size:12px;color:var(--t2)">${now.toLocaleDateString('en-US',{weekday:'long',month:'long',day:'numeric'})}</span></div>
+
+    ${overdue.length||breaches.length?`<div class="alert alert-r" style="margin-bottom:16px">
+      <i class="ti ti-alert-triangle" style="font-size:14px;vertical-align:-2px;margin-right:6px"></i>
+      <strong>Needs attention:</strong>
+      ${overdue.length?`${overdue.length} overdue invoice${overdue.length>1?'s':''}. `:''}
+      ${breaches.length?`${breaches.length} CO SOP breach${breaches.length>1?'es':''}.`:''}
+    </div>`:''}
+
+    <div class="metrics">
+      <div class="metric"><div class="m-label">Active builds</div><div class="m-val">${active.length}</div><div class="m-sub">on the tools now</div></div>
+      <div class="metric"><div class="m-label">Total contract value</div><div class="m-val" style="font-size:17px">${fmt(tContract)}</div></div>
+      <div class="metric"><div class="m-label">Collected</div><div class="m-val" style="font-size:17px;color:var(--green)">${fmt(tPaid)}</div><div class="m-sub">${pctCollected}% of invoiced</div></div>
+      <div class="metric"><div class="m-label">Outstanding</div><div class="m-val" style="font-size:17px;${tInvoiced-tPaid>0?'color:var(--atx)':''}">${fmt(tInvoiced-tPaid)}</div></div>
+    </div>
+
+    <div class="owner-grid">
+
+      <!-- Profit ring (Garmin-inspired) -->
+      <div class="owner-card">
+        <div class="ibt">Profit pulled — Garmin ring</div>
+        <div class="garmin-wrap" id="garmin-rings"></div>
+        <div class="kpi-row">
+          <div class="kpi"><div class="kpi-val" style="color:var(--green)">${pctProfitPulled}%</div><div class="kpi-label">Profit pulled</div></div>
+          <div class="kpi"><div class="kpi-val">${pendingCOs.length}</div><div class="kpi-label">Open COs</div></div>
+          <div class="kpi"><div class="kpi-val" style="${overdue.length?'color:var(--red)':''}">${overdue.length}</div><div class="kpi-label">Overdue invs</div></div>
+        </div>
+      </div>
+
+      <!-- Project health -->
+      <div class="owner-card">
+        <div class="ibt" style="margin-bottom:12px">Active project health</div>
+        <div class="health-grid" id="health-grid">
+          ${active.length?active.map(p=>{
+            const hc=p.health_status==='yellow'?'a':p.health_status==='red'?'r':'g';
+            const hbg={'g':'var(--gbg)','a':'var(--abg)','r':'var(--rbg)'}[hc];
+            return`<div class="hg-card" style="background:${hbg}">
+              <span class="dot dot-${hc}"></span>
+              <div class="hg-info">
+                <div class="hg-name">${p.name.replace(/\|.*/,'').trim()}</div>
+                <div class="hg-detail">${p.clients?`${p.clients.first_name} ${p.clients.last_name}`:'No client'}</div>
+              </div>
+            </div>`;
+          }).join(''):'<div style="font-size:13px;color:var(--t2)">No active projects.</div>'}
+        </div>
+        <div style="margin-top:14px"><div class="ibt" style="margin-bottom:8px">Open tasks</div>
+        <div style="display:flex;gap:10px;flex-wrap:wrap">
+          <span class="badge bg-amber">${openTasks.filter(t=>t.status==='in_progress').length} in progress</span>
+          <span class="badge bg-gray">${openTasks.filter(t=>t.status==='upcoming').length} upcoming</span>
+          <span class="badge bg-red">${openTasks.filter(t=>['delayed','blocked'].includes(t.status)).length} delayed/blocked</span>
+        </div></div>
+      </div>
+
+      <!-- Timeline -->
+      <div class="owner-card full">
+        <div class="ibt" style="margin-bottom:14px">Project timeline</div>
+        <div id="timeline-wrap">
+          ${active.length?renderTimeline(active):'<div style="font-size:13px;color:var(--t2)">No active projects with dates set.</div>'}
+        </div>
+      </div>
+
+      <!-- Activity feed -->
+      <div class="owner-card">
+        <div class="ibt" style="margin-bottom:12px">Recent activity</div>
+        <div class="activity-feed">
+          ${notes.length?notes.slice(0,6).map(n=>{
+            const colors={site_visit:'var(--blue)',client_communication:'var(--purple-tx)',internal:'var(--t3)',daily_log:'var(--green)'};
+            return`<div class="af-item">
+              <div class="af-dot" style="background:${colors[n.note_type]||'var(--t3)'}"></div>
+              <div class="af-body">
+                <div class="af-text"><strong>${n.author}</strong> logged a ${(n.note_type||'note').replace('_',' ')} on <em>${n.projects?.name||'a project'}</em></div>
+                <div class="af-text" style="color:var(--t2);margin-top:2px">${n.content.slice(0,80)}${n.content.length>80?'…':''}</div>
+                <div class="af-time">${fmtD(n.created_at)}</div>
+              </div>
+            </div>`;
+          }).join(''):'<div style="font-size:13px;color:var(--t2)">No recent activity. Log notes on projects to see them here.</div>'}
+        </div>
+      </div>
+
+      <!-- Upcoming tasks -->
+      <div class="owner-card">
+        <div class="ibt" style="margin-bottom:12px">Upcoming tasks</div>
+        ${tasks.filter(t=>t.status!=='complete').slice(0,6).map(t=>{
+          const dc={upcoming:'var(--t3)',in_progress:'var(--amber)',delayed:'var(--red)',blocked:'var(--red)'};
+          return`<div style="display:flex;align-items:center;gap:10px;padding:7px 0;border-bottom:1px solid var(--border)">
+            <span class="dot" style="background:${dc[t.status]||'var(--t3)'}"></span>
+            <div style="flex:1;min-width:0">
+              <div style="font-size:12px;font-weight:500;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${t.title}</div>
+              <div style="font-size:11px;color:var(--t2)">${t.projects?.name||''}${t.assigned_to?' · '+t.assigned_to:''}</div>
+            </div>
+            <div style="font-size:11px;color:var(--t3);text-align:right;flex-shrink:0">${fmtD(t.scheduled_end)}</div>
+          </div>`;
+        }).join('')||'<div style="font-size:13px;color:var(--t2)">No upcoming tasks.</div>'}
+      </div>
+
+    </div>`;
+
+  // Draw Garmin rings after DOM renders
+  setTimeout(()=>{
+    drawGarminRings([
+      {pct:pctProfitPulled,color:'#1D9E75',label:'Profit pulled',track:'#E1F5EE'},
+      {pct:pctCollected,color:'#378ADD',label:'Invoiced collected',track:'#E6F1FB'},
+      {pct:active.length?Math.min(100,Math.round(active.length/3*100)):0,color:'#EF9F27',label:'Build capacity',track:'#FAEEDA'},
+    ]);
+  },50);
+}
+
+function drawGarminRings(rings){
+  const el=document.getElementById('garmin-rings');
+  if(!el)return;
+  const size=200;const cx=size/2;const cy=size/2;
+  const radii=[72,56,40];
+  const sw=12;
+  let svg=`<svg width="${size}" height="${size}" class="gr-svg" viewBox="0 0 ${size} ${size}">`;
+  rings.forEach((r,i)=>{
+    const radius=radii[i];
+    const circ=2*Math.PI*radius;
+    const offset=circ*(1-(r.pct/100));
+    svg+=`<circle class="gr-track" cx="${cx}" cy="${cy}" r="${radius}" stroke="${r.track}" stroke-width="${sw}"/>`;
+    svg+=`<circle class="gr-prog" cx="${cx}" cy="${cy}" r="${radius}" stroke="${r.color}" stroke-width="${sw}" stroke-dasharray="${circ}" stroke-dashoffset="${offset}" transform="rotate(-90 ${cx} ${cy})"/>`;
+  });
+  // Center text
+  svg+=`<text x="${cx}" y="${cy-8}" text-anchor="middle" font-size="24" font-weight="700" fill="var(--text)">${rings[0].pct}%</text>`;
+  svg+=`<text x="${cx}" y="${cy+10}" text-anchor="middle" font-size="10" fill="var(--t2)">PROFIT PULLED</text>`;
+  svg+=`</svg>`;
+  el.innerHTML=svg;
+  // Legend
+  el.innerHTML+=`<div style="display:flex;flex-direction:column;gap:6px;margin-left:16px">
+    ${rings.map(r=>`<div style="display:flex;align-items:center;gap:8px"><span style="width:10px;height:10px;border-radius:50%;background:${r.color};display:inline-block;flex-shrink:0"></span><span style="font-size:11px;color:var(--t2)">${r.label}: <strong>${r.pct}%</strong></span></div>`).join('')}
+  </div>`;
+  el.style.display='flex';el.style.alignItems='center';
+}
+
+function renderTimeline(projs){
+  const today=new Date();
+  const allDates=projs.flatMap(p=>[p.start_date,p.estimated_completion].filter(Boolean).map(d=>new Date(d)));
+  if(!allDates.length)return'<div style="font-size:13px;color:var(--t2)">Set start and completion dates on projects to see the timeline.</div>';
+  const minD=new Date(Math.min(...allDates));
+  const maxD=new Date(Math.max(...allDates));
+  const range=Math.max((maxD-minD)/864e5,1);
+  const todayPct=Math.max(0,Math.min(100,(today-minD)/864e5/range*100));
+
+  let html=`<div style="position:relative;">
+    <div style="display:flex;justify-content:space-between;font-size:11px;color:var(--t2);margin-bottom:8px">
+      <span>${minD.toLocaleDateString('en-US',{month:'short',year:'numeric'})}</span>
+      <span style="font-weight:500;color:var(--red)">Today</span>
+      <span>${maxD.toLocaleDateString('en-US',{month:'short',year:'numeric'})}</span>
+    </div>
+    <div class="proj-timeline">`;
+  projs.filter(p=>p.start_date||p.estimated_completion).forEach(p=>{
+    const s=p.start_date?new Date(p.start_date):minD;
+    const e=p.estimated_completion?new Date(p.estimated_completion):maxD;
+    const left=Math.max(0,(s-minD)/864e5/range*100);
+    const width=Math.max(2,(e-s)/864e5/range*100);
+    const barColor=p.health_status==='red'?'var(--red)':p.health_status==='yellow'?'var(--amber)':'var(--green)';
+    const pct=p.start_date&&p.estimated_completion?Math.max(0,Math.min(100,(today-s)/(e-s)*100)):0;
+    html+=`<div class="tl-row">
+      <div class="tl-name">${(p.name||'').replace(/\|.*/,'').trim()}</div>
+      <div class="tl-bar-wrap">
+        <div class="tl-today" style="left:${todayPct}%"></div>
+        <div class="tl-bar" style="left:${left}%;width:${width}%;background:${barColor};opacity:.25;"></div>
+        <div class="tl-bar" style="left:${left}%;width:${Math.min(width,width*(pct/100))}%;background:${barColor};"></div>
+      </div>
+      <div class="tl-pct">${Math.round(pct)}%</div>
+    </div>`;
+  });
+  html+=`</div></div>`;
+  return html;
+}
+
+// ══════════════════════════════════════════════════
+// PROJECTS
+// ══════════════════════════════════════════════════
+async function pProjects(){
+  const ps=await db('projects','?order=created_at.desc&select=*,clients(first_name,last_name)');
+  allP=ps;
+  const act=ps.filter(p=>p.status==='active');
+  const pip=ps.filter(p=>['estimating','proposed'].includes(p.status));
+  const lds=ps.filter(p=>['lead','vetting'].includes(p.status));
+  const tot=act.concat(pip).reduce((s,p)=>s+(p.contract_value||0),0);
+  document.getElementById('main').innerHTML=`
+    <div class="ph"><div><h1>Projects</h1><p>All active builds, pipeline, and history</p></div></div>
+    <div class="metrics">
+      <div class="metric"><div class="m-label">Active builds</div><div class="m-val">${act.length}</div><div class="m-sub">on the tools now</div></div>
+      <div class="metric"><div class="m-label">In pipeline</div><div class="m-val">${pip.length}</div></div>
+      <div class="metric"><div class="m-label">Open leads</div><div class="m-val">${lds.length}</div></div>
+      <div class="metric"><div class="m-label">Active contract value</div><div class="m-val" style="font-size:17px">${fmt(tot)}</div><div class="m-sub">${ps.length} total</div></div>
+    </div>
+    <div class="sh"><div class="st" id="plt">Active projects</div>
+    <div class="filters">
+      <button class="fb" onclick="fp('all',this)">All (${ps.length})</button>
+      <button class="fb on" onclick="fp('active',this)">Active</button>
+      <button class="fb" onclick="fp('estimating',this)">Estimating</button>
+      <button class="fb" onclick="fp('proposed',this)">Proposed</button>
+      <button class="fb" onclick="fp('lead',this)">Leads</button>
+      <button class="fb" onclick="fp('complete',this)">Closed</button>
+    </div></div>
+    <div id="plist">${pCards(act)}</div>`;
+}
+
+function pCards(list){
+  if(!list.length)return`<div class="empty"><i class="ti ti-building"></i><div class="empty-t">No projects here</div><div class="empty-s">Try a different filter or create a new project.</div></div>`;
+  return list.map(p=>{
+    const c=p.clients;const cl=c?`${c.first_name} ${c.last_name}`:'';
+    return`<div class="pc" onclick="openP('${p.id}')">
+      ${hd(p.health_status)}
+      <div class="pi"><div class="pn">${p.name}</div><div class="ps">${cl}${cl&&p.address?' · ':''}${p.address||''}</div></div>
+      <div class="pm">
+        ${p.contract_value?`<div style="text-align:right"><div style="font-size:10px;color:var(--t3)">Contract</div><div style="font-size:12px;font-weight:500">${fmt(p.contract_value)}</div></div>`:''}
+        ${sb(p.status)}
+        <i class="ti ti-chevron-right" style="color:var(--t3);font-size:15px"></i>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+function fp(t,btn){
+  document.querySelectorAll('#main .fb').forEach(b=>b.classList.remove('on'));btn.classList.add('on');
+  const labels={all:'All projects',active:'Active projects',estimating:'Estimating',proposed:'Proposed',lead:'Open leads',complete:'Closed projects'};
+  document.getElementById('plt').textContent=labels[t]||'Projects';
+  const map={all:allP,active:allP.filter(p=>p.status==='active'),estimating:allP.filter(p=>['estimating','proposed'].includes(p.status)),proposed:allP.filter(p=>p.status==='proposed'),lead:allP.filter(p=>['lead','vetting'].includes(p.status)),complete:allP.filter(p=>p.status==='complete')};
+  document.getElementById('plist').innerHTML=pCards(map[t]||allP);
+}
+
+async function openP(id){
+  proj=allP.find(p=>p.id===id);
+  if(!proj){const r=await db('projects',`?id=eq.${id}&select=*,clients(*)`);proj=r[0];}
+  page='proj-detail';
+  document.getElementById('btn-back').style.display='flex';
+  document.getElementById('back-label').textContent='Projects';
+  document.getElementById('new-label').textContent='Add';
+  await pDetail();
+}
+
+async function pDetail(){
+  const p=proj;
+  const [ests,cos,invs,scheds,notes,tasks]=await Promise.all([
+    db('estimates',`?project_id=eq.${p.id}&order=created_at.desc`),
+    db('change_orders',`?project_id=eq.${p.id}&order=co_number.asc`),
+    db('invoices',`?project_id=eq.${p.id}&order=created_at.desc`),
+    db('schedule_items',`?project_id=eq.${p.id}&order=scheduled_start.asc`),
+    db('project_notes',`?project_id=eq.${p.id}&order=created_at.desc`),
+    db('schedule_items',`?project_id=eq.${p.id}&order=scheduled_start.asc`),
+  ]);
+  _d={ests,cos,invs,scheds,notes,tasks,p};
+  const c=p.clients;
+  const tI=invs.reduce((s,i)=>s+(i.amount_due||0),0);
+  const tP=invs.reduce((s,i)=>s+(i.amount_paid||0),0);
+  const totalTasks=tasks.length;
+  const doneTasks=tasks.filter(t=>t.status==='complete').length;
+  document.getElementById('main').innerHTML=`
+    <div style="display:flex;align-items:flex-start;justify-content:space-between;margin-bottom:16px">
+      <div>
+        <div style="display:flex;align-items:center;gap:8px;margin-bottom:4px">${hd(p.health_status)}<h1 style="font-size:18px;font-weight:600">${p.name}</h1>${sb(p.status)}</div>
+        <div style="font-size:13px;color:var(--t2)"><i class="ti ti-map-pin" style="font-size:12px;vertical-align:-1px"></i> ${p.address||'No address'}${p.city?', '+p.city:''}</div>
+      </div>
+      <div style="display:flex;gap:8px">
+        <button class="btn btn-sm" onclick="mStatus()"><i class="ti ti-adjustments"></i> Status</button>
+        <button class="btn btn-p btn-sm" onclick="mProjAdd()"><i class="ti ti-plus"></i> Add</button>
+      </div>
+    </div>
+    <div class="metrics" style="margin-bottom:16px">
+      <div class="metric"><div class="m-label">Contract</div><div class="m-val" style="font-size:18px">${fmt(p.contract_value)}</div></div>
+      <div class="metric"><div class="m-label">Invoiced</div><div class="m-val" style="font-size:18px">${fmt(tI)}</div><div class="m-sub">${invs.length} invoice${invs.length!==1?'s':''}</div></div>
+      <div class="metric"><div class="m-label">Collected</div><div class="m-val" style="font-size:18px;color:var(--green)">${fmt(tP)}</div></div>
+      <div class="metric"><div class="m-label">Tasks complete</div><div class="m-val" style="font-size:18px">${doneTasks}/${totalTasks}</div><div class="m-sub">${totalTasks>0?Math.round(doneTasks/totalTasks*100):0}% done</div></div>
+    </div>
+    ${totalTasks>0?`<div style="height:4px;background:var(--bg);border-radius:2px;margin-bottom:16px;overflow:hidden"><div style="height:100%;background:var(--green);border-radius:2px;width:${Math.round(doneTasks/totalTasks*100)}%"></div></div>`:''}
+    <div class="card">
+      <div class="tabs" id="dtabs">
+        ${['Overview','Estimate','Change Orders','Invoices','Schedule','Notes'].map((t,i)=>`<div class="tab${i===0?' on':''}" onclick="dtab('${t.toLowerCase().replace(' ','_')}',this)">${t}</div>`).join('')}
+      </div>
+      <div class="tb" id="dbody">${dOverview(p,c)}</div>
+    </div>`;
+}
+
+function dtab(t,el){
+  document.querySelectorAll('#dtabs .tab').forEach(x=>x.classList.remove('on'));el.classList.add('on');
+  const b=document.getElementById('dbody'),d=_d;
+  if(t==='overview')b.innerHTML=dOverview(d.p,d.p.clients);
+  else if(t==='estimate')dEstimate(d.ests,d.p);
+  else if(t==='change_orders')b.innerHTML=dCOs(d.cos);
+  else if(t==='invoices')b.innerHTML=dInvs(d.invs);
+  else if(t==='schedule')b.innerHTML=dSched(d.scheds);
+  else if(t==='notes')b.innerHTML=dNotes(d.notes);
+}
+
+function dOverview(p,c){
+  return`<div class="ig">
+    <div>
+      <div class="ibt">Client</div>
+      ${c?`<div class="ir"><span class="ik">Name</span><span class="iv">${c.first_name} ${c.last_name}</span></div>
+      <div class="ir"><span class="ik">Phone</span><span class="iv">${c.phone||'—'}</span></div>
+      <div class="ir"><span class="ik">Email</span><span class="iv">${c.email||'—'}</span></div>
+      <div class="ir"><span class="ik">Funding</span><span class="iv">${c.funding_type||'—'}</span></div>
+      <div class="ir"><span class="ik">Referred by</span><span class="iv">${c.referral_name||'—'}</span></div>`:'<div style="font-size:12px;color:var(--t2)">No client linked.</div>'}
+      <div style="margin-top:16px"><div class="ibt">Key dates</div>
+      <div class="ir"><span class="ik">Contract signed</span><span class="iv">${fmtD(p.contract_signed_date)}</span></div>
+      <div class="ir"><span class="ik">Start</span><span class="iv">${fmtD(p.start_date)}</span></div>
+      <div class="ir"><span class="ik">Est. completion</span><span class="iv">${fmtD(p.estimated_completion)}</span></div></div>
+    </div>
+    <div>
+      <div class="ibt">Property</div>
+      <div class="ir"><span class="ik">Type</span><span class="iv">${p.project_type||'—'}</span></div>
+      <div class="ir"><span class="ik">Sq ft (assessor)</span><span class="iv">${p.structure_sqft?Number(p.structure_sqft).toLocaleString()+' sf':'—'}</span></div>
+      <div class="ir"><span class="ik">Year built</span><span class="iv">${p.year_built||'—'}</span></div>
+      <div class="ir"><span class="ik">Assessed value</span><span class="iv">${fmt(p.assessed_value)}</span></div>
+      <div class="ir"><span class="ik">Flood zone</span><span class="iv">${p.flood_zone||'—'}</span></div>
+      <div class="ir"><span class="ik">Arch. drawings</span><span class="iv">${p.has_architectural_drawings?'Yes':'No'}</span></div>
+      ${p.internal_notes?`<div style="margin-top:16px"><div class="ibt">Notes</div><div style="font-size:12px;line-height:1.6;padding-top:4px">${p.internal_notes}</div></div>`:''}
+    </div>
+  </div>`;
+}
+
+async function dEstimate(ests,p){
+  const b=document.getElementById('dbody');
+  if(!ests.length){b.innerHTML=`<div class="empty"><i class="ti ti-file-dollar"></i><div class="empty-t">No estimate yet</div><div class="empty-s">Start the estimate for this project.</div><button class="btn btn-p btn-sm" onclick="mNewEst()"><i class="ti ti-plus"></i> Start estimate</button></div>`;return;}
+  const est=ests[0];
+  const items=await db('estimate_line_items',`?estimate_id=eq.${est.id}&order=sort_order.asc`);
+  const pm=items.filter(i=>i.bucket==='pm_fee');
+  const con=items.filter(i=>i.bucket==='construction');
+  const al=items.filter(i=>i.bucket==='allowance');
+  const tots=[pm,con,al].map(g=>g.reduce((s,i)=>s+(i.owner_price||0),0));
+  const grand=tots.reduce((a,b)=>a+b,0);
+  function bkt(title,rows,tot,key){
+    return`<div style="margin-bottom:20px">
+      <div class="ebh"><span style="font-size:13px;font-weight:600">${title}</span>
+      <div style="display:flex;align-items:center;gap:10px"><span style="font-size:13px;font-weight:600">${fmt(tot)}</span>
+      <button class="btn btn-sm btn-ghost" onclick="mAddItem('${est.id}','${key}')"><i class="ti ti-plus"></i> Add</button></div></div>
+      ${rows.length?`<table class="tbl" style="table-layout:fixed">
+        <thead><tr><th style="width:35%">Description</th><th style="width:20%">Internal note</th><th style="width:12%;text-align:right">Cost</th><th style="width:10%;text-align:right">Markup</th><th style="width:13%;text-align:right">Client price</th></tr></thead>
+        <tbody>${rows.map(i=>`<tr><td style="font-weight:500">${i.description}</td><td style="font-size:11px;color:var(--t2)">${i.notes_internal||''}</td><td style="text-align:right">${fmt(i.builder_cost)}</td><td style="text-align:right;color:var(--t2)">${i.markup_type==='percent'?Math.round(i.markup_value)+'%':fmt(i.markup_value)}</td><td style="text-align:right;font-weight:500">${fmt(i.owner_price)}</td></tr>`).join('')}</tbody></table>`
+      :`<div style="font-size:12px;color:var(--t2);padding:8px 14px">No items yet.</div>`}
+    </div>`;
+  }
+  b.innerHTML=`<div style="display:flex;justify-content:flex-end;gap:8px;margin-bottom:16px">
+    <span style="font-size:12px;color:var(--t2);align-self:center">v${est.version} · ${est.status}</span>
+    <button class="btn btn-p btn-sm" onclick="toast('Client PDF export — coming soon')"><i class="ti ti-eye"></i> Client view</button>
+  </div>
+  ${bkt('Project management fee',pm,tots[0],'pm_fee')}
+  ${bkt('Construction',con,tots[1],'construction')}
+  ${bkt('Allowances',al,tots[2],'allowance')}
+  <div class="egrand"><span style="font-size:14px;font-weight:600">Total project cost</span><span style="font-size:20px;font-weight:700">${fmt(grand)}</span></div>`;
+}
+
+function dCOs(cos){
+  const add=`<div style="display:flex;justify-content:flex-end;margin-bottom:14px"><button class="btn btn-p btn-sm" onclick="mNewCO(true)"><i class="ti ti-plus"></i> New CO</button></div>`;
+  if(!cos.length)return add+`<div class="empty"><i class="ti ti-git-branch"></i><div class="empty-t">No change orders</div></div>`;
+  const tm={oversight:'amber',client_addition:'blue',unforeseen:'red'};
+  const sm={pending:'gray',sent:'amber',approved:'green',rejected:'red'};
+  const now=new Date();
+  return add+cos.map(co=>{
+    const br=co.status==='sent'&&co.sent_at&&((now-new Date(co.sent_at))/36e5>24);
+    return`<div class="coc"><div class="coh"><div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
+      <span style="font-weight:600">CO-${String(co.co_number||'?').padStart(3,'0')}</span>
+      <span>${co.title}</span>
+      <span class="badge bg-${tm[co.co_type]||'gray'}">${co.co_type.replace('_',' ')}</span>
+      <span class="badge bg-${sm[co.status]||'gray'}">${co.status}</span>
+      ${br?`<span class="badge bg-red"><i class="ti ti-alert-triangle" style="font-size:11px;margin-right:3px"></i>SOP breach</span>`:''}
+    </div><span style="font-size:14px;font-weight:600">${fmt(co.owner_price)}</span></div>
+    ${co.description?`<div style="font-size:12px;color:var(--t2);margin-top:6px">${co.description}</div>`:''}
+    <div style="display:flex;gap:14px;margin-top:8px">
+      <span style="font-size:11px;color:var(--t3)">Sent: ${fmtD(co.sent_at)}</span>
+      <span style="font-size:11px;color:var(--t3)">Approved: ${fmtD(co.approved_at)}</span>
+    </div></div>`;
+  }).join('')+`<div style="text-align:right;padding-top:8px;font-size:13px;font-weight:600">Total: ${fmt(cos.reduce((s,c)=>s+(c.owner_price||0),0))}</div>`;
+}
+
+function dInvs(invs){
+  const add=`<div style="display:flex;justify-content:flex-end;margin-bottom:14px"><button class="btn btn-p btn-sm" onclick="mNewInv(true)"><i class="ti ti-plus"></i> Create invoice</button></div>`;
+  if(!invs.length)return add+`<div class="empty"><i class="ti ti-receipt"></i><div class="empty-t">No invoices yet</div></div>`;
+  const sm={draft:'gray',sent:'amber',paid:'green',overdue:'red',void:'gray'};
+  const tD=invs.reduce((s,i)=>s+(i.amount_due||0),0);const tP=invs.reduce((s,i)=>s+(i.amount_paid||0),0);
+  return add+invs.map(i=>`<div class="invr"><div><div style="font-size:13px;font-weight:500">${i.invoice_number||'Draft'}</div><div style="font-size:11px;color:var(--t3)">${i.invoice_type} · Due ${fmtD(i.due_date)}</div></div><div style="display:flex;align-items:center;gap:10px"><span style="font-size:14px;font-weight:600">${fmt(i.amount_due)}</span><span class="badge bg-${sm[i.status]||'gray'}">${i.status}</span></div></div>`).join('')
+  +`<div style="text-align:right;padding-top:8px;font-size:12px;display:flex;justify-content:flex-end;gap:16px"><span>Total: <strong>${fmt(tD)}</strong></span><span style="color:var(--gtx)">Paid: <strong>${fmt(tP)}</strong></span><span style="color:var(--atx)">Due: <strong>${fmt(tD-tP)}</strong></span></div>`;
+}
+
+function dSched(items){
+  const add=`<div style="display:flex;justify-content:flex-end;margin-bottom:14px"><button class="btn btn-p btn-sm" onclick="mNewTask(true)"><i class="ti ti-plus"></i> Add task</button></div>`;
+  if(!items.length)return add+`<div class="empty"><i class="ti ti-calendar"></i><div class="empty-t">No schedule yet</div></div>`;
+  const dc={upcoming:'var(--t3)',in_progress:'var(--amber)',complete:'var(--green)',delayed:'var(--red)',blocked:'var(--red)'};
+  return add+items.map(t=>`<div class="scr"><span class="dot" style="background:${dc[t.status]||'var(--t3)'}"></span><div class="sci"><div style="font-size:13px;font-weight:500">${t.title}</div><div style="font-size:11px;color:var(--t2)">${t.assigned_to||''}${t.phase?' · '+t.phase:''}</div></div><div style="text-align:right"><div style="font-size:12px;color:var(--t2)">${fmtD(t.scheduled_start)} → ${fmtD(t.scheduled_end)}</div><span class="badge bg-${t.status==='complete'?'green':['delayed','blocked'].includes(t.status)?'red':t.status==='in_progress'?'amber':'gray'}">${t.status.replace('_',' ')}</span></div></div>`).join('');
+}
+
+function dNotes(notes){
+  const add=`<div style="display:flex;justify-content:flex-end;margin-bottom:14px"><button class="btn btn-p btn-sm" onclick="mNote()"><i class="ti ti-plus"></i> Log note</button></div>`;
+  if(!notes.length)return add+`<div class="empty"><i class="ti ti-notes"></i><div class="empty-t">No notes yet</div></div>`;
+  const tc={site_visit:'blue',client_communication:'purple',internal:'gray',daily_log:'green'};
+  return add+notes.map(n=>`<div class="coc"><div style="display:flex;align-items:center;gap:8px;margin-bottom:6px"><span class="badge bg-${tc[n.note_type]||'gray'}">${(n.note_type||'note').replace('_',' ')}</span><span style="font-size:11px;color:var(--t3)">${n.author} · ${fmtD(n.created_at)}</span>${n.is_client_visible?'<span class="badge bg-blue">client visible</span>':''}</div><div style="font-size:13px;line-height:1.6">${n.content}</div></div>`).join('');
+}
+
+// ══════════════════════════════════════════════════
+// LEADS
+// ══════════════════════════════════════════════════
+async function pLeads(){
+  const leads=await db('leads','?order=created_at.desc');
+  const nw=leads.filter(l=>l.status==='new');const ct=leads.filter(l=>l.status==='contacted');const ql=leads.filter(l=>l.status==='qualified');
+  document.getElementById('main').innerHTML=`
+    <div class="ph"><div><h1>Leads</h1><p>Incoming inquiries and prospects</p></div><button class="btn btn-p btn-sm" onclick="mNewLead()"><i class="ti ti-plus"></i> New lead</button></div>
+    <div class="metrics">
+      <div class="metric"><div class="m-label">New inquiries</div><div class="m-val">${nw.length}</div><div class="m-sub">not yet contacted</div></div>
+      <div class="metric"><div class="m-label">Contacted</div><div class="m-val">${ct.length}</div></div>
+      <div class="metric"><div class="m-label">Qualified</div><div class="m-val">${ql.length}</div></div>
+      <div class="metric"><div class="m-label">Total</div><div class="m-val">${leads.length}</div></div>
+    </div>
+    <div class="sh"><div class="st">All leads</div><div class="filters">
+      <button class="fb on" onclick="fld('all',this)">All</button>
+      <button class="fb" onclick="fld('new',this)">New</button>
+      <button class="fb" onclick="fld('contacted',this)">Contacted</button>
+      <button class="fb" onclick="fld('qualified',this)">Qualified</button>
+      <button class="fb" onclick="fld('converted',this)">Converted</button>
+    </div></div>
+    <div id="llist">${lCards(leads)}</div>`;
+  window._ld=leads;
+}
+function lCards(list){
+  if(!list.length)return`<div class="empty"><i class="ti ti-user-plus"></i><div class="empty-t">No leads</div><div class="empty-s">Add a lead or paste a form submission.</div></div>`;
+  const sm={new:'gray',contacted:'amber',qualified:'blue',converted:'green',disqualified:'red'};
+  return list.map(l=>`<div class="lc"><div style="display:flex;align-items:center;justify-content:space-between">
+    <div><div style="font-size:13px;font-weight:500">${l.first_name||''} ${l.last_name||''}</div>
+    <div style="font-size:12px;color:var(--t2);margin-top:2px">${l.project_address||'Address TBD'}${l.project_type?' · '+l.project_type:''}</div></div>
+    <div style="display:flex;align-items:center;gap:10px">
+      ${l.budget_range_min?`<span style="font-size:12px;color:var(--t2)">${fmt(l.budget_range_min)}+ budget</span>`:''}
+      <span class="badge bg-${sm[l.status]||'gray'}">${l.status}</span>
+    </div></div>
+    <div style="display:flex;gap:12px;margin-top:8px;flex-wrap:wrap">
+      ${l.phone?`<span style="font-size:11px;color:var(--t3)"><i class="ti ti-phone" style="font-size:12px;vertical-align:-1px"></i> ${l.phone}</span>`:''}
+      ${l.email?`<span style="font-size:11px;color:var(--t3)"><i class="ti ti-mail" style="font-size:12px;vertical-align:-1px"></i> ${l.email}</span>`:''}
+      ${l.referral_name?`<span style="font-size:11px;color:var(--t3)">Referred by ${l.referral_name}</span>`:''}
+    </div></div>`).join('');
+}
+function fld(t,btn){document.querySelectorAll('#main .fb').forEach(b=>b.classList.remove('on'));btn.classList.add('on');document.getElementById('llist').innerHTML=lCards(t==='all'?window._ld:window._ld.filter(l=>l.status===t));}
+
+// ══════════════════════════════════════════════════
+// CLIENTS
+// ══════════════════════════════════════════════════
+async function pClients(){
+  const cl=await db('clients','?order=last_name.asc');
+  const adv=cl.filter(c=>c.is_advocate);const rep=cl.filter(c=>c.is_repeat_client);const gift=cl.filter(c=>!c.referral_gift_sent&&c.referral_name);
+  document.getElementById('main').innerHTML=`
+    <div class="ph"><div><h1>Clients</h1><p>Your client roster and referral network</p></div><button class="btn btn-p btn-sm" onclick="mNewClient()"><i class="ti ti-plus"></i> New client</button></div>
+    <div class="metrics">
+      <div class="metric"><div class="m-label">Total clients</div><div class="m-val">${cl.length}</div></div>
+      <div class="metric"><div class="m-label">Repeat</div><div class="m-val">${rep.length}</div></div>
+      <div class="metric"><div class="m-label">Advocates</div><div class="m-val">${adv.length}</div></div>
+      <div class="metric"><div class="m-label">Gifts pending</div><div class="m-val" style="${gift.length?'color:var(--atx)':''}">${gift.length}</div></div>
+    </div>
+    ${gift.length?`<div class="alert alert-a"><i class="ti ti-gift" style="font-size:14px;vertical-align:-2px;margin-right:6px"></i><strong>${gift.length} referral gift${gift.length>1?'s':''} to send:</strong> ${gift.slice(0,3).map(c=>`${c.first_name} ${c.last_name}`).join(', ')}${gift.length>3?` +${gift.length-3} more`:''}</div>`:''}
+    <div class="sh"><div class="st">${cl.length} clients</div><div class="filters">
+      <button class="fb on" onclick="fcl('all',this)">All</button>
+      <button class="fb" onclick="fcl('advocate',this)">Advocates</button>
+      <button class="fb" onclick="fcl('repeat',this)">Repeat</button>
+      <button class="fb" onclick="fcl('gift',this)">Gift pending</button>
+    </div></div>
+    <div id="clist">${cCards(cl)}</div>`;
+  window._cl=cl;
+}
+function cCards(list){
+  if(!list.length)return`<div class="empty"><i class="ti ti-users"></i><div class="empty-t">No clients</div></div>`;
+  return list.map(c=>`<div class="cc"><div class="av">${(c.first_name||'?')[0]}${(c.last_name||'')[0]||''}</div>
+    <div style="flex:1;min-width:0"><div style="font-size:13px;font-weight:500">${c.first_name} ${c.last_name}</div><div style="font-size:12px;color:var(--t2);margin-top:2px">${c.email||''}${c.email&&c.phone?' · ':''}${c.phone||''}</div></div>
+    <div style="display:flex;align-items:center;gap:8px;flex-shrink:0">
+      ${c.referral_name?`<span style="font-size:11px;color:var(--t3)">Ref: ${c.referral_name}</span>`:''}
+      ${c.is_advocate?'<span class="badge bg-green">Advocate</span>':''}
+      ${c.is_repeat_client?'<span class="badge bg-blue">Repeat</span>':''}
+      ${!c.referral_gift_sent&&c.referral_name?'<span class="badge bg-amber"><i class="ti ti-gift" style="font-size:11px;margin-right:3px"></i>Gift</span>':''}
+      ${c.lifetime_value?`<span style="font-size:12px;font-weight:500">${fmt(c.lifetime_value)}</span>`:''}
+    </div></div>`).join('');
+}
+function fcl(t,btn){document.querySelectorAll('#main .fb').forEach(b=>b.classList.remove('on'));btn.classList.add('on');const m={all:window._cl,advocate:window._cl.filter(c=>c.is_advocate),repeat:window._cl.filter(c=>c.is_repeat_client),gift:window._cl.filter(c=>!c.referral_gift_sent&&c.referral_name)};document.getElementById('clist').innerHTML=cCards(m[t]||window._cl);}
+
+// ══════════════════════════════════════════════════
+// ESTIMATES
+// ══════════════════════════════════════════════════
+async function pEstimates(){
+  const ests=await db('estimates','?order=created_at.desc&select=*,projects(name)');
+  const dr=ests.filter(e=>e.status==='draft');const ap=ests.filter(e=>e.status==='approved');
+  document.getElementById('main').innerHTML=`
+    <div class="ph"><div><h1>Estimates</h1><p>All estimates across all projects</p></div></div>
+    <div class="metrics">
+      <div class="metric"><div class="m-label">Draft</div><div class="m-val">${dr.length}</div></div>
+      <div class="metric"><div class="m-label">Sent to client</div><div class="m-val">${ests.filter(e=>e.status==='sent_to_client').length}</div></div>
+      <div class="metric"><div class="m-label">Approved</div><div class="m-val">${ap.length}</div></div>
+      <div class="metric"><div class="m-label">Approved value</div><div class="m-val" style="font-size:17px">${fmt(ap.reduce((s,e)=>s+(e.grand_total_owner_price||0),0))}</div></div>
+    </div>
+    <div class="card">
+      ${ests.length?`<table class="tbl"><thead><tr><th>Project</th><th>Version</th><th>PM fee</th><th>Construction</th><th>Allowances</th><th>Grand total</th><th>Status</th></tr></thead>
+      <tbody>${ests.map(e=>`<tr onclick="toast('Open the project to edit this estimate')"><td style="font-weight:500">${e.projects?.name||'—'}</td><td>v${e.version}</td><td>${fmt(e.pm_fee_total)}</td><td>${fmt(e.construction_total_owner_price)}</td><td>${fmt(e.allowance_total)}</td><td style="font-weight:600">${fmt(e.grand_total_owner_price)}</td><td>${sb(e.status)}</td></tr>`).join('')}</tbody></table>`
+      :`<div class="empty" style="padding:40px"><i class="ti ti-file-dollar"></i><div class="empty-t">No estimates yet</div><div class="empty-s">Open a project and start an estimate from the Estimate tab.</div></div>`}
+    </div>`;
+}
+
+// ══════════════════════════════════════════════════
+// INVOICES
+// ══════════════════════════════════════════════════
+async function pInvoices(){
+  const invs=await db('invoices','?order=created_at.desc&select=*,projects(name)');
+  const ov=invs.filter(i=>i.status==='overdue');const st=invs.filter(i=>i.status==='sent');const pd=invs.filter(i=>i.status==='paid');
+  const tout=invs.filter(i=>['sent','overdue'].includes(i.status)).reduce((s,i)=>s+(i.amount_due||0)-(i.amount_paid||0),0);
+  document.getElementById('main').innerHTML=`
+    <div class="ph"><div><h1>Invoices</h1><p>All invoices across all projects</p></div><button class="btn btn-p btn-sm" onclick="mNewInv()"><i class="ti ti-plus"></i> Create invoice</button></div>
+    <div class="metrics">
+      <div class="metric"><div class="m-label">Overdue</div><div class="m-val" style="${ov.length?'color:var(--red)':''}">${ov.length}</div><div class="m-sub">needs attention</div></div>
+      <div class="metric"><div class="m-label">Awaiting payment</div><div class="m-val">${st.length}</div></div>
+      <div class="metric"><div class="m-label">Paid</div><div class="m-val">${pd.length}</div></div>
+      <div class="metric"><div class="m-label">Outstanding</div><div class="m-val" style="font-size:17px;${tout>0?'color:var(--atx)':''}">${fmt(tout)}</div></div>
+    </div>
+    <div class="sh"><div class="st">All invoices</div><div class="filters">
+      <button class="fb on" onclick="finv('all',this)">All (${invs.length})</button>
+      <button class="fb" onclick="finv('overdue',this)">Overdue</button>
+      <button class="fb" onclick="finv('sent',this)">Sent</button>
+      <button class="fb" onclick="finv('paid',this)">Paid</button>
+      <button class="fb" onclick="finv('draft',this)">Draft</button>
+    </div></div>
+    <div id="ilist">${invCards(invs)}</div>`;
+  window._inv=invs;
+}
+function invCards(list){
+  if(!list.length)return`<div class="empty"><i class="ti ti-receipt"></i><div class="empty-t">No invoices</div></div>`;
+  const sm={draft:'gray',sent:'amber',paid:'green',overdue:'red',void:'gray'};
+  return list.map(i=>`<div class="invr"><div><div style="font-size:13px;font-weight:500">${i.invoice_number||'Draft'} <span style="color:var(--t2);font-weight:400">· ${i.projects?.name||''}</span></div><div style="font-size:11px;color:var(--t3)">${i.invoice_type} · Due ${fmtD(i.due_date)}</div></div><div style="display:flex;align-items:center;gap:10px"><span style="font-size:14px;font-weight:600">${fmt(i.amount_due)}</span><span class="badge bg-${sm[i.status]||'gray'}">${i.status}</span></div></div>`).join('');
+}
+function finv(t,btn){document.querySelectorAll('#main .fb').forEach(b=>b.classList.remove('on'));btn.classList.add('on');document.getElementById('ilist').innerHTML=invCards(t==='all'?window._inv:window._inv.filter(i=>i.status===t));}
+
+// ══════════════════════════════════════════════════
+// CHANGE ORDERS
+// ══════════════════════════════════════════════════
+async function pCOs(){
+  const cos=await db('change_orders','?order=created_at.desc&select=*,projects(name)');
+  const now=new Date();
+  const br=cos.filter(c=>c.status==='sent'&&c.sent_at&&((now-new Date(c.sent_at))/36e5>24));
+  const pn=cos.filter(c=>c.status==='pending');const st=cos.filter(c=>c.status==='sent');const ap=cos.filter(c=>c.status==='approved');
+  document.getElementById('main').innerHTML=`
+    <div class="ph"><div><h1>Change Orders</h1><p>All COs across active projects</p></div><button class="btn btn-p btn-sm" onclick="mNewCO()"><i class="ti ti-plus"></i> New CO</button></div>
+    <div class="metrics">
+      <div class="metric"><div class="m-label">SOP breaches</div><div class="m-val" style="${br.length?'color:var(--red)':''}">${br.length}</div><div class="m-sub">>24hr unresponded</div></div>
+      <div class="metric"><div class="m-label">Pending</div><div class="m-val">${pn.length}</div></div>
+      <div class="metric"><div class="m-label">Awaiting approval</div><div class="m-val">${st.length}</div></div>
+      <div class="metric"><div class="m-label">Approved value</div><div class="m-val" style="font-size:17px">${fmt(ap.reduce((s,c)=>s+(c.owner_price||0),0))}</div></div>
+    </div>
+    ${br.length?`<div class="alert alert-r"><i class="ti ti-alert-triangle" style="font-size:14px;vertical-align:-2px;margin-right:6px"></i><strong>${br.length} SOP breach${br.length>1?'es':''}</strong> — sent but not approved within 24 hours</div>`:''}
+    <div class="sh"><div class="st">All change orders</div><div class="filters">
+      <button class="fb on" onclick="fco('all',this)">All (${cos.length})</button>
+      <button class="fb" onclick="fco('pending',this)">Pending</button>
+      <button class="fb" onclick="fco('sent',this)">Sent</button>
+      <button class="fb" onclick="fco('approved',this)">Approved</button>
+      <button class="fb" onclick="fco('oversight',this)">Oversight</button>
+      <button class="fb" onclick="fco('client_addition',this)">Client adds</button>
+      <button class="fb" onclick="fco('unforeseen',this)">Unforeseen</button>
+    </div></div>
+    <div id="colist">${coCards(cos)}</div>`;
+  window._co=cos;
+}
+function coCards(list){
+  if(!list.length)return`<div class="empty"><i class="ti ti-git-branch"></i><div class="empty-t">No change orders</div></div>`;
+  const tm={oversight:'amber',client_addition:'blue',unforeseen:'red'};const sm={pending:'gray',sent:'amber',approved:'green',rejected:'red'};const now=new Date();
+  return list.map(co=>{const br=co.status==='sent'&&co.sent_at&&((now-new Date(co.sent_at))/36e5>24);
+    return`<div class="coc"><div class="coh"><div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
+      <span style="font-weight:600">CO-${String(co.co_number||'?').padStart(3,'0')}</span><span>${co.title}</span>
+      <span style="font-size:11px;color:var(--t3)">${co.projects?.name||''}</span>
+      <span class="badge bg-${tm[co.co_type]||'gray'}">${co.co_type.replace('_',' ')}</span>
+      <span class="badge bg-${sm[co.status]||'gray'}">${co.status}</span>
+      ${br?`<span class="badge bg-red"><i class="ti ti-alert-triangle" style="font-size:11px;margin-right:3px"></i>SOP</span>`:''}
+    </div><span style="font-size:14px;font-weight:600">${fmt(co.owner_price)}</span></div>
+    ${co.description?`<div style="font-size:12px;color:var(--t2);margin-top:6px">${co.description}</div>`:''}
+    </div>`;}).join('');
+}
+function fco(t,btn){
+  document.querySelectorAll('#main .fb').forEach(b=>b.classList.remove('on'));btn.classList.add('on');
+  const byS=['pending','sent','approved','rejected'];const byT=['oversight','client_addition','unforeseen'];
+  let f=window._co;
+  if(byS.includes(t))f=f.filter(c=>c.status===t);else if(byT.includes(t))f=f.filter(c=>c.co_type===t);
+  document.getElementById('colist').innerHTML=coCards(f);
+}
+
+// ══════════════════════════════════════════════════
+// TASK BOARD (Monday.com style)
+// ══════════════════════════════════════════════════
+async function pTasks(){
+  const [tasks,projs]=await Promise.all([
+    db('schedule_items','?order=scheduled_start.asc&select=*,projects(name)'),
+    db('projects','?is_archived=eq.false&status=in.(active,estimating,proposed)&select=id,name'),
+  ]);
+  const cols={upcoming:'To Do',in_progress:'In Progress',delayed:'Delayed / Blocked',complete:'Done'};
+  const colColors={upcoming:'var(--t3)',in_progress:'var(--amber)',delayed:'var(--red)',complete:'var(--green)'};
+  const done=tasks.filter(t=>t.status==='complete').length;
+  const total=tasks.length;
+  document.getElementById('main').innerHTML=`
+    <div class="ph"><div><h1>Task Board</h1><p>Shared task management across all active projects</p></div>
+    <div style="display:flex;gap:8px">
+      <button class="btn btn-sm" onclick="filterTasks('all',this)">All projects</button>
+      <button class="btn btn-p btn-sm" onclick="mNewTask()"><i class="ti ti-plus"></i> New task</button>
+    </div></div>
+    <div class="metrics">
+      <div class="metric"><div class="m-label">Total tasks</div><div class="m-val">${total}</div></div>
+      <div class="metric"><div class="m-label">In progress</div><div class="m-val" style="color:var(--amber)">${tasks.filter(t=>t.status==='in_progress').length}</div></div>
+      <div class="metric"><div class="m-label">Delayed / blocked</div><div class="m-val" style="${tasks.filter(t=>['delayed','blocked'].includes(t.status)).length?'color:var(--red)':''}">${tasks.filter(t=>['delayed','blocked'].includes(t.status)).length}</div></div>
+      <div class="metric"><div class="m-label">Completed</div><div class="m-val" style="color:var(--green)">${done}/${total}</div><div class="m-sub">${total>0?Math.round(done/total*100):0}% done</div></div>
+    </div>
+    <div style="margin-bottom:12px;display:flex;gap:8px;flex-wrap:wrap" id="task-proj-filters">
+      <button class="fb on" onclick="filterTasks('all',this)">All</button>
+      ${projs.map(p=>`<button class="fb" onclick="filterTasks('${p.id}',this)">${p.name.replace(/\|.*/,'').trim()}</button>`).join('')}
+    </div>
+    <div class="board" id="task-board">${renderBoard(tasks)}</div>`;
+  window._tasks=tasks;
+}
+
+function renderBoard(tasks){
+  const statuses=['upcoming','in_progress','delayed','complete'];
+  const labels={upcoming:'To Do',in_progress:'In Progress',delayed:'Delayed / Blocked',complete:'Done'};
+  const colors={upcoming:'var(--t3)',in_progress:'var(--amber)',delayed:'var(--red)',complete:'var(--green)'};
+  return statuses.map(s=>{
+    const col=tasks.filter(t=>s==='delayed'?['delayed','blocked'].includes(t.status):t.status===s);
+    return`<div class="col">
+      <div class="col-hd"><span style="color:${colors[s]}">${labels[s]}</span><span style="background:var(--border);padding:1px 7px;border-radius:10px;font-size:11px">${col.length}</span></div>
+      ${col.map(t=>{
+        const now=new Date();const overdue=t.scheduled_end&&new Date(t.scheduled_end)<now&&t.status!=='complete';
+        return`<div class="task-card ${t.is_milestone?'priority-high':''}" onclick="mEditTask('${t.id}')">
+          <div class="task-title">${t.title}</div>
+          <div class="task-meta">${t.projects?.name||'No project'}</div>
+          ${t.assigned_to?`<div class="task-meta" style="margin-top:3px"><span style="background:var(--bbg);color:var(--btx);padding:1px 6px;border-radius:10px;font-size:10px">${t.assigned_to}</span></div>`:''}
+          ${t.scheduled_end?`<div class="task-meta" style="margin-top:3px;${overdue?'color:var(--red);font-weight:500':''}">${overdue?'⚠ ':''} Due ${fmtD(t.scheduled_end)}</div>`:''}
+          ${t.phase?`<div class="task-meta" style="margin-top:2px">${t.phase}</div>`:''}
+        </div>`;
+      }).join('')}
+      <button class="btn btn-ghost btn-sm" style="width:100%;margin-top:6px;color:var(--t2);justify-content:center" onclick="mNewTask(false,'${s}')"><i class="ti ti-plus"></i> Add</button>
+    </div>`;
+  }).join('');
+}
+
+function filterTasks(projId,btn){
+  document.querySelectorAll('#task-proj-filters .fb').forEach(b=>b.classList.remove('on'));btn.classList.add('on');
+  const f=projId==='all'?window._tasks:window._tasks.filter(t=>t.project_id===projId);
+  document.getElementById('task-board').innerHTML=renderBoard(f);
+}
+
+// ══════════════════════════════════════════════════
+// SCHEDULE (list view)
+// ══════════════════════════════════════════════════
+async function pSchedule(){
+  const items=await db('schedule_items','?order=scheduled_start.asc&select=*,projects(name)');
+  const ip=items.filter(i=>i.status==='in_progress');const dl=items.filter(i=>i.status==='delayed');
+  document.getElementById('main').innerHTML=`
+    <div class="ph"><div><h1>Schedule</h1><p>All tasks across active projects — Shannon manages this daily</p></div><button class="btn btn-p btn-sm" onclick="mNewTask()"><i class="ti ti-plus"></i> Add task</button></div>
+    <div class="metrics">
+      <div class="metric"><div class="m-label">In progress</div><div class="m-val">${ip.length}</div></div>
+      <div class="metric"><div class="m-label">Upcoming</div><div class="m-val">${items.filter(i=>i.status==='upcoming').length}</div></div>
+      <div class="metric"><div class="m-label">Delayed</div><div class="m-val" style="${dl.length?'color:var(--red)':''}">${dl.length}</div></div>
+      <div class="metric"><div class="m-label">Complete</div><div class="m-val" style="color:var(--green)">${items.filter(i=>i.status==='complete').length}</div></div>
+    </div>
+    <div class="sh"><div class="st">All tasks</div><div class="filters">
+      <button class="fb on" onclick="fsch('all',this)">All (${items.length})</button>
+      <button class="fb" onclick="fsch('in_progress',this)">In progress</button>
+      <button class="fb" onclick="fsch('upcoming',this)">Upcoming</button>
+      <button class="fb" onclick="fsch('delayed',this)">Delayed</button>
+      <button class="fb" onclick="fsch('complete',this)">Complete</button>
+    </div></div>
+    <div id="sclist">${schCards(items)}</div>`;
+  window._sch=items;
+}
+function schCards(list){
+  if(!list.length)return`<div class="empty"><i class="ti ti-calendar"></i><div class="empty-t">No tasks yet</div><div class="empty-s">Add tasks from the Task Board or a project's Schedule tab.</div></div>`;
+  const dc={upcoming:'var(--t3)',in_progress:'var(--amber)',complete:'var(--green)',delayed:'var(--red)',blocked:'var(--red)'};
+  return list.map(t=>`<div class="scr"><span class="dot" style="background:${dc[t.status]||'var(--t3)'}"></span><div class="sci"><div style="font-size:13px;font-weight:500">${t.title}</div><div style="font-size:11px;color:var(--t2)">${t.projects?.name||''}${t.assigned_to?' · '+t.assigned_to:''}${t.phase?' · '+t.phase:''}</div></div><div style="text-align:right"><div style="font-size:12px;color:var(--t2)">${fmtD(t.scheduled_start)} → ${fmtD(t.scheduled_end)}</div><span class="badge bg-${t.status==='complete'?'green':['delayed','blocked'].includes(t.status)?'red':t.status==='in_progress'?'amber':'gray'}">${t.status.replace('_',' ')}</span></div></div>`).join('');
+}
+function fsch(t,btn){document.querySelectorAll('#main .fb').forEach(b=>b.classList.remove('on'));btn.classList.add('on');document.getElementById('sclist').innerHTML=schCards(t==='all'?window._sch:window._sch.filter(i=>i.status===t));}
+
+// ══════════════════════════════════════════════════
+// SUBCONTRACTORS
+// ══════════════════════════════════════════════════
+async function pSubs(){
+  const subs=await db('subcontractors','?order=company_name.asc');
+  const pf=subs.filter(s=>s.preferred);const ie=subs.filter(s=>s.insurance_expiry&&new Date(s.insurance_expiry)<new Date(Date.now()+30*864e5));const nw=subs.filter(s=>!s.w9_on_file);
+  document.getElementById('main').innerHTML=`
+    <div class="ph"><div><h1>Subcontractors</h1><p>Your trade partners and vendor roster</p></div><button class="btn btn-p btn-sm" onclick="mNewSub()"><i class="ti ti-plus"></i> Add sub</button></div>
+    <div class="metrics">
+      <div class="metric"><div class="m-label">Total subs</div><div class="m-val">${subs.length}</div></div>
+      <div class="metric"><div class="m-label">Preferred</div><div class="m-val">${pf.length}</div></div>
+      <div class="metric"><div class="m-label">Insurance expiring</div><div class="m-val" style="${ie.length?'color:var(--atx)':''}">${ie.length}</div><div class="m-sub">within 30 days</div></div>
+      <div class="metric"><div class="m-label">W9 missing</div><div class="m-val" style="${nw.length?'color:var(--atx)':''}">${nw.length}</div></div>
+    </div>
+    ${ie.length?`<div class="alert alert-a"><i class="ti ti-alert-triangle" style="font-size:14px;vertical-align:-2px;margin-right:6px"></i><strong>Insurance expiring soon:</strong> ${ie.map(s=>s.company_name).join(', ')}</div>`:''}
+    <div class="sh"><div class="st">${subs.length} subs</div><div class="filters">
+      <button class="fb on" onclick="fsub('all',this)">All</button>
+      <button class="fb" onclick="fsub('preferred',this)">Preferred</button>
+      <button class="fb" onclick="fsub('w9',this)">W9 missing</button>
+    </div></div>
+    <div id="sublist">${subCards(subs)}</div>`;
+  window._sub=subs;
+}
+function subCards(list){
+  if(!list.length)return`<div class="empty"><i class="ti ti-tools"></i><div class="empty-t">No subs yet</div><div class="empty-s">Add your trade partners to build the roster.</div></div>`;
+  return list.map(s=>`<div style="background:var(--surface);border:1px solid var(--border);border-radius:var(--rl);padding:12px 16px;margin-bottom:6px;display:flex;align-items:center;gap:14px;">
+    <div class="av" style="background:var(--gray-bg);color:var(--gray-tx)">${(s.company_name||'?')[0]}</div>
+    <div style="flex:1;min-width:0"><div style="font-size:13px;font-weight:500;display:flex;align-items:center;gap:8px">${s.company_name}${s.preferred?'<span class="badge bg-green">Preferred</span>':''}</div><div style="font-size:12px;color:var(--t2);margin-top:2px">${s.trade||''}${s.contact_name?' · '+s.contact_name:''}</div></div>
+    <div style="display:flex;align-items:center;gap:8px;flex-shrink:0">
+      ${s.phone?`<span style="font-size:12px;color:var(--t2)">${s.phone}</span>`:''}
+      ${s.w9_on_file?'<span class="badge bg-green">W9 ✓</span>':'<span class="badge bg-amber">W9 needed</span>'}
+      ${s.insurance_expiry?`<span style="font-size:11px;color:${new Date(s.insurance_expiry)<new Date(Date.now()+30*864e5)?'var(--atx)':'var(--t3)'}">Ins: ${fmtD(s.insurance_expiry)}</span>`:''}
+    </div></div>`).join('');
+}
+function fsub(t,btn){document.querySelectorAll('#main .fb').forEach(b=>b.classList.remove('on'));btn.classList.add('on');const m={all:window._sub,preferred:window._sub.filter(s=>s.preferred),w9:window._sub.filter(s=>!s.w9_on_file)};document.getElementById('sublist').innerHTML=subCards(m[t]||window._sub);}
+
+// ══════════════════════════════════════════════════
+// MODALS
+// ══════════════════════════════════════════════════
+function mNewProj(){showM(`<div class="mo" onclick="if(event.target===this)closeM()"><div class="mb">
+  <div class="mt">New project</div><div id="merr"></div>
+  <div class="fg"><label class="fl">Project name</label><input class="fi" id="fn" placeholder="4040 N Park Ave Renovation"></div>
+  <div class="fr"><div class="fg"><label class="fl">Address</label><input class="fi" id="fa" placeholder="4040 N Park Ave"></div><div class="fg"><label class="fl">Zip</label><input class="fi" id="fz" placeholder="46205"></div></div>
+  <div class="fr"><div class="fg"><label class="fl">Status</label><select class="fi" id="fs"><option value="lead">Lead</option><option value="vetting">Vetting</option><option value="estimating">Estimating</option><option value="proposed">Proposed</option><option value="active">Active</option></select></div>
+  <div class="fg"><label class="fl">Project type</label><input class="fi" id="ft" placeholder="renovation, addition..."></div></div>
+  <div class="fr"><div class="fg"><label class="fl">Start date</label><input class="fi" id="fsd" type="date"></div><div class="fg"><label class="fl">Est. completion</label><input class="fi" id="fec" type="date"></div></div>
+  <div class="fg"><label class="fl">Notes</label><textarea class="fi" id="fo" placeholder="Site visit observations..."></textarea></div>
+  <div class="ma"><button class="btn" onclick="closeM()">Cancel</button><button class="btn btn-p" onclick="saveProj()"><i class="ti ti-check"></i> Create</button></div>
+</div></div>`);}
+async function saveProj(){
+  const name=document.getElementById('fn').value.trim();
+  if(!name){document.getElementById('merr').innerHTML='<div class="merr">Name required.</div>';return;}
+  try{await dbPost('projects',{name,address:document.getElementById('fa').value.trim(),zip:document.getElementById('fz').value.trim(),status:document.getElementById('fs').value,project_type:document.getElementById('ft').value.trim(),start_date:document.getElementById('fsd').value||null,estimated_completion:document.getElementById('fec').value||null,internal_notes:document.getElementById('fo').value.trim(),city:'Indianapolis',state:'IN'});closeM();toast('Project created');nav('projects');}
+  catch(e){document.getElementById('merr').innerHTML=`<div class="merr">${e.message}</div>`;}
+}
+
+function mNewLead(){showM(`<div class="mo" onclick="if(event.target===this)closeM()"><div class="mb wide">
+  <div class="mt">New lead</div><div id="merr"></div>
+  <div class="fr"><div class="fg"><label class="fl">First name</label><input class="fi" id="lfn" placeholder="Jane"></div><div class="fg"><label class="fl">Last name</label><input class="fi" id="lln" placeholder="Smith"></div></div>
+  <div class="fr"><div class="fg"><label class="fl">Phone</label><input class="fi" id="lph" placeholder="(317) 555-0100"></div><div class="fg"><label class="fl">Email</label><input class="fi" id="lem" placeholder="jane@email.com"></div></div>
+  <div class="fg"><label class="fl">Project address</label><input class="fi" id="lad" placeholder="123 Main St, Indianapolis IN"></div>
+  <div class="fr"><div class="fg"><label class="fl">Project type</label><input class="fi" id="lpt" placeholder="kitchen, addition..."></div>
+  <div class="fg"><label class="fl">How they heard</label><select class="fi" id="lhh"><option value="">—</option><option value="form">Website form</option><option value="email">Email</option><option value="text">Text</option><option value="phone">Phone</option><option value="instagram">Instagram</option><option value="other">Other</option></select></div></div>
+  <div class="fr"><div class="fg"><label class="fl">Budget min ($)</label><input class="fi" id="lbmin" type="number" placeholder="50000"></div><div class="fg"><label class="fl">Budget max ($)</label><input class="fi" id="lbmax" type="number" placeholder="100000"></div></div>
+  <div class="fr"><div class="fg"><label class="fl">Referred by</label><input class="fi" id="lref" placeholder="Name of referrer"></div>
+  <div class="fg"><label class="fl">Funding</label><select class="fi" id="lft"><option value="">—</option><option value="cash">Cash</option><option value="HELOC">HELOC</option><option value="construction_loan">Construction loan</option><option value="other">Other</option></select></div></div>
+  <div class="fg"><label class="fl">Vetting score (1–5)</label><select class="fi" id="lvs"><option value="">—</option><option value="5">5 — Strong fit</option><option value="4">4 — Good fit</option><option value="3">3 — Maybe</option><option value="2">2 — Questionable</option><option value="1">1 — Poor fit</option></select></div>
+  <div class="fg"><label class="fl">Notes / form submission</label><textarea class="fi" id="lnt" placeholder="Paste form submission or intake notes..."></textarea></div>
+  <div class="ma"><button class="btn" onclick="closeM()">Cancel</button><button class="btn btn-p" onclick="saveLead()"><i class="ti ti-check"></i> Add lead</button></div>
+</div></div>`);}
+async function saveLead(){
+  try{await dbPost('leads',{first_name:document.getElementById('lfn').value.trim(),last_name:document.getElementById('lln').value.trim(),phone:document.getElementById('lph').value.trim(),email:document.getElementById('lem').value.trim(),project_address:document.getElementById('lad').value.trim(),project_type:document.getElementById('lpt').value.trim(),initial_contact_method:document.getElementById('lhh').value,budget_range_min:parseFloat(document.getElementById('lbmin').value)||null,budget_range_max:parseFloat(document.getElementById('lbmax').value)||null,referral_name:document.getElementById('lref').value.trim(),funding_type:document.getElementById('lft').value,vetting_score:parseInt(document.getElementById('lvs').value)||null,form_submission_raw:document.getElementById('lnt').value.trim(),status:'new',assigned_to:'brent'});closeM();toast('Lead added');nav('leads');}
+  catch(e){document.getElementById('merr').innerHTML=`<div class="merr">${e.message}</div>`;}
+}
+
+function mNewClient(){showM(`<div class="mo" onclick="if(event.target===this)closeM()"><div class="mb wide">
+  <div class="mt">New client</div><div id="merr"></div>
+  <div class="fr"><div class="fg"><label class="fl">First name</label><input class="fi" id="cfn" placeholder="John"></div><div class="fg"><label class="fl">Last name</label><input class="fi" id="cln" placeholder="Smith"></div></div>
+  <div class="fr"><div class="fg"><label class="fl">Phone</label><input class="fi" id="cph" placeholder="(317) 555-0100"></div><div class="fg"><label class="fl">Email</label><input class="fi" id="cem" placeholder="john@email.com"></div></div>
+  <div class="fr"><div class="fg"><label class="fl">Referred by</label><input class="fi" id="crf" placeholder="Referrer name"></div>
+  <div class="fg"><label class="fl">Funding</label><select class="fi" id="cft"><option value="">—</option><option value="cash">Cash</option><option value="HELOC">HELOC</option><option value="construction_loan">Construction loan</option><option value="other">Other</option></select></div></div>
+  <div class="fr"><div class="fg"><label class="fl">Preferred contact</label><select class="fi" id="cpc"><option value="">—</option><option value="phone">Phone</option><option value="text">Text</option><option value="email">Email</option><option value="any">Any</option></select></div>
+  <div class="fg"><label class="fl">Spouse / partner</label><input class="fi" id="csp" placeholder="Jane"></div></div>
+  <div class="fg"><label class="fl">Notes</label><textarea class="fi" id="cnt" placeholder="Personality, communication preferences..."></textarea></div>
+  <div class="ma"><button class="btn" onclick="closeM()">Cancel</button><button class="btn btn-p" onclick="saveClient()"><i class="ti ti-check"></i> Add client</button></div>
+</div></div>`);}
+async function saveClient(){
+  const fn=document.getElementById('cfn').value.trim();
+  if(!fn){document.getElementById('merr').innerHTML='<div class="merr">First name required.</div>';return;}
+  try{await dbPost('clients',{first_name:fn,last_name:document.getElementById('cln').value.trim(),phone:document.getElementById('cph').value.trim(),email:document.getElementById('cem').value.trim(),referral_name:document.getElementById('crf').value.trim(),funding_type:document.getElementById('cft').value,preferred_contact_method:document.getElementById('cpc').value,spouse_partner_name:document.getElementById('csp').value.trim(),notes:document.getElementById('cnt').value.trim(),is_active:true});closeM();toast('Client added');nav('clients');}
+  catch(e){document.getElementById('merr').innerHTML=`<div class="merr">${e.message}</div>`;}
+}
+
+function mNewCO(forProj=false){showM(`<div class="mo" onclick="if(event.target===this)closeM()"><div class="mb">
+  <div class="mt">New change order</div><div id="merr"></div>
+  <div class="fg"><label class="fl">Title</label><input class="fi" id="cot" placeholder="Brief description of change"></div>
+  <div class="fr"><div class="fg"><label class="fl">Type</label><select class="fi" id="coty"><option value="oversight">Oversight — missed scope</option><option value="client_addition">Client addition</option><option value="unforeseen">Unforeseen condition</option></select></div>
+  <div class="fg"><label class="fl">Owner price ($)</label><input class="fi" id="cop" type="number" placeholder="0"></div></div>
+  <div class="fr"><div class="fg"><label class="fl">Discovered by</label><select class="fi" id="codb"><option value="brent">Brent</option><option value="alex">Alex</option><option value="subcontractor">Subcontractor</option><option value="client">Client</option><option value="inspector">Inspector</option></select></div>
+  <div class="fg"><label class="fl">Builder cost ($)</label><input class="fi" id="cobc" type="number" placeholder="0"></div></div>
+  <div class="fg"><label class="fl">Description</label><textarea class="fi" id="cod" placeholder="What changed and why..."></textarea></div>
+  <div class="ma"><button class="btn" onclick="closeM()">Cancel</button><button class="btn btn-p" onclick="saveCO(${forProj&&proj?`'${proj.id}'`:'null'})"><i class="ti ti-check"></i> Create CO</button></div>
+</div></div>`);}
+async function saveCO(pid){
+  const title=document.getElementById('cot').value.trim();
+  if(!title){document.getElementById('merr').innerHTML='<div class="merr">Title required.</div>';return;}
+  const projId=pid||proj?.id;
+  if(!projId){document.getElementById('merr').innerHTML='<div class="merr">Open a project first.</div>';return;}
+  try{
+    const ex=await db('change_orders',`?project_id=eq.${projId}&select=co_number&order=co_number.desc&limit=1`);
+    const n=ex.length?(ex[0].co_number||0)+1:1;
+    await dbPost('change_orders',{project_id:projId,co_number:n,title,co_type:document.getElementById('coty').value,owner_price:parseFloat(document.getElementById('cop').value)||0,builder_cost:parseFloat(document.getElementById('cobc').value)||0,description:document.getElementById('cod').value.trim(),discovered_by:document.getElementById('codb').value,status:'pending',sent_at:new Date().toISOString()});
+    closeM();toast('Change order created');
+    if(proj){const cos=await db('change_orders',`?project_id=eq.${projId}&order=co_number.asc`);_d.cos=cos;document.getElementById('dbody').innerHTML=dCOs(cos);}
+    else nav('change-orders');
+  }catch(e){document.getElementById('merr').innerHTML=`<div class="merr">${e.message}</div>`;}
+}
+
+function mNewInv(forProj=false){showM(`<div class="mo" onclick="if(event.target===this)closeM()"><div class="mb">
+  <div class="mt">Create invoice</div><div id="merr"></div>
+  <div class="fr"><div class="fg"><label class="fl">Invoice #</label><input class="fi" id="ivn" placeholder="4040-INV-001"></div>
+  <div class="fg"><label class="fl">Type</label><select class="fi" id="ivt"><option value="deposit">Deposit</option><option value="progress">Progress</option><option value="allowance">Allowance (no markup)</option><option value="change_order">Change order</option><option value="final">Final</option></select></div></div>
+  <div class="fr"><div class="fg"><label class="fl">Amount due ($)</label><input class="fi" id="iva" type="number" placeholder="0"></div><div class="fg"><label class="fl">Due date</label><input class="fi" id="ivd" type="date"></div></div>
+  <div class="fg"><label class="fl">Notes for client</label><textarea class="fi" id="ivnt" placeholder="Invoice notes..."></textarea></div>
+  <div class="ma"><button class="btn" onclick="closeM()">Cancel</button><button class="btn btn-p" onclick="saveInv()"><i class="ti ti-check"></i> Create</button></div>
+</div></div>`);}
+async function saveInv(){
+  const pid=proj?.id;if(!pid){document.getElementById('merr').innerHTML='<div class="merr">Open a project first.</div>';return;}
+  try{await dbPost('invoices',{project_id:pid,invoice_number:document.getElementById('ivn').value.trim(),invoice_type:document.getElementById('ivt').value,amount_due:parseFloat(document.getElementById('iva').value)||0,due_date:document.getElementById('ivd').value||null,notes_external:document.getElementById('ivnt').value.trim(),status:'draft',issued_at:new Date().toISOString().split('T')[0]});closeM();toast('Invoice created');if(proj){const invs=await db('invoices',`?project_id=eq.${pid}&order=created_at.desc`);_d.invs=invs;document.getElementById('dbody').innerHTML=dInvs(invs);}else nav('invoices');}
+  catch(e){document.getElementById('merr').innerHTML=`<div class="merr">${e.message}</div>`;}
+}
+
+async function mNewTask(forProj=false,defaultStatus='upcoming'){
+  const projs=await db('projects','?is_archived=eq.false&status=in.(active,estimating,proposed)&select=id,name&order=name.asc');
+  showM(`<div class="mo" onclick="if(event.target===this)closeM()"><div class="mb">
+    <div class="mt">Add task</div><div id="merr"></div>
+    <div class="fg"><label class="fl">Task title</label><input class="fi" id="stn" placeholder="e.g. Tile master bath floor"></div>
+    <div class="fr"><div class="fg"><label class="fl">Project</label><select class="fi" id="stp">
+      <option value="">— Select project —</option>
+      ${projs.map(p=>`<option value="${p.id}"${proj&&p.id===proj.id?' selected':''}>${p.name.replace(/\|.*/,'').trim()}</option>`).join('')}
+    </select></div>
+    <div class="fg"><label class="fl">Assigned to</label><select class="fi" id="sta"><option value="alex">Alex</option><option value="brent">Brent</option><option value="shannon">Shannon</option><option value="faith">Faith</option><option value="subcontractor">Subcontractor</option></select></div></div>
+    <div class="fr"><div class="fg"><label class="fl">Phase</label><input class="fi" id="stph" placeholder="demo, rough, finish..."></div>
+    <div class="fg"><label class="fl">Status</label><select class="fi" id="stst">
+      <option value="upcoming"${defaultStatus==='upcoming'?' selected':''}>To do</option>
+      <option value="in_progress"${defaultStatus==='in_progress'?' selected':''}>In progress</option>
+      <option value="delayed"${defaultStatus==='delayed'?' selected':''}>Delayed</option>
+      <option value="complete"${defaultStatus==='complete'?' selected':''}>Done</option>
+    </select></div></div>
+    <div class="fr"><div class="fg"><label class="fl">Start date</label><input class="fi" id="sts" type="date"></div><div class="fg"><label class="fl">End / due date</label><input class="fi" id="ste" type="date"></div></div>
+    <div class="fr"><div class="fg"><label class="fl">Priority</label><select class="fi" id="stpr"><option value="">Normal</option><option value="high">High</option><option value="medium">Medium</option><option value="low">Low</option></select></div>
+    <div class="fg" style="display:flex;align-items:center;gap:8px;padding-top:22px"><input type="checkbox" id="stm"><label for="stm" style="font-size:13px">Mark as milestone</label></div></div>
+    <div class="fg"><label class="fl">Notes</label><textarea class="fi" id="stnt" placeholder="Task details, instructions..."></textarea></div>
+    <div class="ma"><button class="btn" onclick="closeM()">Cancel</button><button class="btn btn-p" onclick="saveTask()"><i class="ti ti-check"></i> Add task</button></div>
+  </div></div>`);
+}
+async function saveTask(){
+  const title=document.getElementById('stn').value.trim();if(!title){document.getElementById('merr').innerHTML='<div class="merr">Title required.</div>';return;}
+  const pid=document.getElementById('stp').value||proj?.id;if(!pid){document.getElementById('merr').innerHTML='<div class="merr">Select a project.</div>';return;}
+  try{await dbPost('schedule_items',{project_id:pid,title,assigned_to:document.getElementById('sta').value,phase:document.getElementById('stph').value.trim(),status:document.getElementById('stst').value,scheduled_start:document.getElementById('sts').value||null,scheduled_end:document.getElementById('ste').value||null,notes:document.getElementById('stnt').value.trim(),is_milestone:document.getElementById('stm').checked});closeM();toast('Task added');
+  if(page==='tasks')await pTasks();else if(page==='schedule')await pSchedule();else if(proj){const s=await db('schedule_items',`?project_id=eq.${proj.id}&order=scheduled_start.asc`);_d.scheds=s;document.getElementById('dbody').innerHTML=dSched(s);}}
+  catch(e){document.getElementById('merr').innerHTML=`<div class="merr">${e.message}</div>`;}
+}
+
+async function mEditTask(id){
+  const tasks=window._tasks||[];const t=tasks.find(x=>x.id===id);if(!t)return;
+  const projs=await db('projects','?is_archived=eq.false&status=in.(active,estimating,proposed)&select=id,name&order=name.asc');
+  showM(`<div class="mo" onclick="if(event.target===this)closeM()"><div class="mb">
+    <div class="mt">Edit task</div><div id="merr"></div>
+    <div class="fg"><label class="fl">Task title</label><input class="fi" id="etn" value="${t.title}"></div>
+    <div class="fr"><div class="fg"><label class="fl">Status</label><select class="fi" id="etst">
+      <option value="upcoming"${t.status==='upcoming'?' selected':''}>To do</option>
+      <option value="in_progress"${t.status==='in_progress'?' selected':''}>In progress</option>
+      <option value="delayed"${t.status==='delayed'?' selected':''}>Delayed</option>
+      <option value="blocked"${t.status==='blocked'?' selected':''}>Blocked</option>
+      <option value="complete"${t.status==='complete'?' selected':''}>Done</option>
+    </select></div>
+    <div class="fg"><label class="fl">Assigned to</label><select class="fi" id="eta"><option value="alex"${t.assigned_to==='alex'?' selected':''}>Alex</option><option value="brent"${t.assigned_to==='brent'?' selected':''}>Brent</option><option value="shannon"${t.assigned_to==='shannon'?' selected':''}>Shannon</option><option value="faith"${t.assigned_to==='faith'?' selected':''}>Faith</option><option value="subcontractor"${t.assigned_to==='subcontractor'?' selected':''}>Subcontractor</option></select></div></div>
+    <div class="fr"><div class="fg"><label class="fl">End / due date</label><input class="fi" id="ete" type="date" value="${t.scheduled_end||''}"></div>
+    <div class="fg"><label class="fl">Phase</label><input class="fi" id="etph" value="${t.phase||''}"></div></div>
+    <div class="ma">
+      <button class="btn" onclick="closeM()">Cancel</button>
+      <button class="btn btn-p" onclick="updateTask('${id}')"><i class="ti ti-check"></i> Save</button>
+    </div>
+  </div></div>`);
+}
+async function updateTask(id){
+  try{await dbPatch('schedule_items',id,{title:document.getElementById('etn').value.trim(),status:document.getElementById('etst').value,assigned_to:document.getElementById('eta').value,scheduled_end:document.getElementById('ete').value||null,phase:document.getElementById('etph').value.trim()});closeM();toast('Task updated');await pTasks();}
+  catch(e){document.getElementById('merr').innerHTML=`<div class="merr">${e.message}</div>`;}
+}
+
+function mNewSub(){showM(`<div class="mo" onclick="if(event.target===this)closeM()"><div class="mb wide">
+  <div class="mt">Add subcontractor</div><div id="merr"></div>
+  <div class="fr"><div class="fg"><label class="fl">Company name</label><input class="fi" id="scn" placeholder="ABC Plumbing Co."></div><div class="fg"><label class="fl">Trade</label><input class="fi" id="str" placeholder="plumbing, electrical, tile..."></div></div>
+  <div class="fr"><div class="fg"><label class="fl">Contact name</label><input class="fi" id="scnt" placeholder="John Smith"></div><div class="fg"><label class="fl">Phone</label><input class="fi" id="sph" placeholder="(317) 555-0100"></div></div>
+  <div class="fr"><div class="fg"><label class="fl">Email</label><input class="fi" id="sem" placeholder="john@abc.com"></div><div class="fg"><label class="fl">Insurance expiry</label><input class="fi" id="sie" type="date"></div></div>
+  <div class="fr"><div class="fg"><label class="fl">License #</label><input class="fi" id="slic"></div>
+  <div class="fg"><label class="fl">Rating</label><select class="fi" id="srat"><option value="">—</option><option value="5">★★★★★ Excellent</option><option value="4">★★★★☆ Good</option><option value="3">★★★☆☆ Average</option><option value="2">★★☆☆☆ Below avg</option><option value="1">★☆☆☆☆ Poor</option></select></div></div>
+  <div style="display:flex;gap:20px;margin-bottom:14px"><label style="display:flex;align-items:center;gap:8px;font-size:13px;cursor:pointer"><input type="checkbox" id="spref"> Preferred sub</label><label style="display:flex;align-items:center;gap:8px;font-size:13px;cursor:pointer"><input type="checkbox" id="sw9"> W9 on file</label></div>
+  <div class="fg"><label class="fl">Notes</label><textarea class="fi" id="snt" placeholder="Notes about this sub..."></textarea></div>
+  <div class="ma"><button class="btn" onclick="closeM()">Cancel</button><button class="btn btn-p" onclick="saveSub()"><i class="ti ti-check"></i> Add sub</button></div>
+</div></div>`);}
+async function saveSub(){
+  const company=document.getElementById('scn').value.trim();if(!company){document.getElementById('merr').innerHTML='<div class="merr">Company name required.</div>';return;}
+  try{await dbPost('subcontractors',{company_name:company,trade:document.getElementById('str').value.trim(),contact_name:document.getElementById('scnt').value.trim(),phone:document.getElementById('sph').value.trim(),email:document.getElementById('sem').value.trim(),insurance_expiry:document.getElementById('sie').value||null,license_number:document.getElementById('slic').value.trim(),rating:parseInt(document.getElementById('srat').value)||null,preferred:document.getElementById('spref').checked,w9_on_file:document.getElementById('sw9').checked,notes:document.getElementById('snt').value.trim(),is_active:true});closeM();toast('Sub added');nav('subcontractors');}
+  catch(e){document.getElementById('merr').innerHTML=`<div class="merr">${e.message}</div>`;}
+}
+
+function mNewEst(){
+  if(!proj){toast('Open a project first','err');return;}
+  showM(`<div class="mo" onclick="if(event.target===this)closeM()"><div class="mb">
+    <div class="mt">Start estimate</div><div id="merr"></div>
+    <div class="fg"><label class="fl">Project</label><input class="fi" value="${proj.name}" disabled></div>
+    <div class="fr"><div class="fg"><label class="fl">PM fee ($)</label><input class="fi" id="epm" type="number" placeholder="0"></div>
+    <div class="fg"><label class="fl">Status</label><select class="fi" id="est"><option value="draft">Draft</option><option value="internal_review">Internal review</option></select></div></div>
+    <div class="fg"><label class="fl">Shannon's build notes</label><textarea class="fi" id="ent" placeholder="From Brent's Slack message..."></textarea></div>
+    <div class="ma"><button class="btn" onclick="closeM()">Cancel</button><button class="btn btn-p" onclick="saveEst()"><i class="ti ti-check"></i> Create estimate</button></div>
+  </div></div>`);
+}
+async function saveEst(){
+  try{const pmFee=parseFloat(document.getElementById('epm').value)||0;const r=await dbPost('estimates',{project_id:proj.id,version:1,status:document.getElementById('est').value,pm_fee_total:pmFee,notes_internal:document.getElementById('ent').value.trim()});if(pmFee>0&&r[0])await dbPost('estimate_line_items',{estimate_id:r[0].id,bucket:'pm_fee',description:'Project management fee',owner_price:pmFee,builder_cost:pmFee,sort_order:1});closeM();toast('Estimate created');const ests=await db('estimates',`?project_id=eq.${proj.id}&order=created_at.desc`);_d.ests=ests;dEstimate(ests,proj);}
+  catch(e){document.getElementById('merr').innerHTML=`<div class="merr">${e.message}</div>`;}
+}
+
+async function mAddItem(estId,bucket){
+  const codes=await db('cost_codes','?is_active=eq.true&order=code.asc&limit=200');
+  showM(`<div class="mo" onclick="if(event.target===this)closeM()"><div class="mb wide">
+    <div class="mt">Add line item</div><div id="merr"></div>
+    <div class="fg"><label class="fl">Description</label><input class="fi" id="lid" placeholder="e.g. Tile master bath — labor and materials"></div>
+    <div class="fr"><div class="fg"><label class="fl">Cost code</label><select class="fi" id="lcc"><option value="">— Select —</option>${codes.map(c=>`<option value="${c.id}">${c.code} — ${c.name}</option>`).join('')}</select></div>
+    <div class="fg"><label class="fl">Bucket</label><select class="fi" id="lbk"><option value="pm_fee"${bucket==='pm_fee'?' selected':''}>PM fee</option><option value="construction"${bucket==='construction'?' selected':''}>Construction</option><option value="allowance"${bucket==='allowance'?' selected':''}>Allowance</option></select></div></div>
+    <div class="fr3">
+      <div class="fg"><label class="fl">Builder cost ($)</label><input class="fi" id="lbc" type="number" placeholder="0" oninput="calcOP()"></div>
+      <div class="fg"><label class="fl">Markup type</label><select class="fi" id="lmt" onchange="calcOP()"><option value="percent">Percent (%)</option><option value="flat">Flat ($)</option></select></div>
+      <div class="fg"><label class="fl">Markup value</label><input class="fi" id="lmv" type="number" placeholder="0" oninput="calcOP()"></div>
+    </div>
+    <div class="fg"><label class="fl">Owner / client price ($)</label><input class="fi" id="lop" type="number" placeholder="0"></div>
+    <div class="fr"><div class="fg"><label class="fl">Internal note</label><input class="fi" id="lni" placeholder="Internal only"></div><div class="fg"><label class="fl">Client note</label><input class="fi" id="lne" placeholder="Client-facing"></div></div>
+    <div class="ma"><button class="btn" onclick="closeM()">Cancel</button><button class="btn btn-p" onclick="saveItem('${estId}')"><i class="ti ti-check"></i> Add</button></div>
+  </div></div>`);
+}
+function calcOP(){const cost=parseFloat(document.getElementById('lbc').value)||0;const type=document.getElementById('lmt').value;const val=parseFloat(document.getElementById('lmv').value)||0;document.getElementById('lop').value=Math.round(type==='percent'?cost*(1+val/100):cost+val);}
+async function saveItem(estId){
+  const desc=document.getElementById('lid').value.trim();if(!desc){document.getElementById('merr').innerHTML='<div class="merr">Description required.</div>';return;}
+  try{await dbPost('estimate_line_items',{estimate_id:estId,cost_code_id:document.getElementById('lcc').value||null,bucket:document.getElementById('lbk').value,description:desc,builder_cost:parseFloat(document.getElementById('lbc').value)||0,markup_type:document.getElementById('lmt').value,markup_value:parseFloat(document.getElementById('lmv').value)||0,owner_price:parseFloat(document.getElementById('lop').value)||0,notes_internal:document.getElementById('lni').value.trim(),notes_external:document.getElementById('lne').value.trim()});closeM();toast('Line item added');const ests=await db('estimates',`?project_id=eq.${proj.id}&order=created_at.desc`);_d.ests=ests;dEstimate(ests,proj);}
+  catch(e){document.getElementById('merr').innerHTML=`<div class="merr">${e.message}</div>`;}
+}
+
+function mNote(){showM(`<div class="mo" onclick="if(event.target===this)closeM()"><div class="mb">
+  <div class="mt">Log a note</div><div id="merr"></div>
+  <div class="fr"><div class="fg"><label class="fl">Author</label><select class="fi" id="nau"><option value="brent">Brent</option><option value="shannon">Shannon</option><option value="alex">Alex</option><option value="faith">Faith</option></select></div>
+  <div class="fg"><label class="fl">Type</label><select class="fi" id="nty"><option value="site_visit">Site visit</option><option value="client_communication">Client communication</option><option value="internal">Internal</option><option value="daily_log">Daily log</option></select></div></div>
+  <div class="fg"><label class="fl">Note</label><textarea class="fi" id="nco" placeholder="What happened, what was decided, what's next..." style="min-height:120px"></textarea></div>
+  <div style="display:flex;align-items:center;gap:8px;margin-bottom:14px"><input type="checkbox" id="ncv"> <label for="ncv" style="font-size:13px">Client visible</label></div>
+  <div class="ma"><button class="btn" onclick="closeM()">Cancel</button><button class="btn btn-p" onclick="saveNote()"><i class="ti ti-check"></i> Save</button></div>
+</div></div>`);}
+async function saveNote(){
+  const content=document.getElementById('nco').value.trim();if(!content){document.getElementById('merr').innerHTML='<div class="merr">Note required.</div>';return;}if(!proj){document.getElementById('merr').innerHTML='<div class="merr">No project selected.</div>';return;}
+  try{const r=await dbPost('project_notes',{project_id:proj.id,author:document.getElementById('nau').value,note_type:document.getElementById('nty').value,content,is_client_visible:document.getElementById('ncv').checked});_d.notes.unshift(r[0]);closeM();toast('Note saved');document.getElementById('dbody').innerHTML=dNotes(_d.notes);}
+  catch(e){document.getElementById('merr').innerHTML=`<div class="merr">${e.message}</div>`;}
+}
+
+function mStatus(){if(!proj)return;
+  showM(`<div class="mo" onclick="if(event.target===this)closeM()"><div class="mb">
+    <div class="mt">Update project status</div><div id="merr"></div>
+    <div class="fg"><label class="fl">Status</label><select class="fi" id="ups">${['lead','vetting','estimating','proposed','active','punch_list','complete','on_hold','lost'].map(s=>`<option value="${s}"${s===proj.status?' selected':''}>${sl(s)}</option>`).join('')}</select></div>
+    <div class="fg"><label class="fl">Health</label><select class="fi" id="uph"><option value="green"${proj.health_status==='green'?' selected':''}>Green — on track</option><option value="yellow"${proj.health_status==='yellow'?' selected':''}>Yellow — minor concerns</option><option value="red"${proj.health_status==='red'?' selected':''}>Red — needs attention</option></select></div>
+    <div class="fg"><label class="fl">Health notes</label><textarea class="fi" id="uphn">${proj.health_notes||''}</textarea></div>
+    <div class="ma"><button class="btn" onclick="closeM()">Cancel</button><button class="btn btn-p" onclick="saveStatus()"><i class="ti ti-check"></i> Update</button></div>
+  </div></div>`);
+}
+async function saveStatus(){
+  try{await dbPatch('projects',proj.id,{status:document.getElementById('ups').value,health_status:document.getElementById('uph').value,health_notes:document.getElementById('uphn').value.trim()});proj.status=document.getElementById('ups').value;proj.health_status=document.getElementById('uph').value;closeM();toast('Status updated');pDetail();}
+  catch(e){document.getElementById('merr').innerHTML=`<div class="merr">${e.message}</div>`;}
+}
+
+function mProjAdd(){showM(`<div class="mo" onclick="if(event.target===this)closeM()"><div class="mb" style="max-width:320px">
+  <div class="mt">Add to project</div>
+  <div style="display:flex;flex-direction:column;gap:8px">
+    <button class="btn" style="justify-content:flex-start" onclick="closeM();mNewEst()"><i class="ti ti-file-dollar"></i> Start / view estimate</button>
+    <button class="btn" style="justify-content:flex-start" onclick="closeM();mNewCO(true)"><i class="ti ti-git-branch"></i> New change order</button>
+    <button class="btn" style="justify-content:flex-start" onclick="closeM();mNewInv(true)"><i class="ti ti-receipt"></i> Create invoice</button>
+    <button class="btn" style="justify-content:flex-start" onclick="closeM();mNewTask(true)"><i class="ti ti-layout-kanban"></i> Add task</button>
+    <button class="btn" style="justify-content:flex-start" onclick="closeM();mNote()"><i class="ti ti-notes"></i> Log a note</button>
+    <button class="btn" style="justify-content:flex-start" onclick="closeM();mStatus()"><i class="ti ti-adjustments"></i> Update status</button>
+  </div>
+  <div class="ma" style="border:none;padding:0;margin-top:12px"><button class="btn" onclick="closeM()">Cancel</button></div>
+</div></div>`);}
+
+// ── Boot ─────────────────────────────────────────
+nav('dashboard');
+</script>
+</body>
+</html>
