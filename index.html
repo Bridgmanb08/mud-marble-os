@@ -228,10 +228,12 @@ textarea.fi{resize:vertical;min-height:80px;}
   <div class="nav-item" data-p="estimates" onclick="nav('estimates')"><i class="ti ti-file-dollar"></i> <span>Estimates</span></div>
   <div class="nav-item" data-p="invoices" onclick="nav('invoices')"><i class="ti ti-receipt"></i> <span>Invoices</span></div>
   <div class="nav-item" data-p="change-orders" onclick="nav('change-orders')"><i class="ti ti-git-branch"></i> <span>Change Orders</span></div>
+  <div class="nav-item" data-p="inhouse" onclick="nav('inhouse')"><i class="ti ti-table"></i> <span>In-House Sheet</span></div>
   <div class="nav-section">Team</div>
   <div class="nav-item" data-p="tasks" onclick="nav('tasks')"><i class="ti ti-layout-kanban"></i> <span>Task Board</span></div>
   <div class="nav-item" data-p="schedule" onclick="nav('schedule')"><i class="ti ti-calendar"></i> <span>Schedule</span></div>
   <div class="nav-item" data-p="subcontractors" onclick="nav('subcontractors')"><i class="ti ti-tools"></i> <span>Subcontractors</span></div>
+  <div class="nav-item" data-p="sub-intelligence" onclick="nav('sub-intelligence')"><i class="ti ti-chart-bar"></i> <span>Sub Intelligence</span></div>
 </div>
 
 <div class="main" id="main"></div>
@@ -262,7 +264,7 @@ let page='dashboard',proj=null,allP=[],_d={};
 function nav(p){
   page=p;proj=null;
   document.querySelectorAll('.nav-item').forEach(el=>el.classList.toggle('active',el.dataset.p===p));
-  const labels={dashboard:'Overview',projects:'New project',leads:'New lead',clients:'New client',estimates:'New estimate',invoices:'New invoice','change-orders':'New CO',tasks:'New task',schedule:'Add task',subcontractors:'Add sub'};
+  const labels={dashboard:'Overview',projects:'New project',leads:'New lead',clients:'New client',estimates:'New estimate',invoices:'New invoice','change-orders':'New CO',tasks:'New task',schedule:'Add task',subcontractors:'Add sub',inhouse:'Add transaction','sub-intelligence':'Insights'};
   document.getElementById('new-label').textContent=labels[p]||'New';
   document.getElementById('btn-back').style.display='none';
   render();
@@ -276,6 +278,8 @@ function handleNew(){
   else if(page==='invoices')mNewInv();
   else if(page==='tasks'||page==='schedule')mNewTask();
   else if(page==='subcontractors')mNewSub();
+  else if(page==='inhouse')mNewTransaction();
+  else if(page==='sub-intelligence')toast('Select insights from the page');
   else if(page==='estimates')toast('Open a project to create an estimate');
   else if(page==='dashboard')toast('Select a page to add items');
 }
@@ -294,6 +298,8 @@ async function render(){
     else if(page==='tasks')await pTasks();
     else if(page==='schedule')await pSchedule();
     else if(page==='subcontractors')await pSubs();
+    else if(page==='inhouse')await pInhouse();
+    else if(page==='sub-intelligence')await pSubIntelligence();
   }catch(e){m.innerHTML=`<div class="empty"><i class="ti ti-alert-circle" style="color:var(--red)"></i><div class="empty-t">Error loading</div><div class="empty-s">${e.message}</div></div>`;}
 }
 
@@ -1279,9 +1285,410 @@ function mProjAdd(){showM(`<div class="mo" onclick="if(event.target===this)close
   <div class="ma" style="border:none;padding:0;margin-top:12px"><button class="btn" onclick="closeM()">Cancel</button></div>
 </div></div>`);}
 
+// ══════════════════════════════════════════════════
+// IN-HOUSE SHEET
+// ══════════════════════════════════════════════════
+async function pInhouse(){
+  const [projs,txns]=await Promise.all([
+    db('projects','?is_archived=eq.false&order=name.asc&select=id,name,contract_value,status,clients(first_name,last_name)'),
+    db('transactions','?order=transaction_date.desc&select=*,projects(name),cost_codes(code,name)'),
+  ]);
+  const totalRevenue=txns.filter(t=>t.transaction_type==='income').reduce((s,t)=>s+Math.abs(t.amount||0),0);
+  const totalExpenses=txns.filter(t=>t.transaction_type==='expense').reduce((s,t)=>s+Math.abs(t.amount||0),0);
+  const netProfit=totalRevenue-totalExpenses;
+  const unsynced=txns.filter(t=>!t.quickbooks_synced);
+
+  // Group transactions by project for profitability
+  const byProj={};
+  txns.forEach(t=>{
+    const pid=t.project_id||'unassigned';
+    if(!byProj[pid])byProj[pid]={name:t.projects?.name||'Unassigned',income:0,expense:0,txns:[]};
+    if(t.transaction_type==='income')byProj[pid].income+=Math.abs(t.amount||0);
+    else if(t.transaction_type==='expense')byProj[pid].expense+=Math.abs(t.amount||0);
+    byProj[pid].txns.push(t);
+  });
+
+  document.getElementById('main').innerHTML=`
+    <div class="ph"><div><h1>In-House Sheet</h1><p>Faith's financial tracking — all transactions, job costing, and profitability</p></div>
+    <div style="display:flex;gap:8px">
+      <button class="btn btn-sm" onclick="exportToCSV()"><i class="ti ti-download"></i> Export CSV</button>
+      <button class="btn btn-p btn-sm" onclick="mNewTransaction()"><i class="ti ti-plus"></i> Add transaction</button>
+    </div></div>
+
+    <div class="metrics">
+      <div class="metric"><div class="m-label">Total revenue</div><div class="m-val" style="font-size:17px;color:var(--green)">${fmt(totalRevenue)}</div><div class="m-sub">all income received</div></div>
+      <div class="metric"><div class="m-label">Total expenses</div><div class="m-val" style="font-size:17px">${fmt(totalExpenses)}</div><div class="m-sub">all costs logged</div></div>
+      <div class="metric"><div class="m-label">Net profit</div><div class="m-val" style="font-size:17px;${netProfit>=0?'color:var(--green)':'color:var(--red)'}">${fmt(netProfit)}</div><div class="m-sub">${totalRevenue>0?Math.round(netProfit/totalRevenue*100):0}% margin</div></div>
+      <div class="metric"><div class="m-label">QB sync pending</div><div class="m-val" style="${unsynced.length?'color:var(--amber)':''}">${unsynced.length}</div><div class="m-sub">transactions to export</div></div>
+    </div>
+
+    <!-- Project profitability summary -->
+    <div class="card" style="margin-bottom:16px">
+      <div style="padding:16px 20px;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between">
+        <div style="font-size:13px;font-weight:600">Project profitability overview</div>
+        <span style="font-size:11px;color:var(--t2)">${Object.keys(byProj).length} projects with transactions</span>
+      </div>
+      <div style="overflow-x:auto">
+        <table class="tbl">
+          <thead><tr>
+            <th>Project</th>
+            <th style="text-align:right">Revenue</th>
+            <th style="text-align:right">Expenses</th>
+            <th style="text-align:right">Profit</th>
+            <th style="text-align:right">Margin</th>
+            <th style="text-align:right">Txns</th>
+          </tr></thead>
+          <tbody>
+            ${Object.values(byProj).sort((a,b)=>b.income-a.income).map(p=>{
+              const profit=p.income-p.expense;
+              const margin=p.income>0?Math.round(profit/p.income*100):0;
+              return`<tr>
+                <td style="font-weight:500">${p.name}</td>
+                <td style="text-align:right;color:var(--gtx)">${fmt(p.income)}</td>
+                <td style="text-align:right">${fmt(p.expense)}</td>
+                <td style="text-align:right;font-weight:600;${profit>=0?'color:var(--gtx)':'color:var(--rtx)'}">${fmt(profit)}</td>
+                <td style="text-align:right">
+                  <div style="display:flex;align-items:center;justify-content:flex-end;gap:6px">
+                    <div style="width:50px;height:6px;background:var(--bg);border-radius:3px;overflow:hidden">
+                      <div style="height:100%;width:${Math.max(0,Math.min(100,margin))}%;background:${margin>=20?'var(--green)':margin>=10?'var(--amber)':'var(--red)'};border-radius:3px"></div>
+                    </div>
+                    <span style="font-size:12px;font-weight:500">${margin}%</span>
+                  </div>
+                </td>
+                <td style="text-align:right;color:var(--t2)">${p.txns.length}</td>
+              </tr>`;
+            }).join('') || '<tr><td colspan="6" style="text-align:center;color:var(--t2);padding:20px">No transactions yet. Add your first transaction above.</td></tr>'}
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- Transaction ledger -->
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px">
+      <div class="st">Transaction ledger (${txns.length} entries)</div>
+      <div class="filters">
+        <button class="fb on" onclick="filterTxns('all',this)">All</button>
+        <button class="fb" onclick="filterTxns('income',this)">Income</button>
+        <button class="fb" onclick="filterTxns('expense',this)">Expenses</button>
+        <button class="fb" onclick="filterTxns('allowance',this)">Allowances</button>
+        <button class="fb" onclick="filterTxns('unsynced',this)">QB pending</button>
+      </div>
+    </div>
+    <div class="card">
+      <div id="txn-table" style="overflow-x:auto">
+        ${renderTxnTable(txns)}
+      </div>
+    </div>`;
+  window._txns=txns;
+}
+
+function renderTxnTable(txns){
+  if(!txns.length)return`<div class="empty"><i class="ti ti-table"></i><div class="empty-t">No transactions yet</div><div class="empty-s">Add your first transaction or import from Faith's in-house sheets.</div></div>`;
+  return`<table class="tbl" style="table-layout:fixed">
+    <thead><tr>
+      <th style="width:100px">Date</th>
+      <th style="width:140px">Project</th>
+      <th style="width:140px">Vendor</th>
+      <th style="width:160px">Description</th>
+      <th style="width:120px">Cost code</th>
+      <th style="width:100px;text-align:right">Amount</th>
+      <th style="width:80px">Type</th>
+      <th style="width:60px;text-align:center">QB</th>
+    </tr></thead>
+    <tbody>
+      ${txns.map(t=>{
+        const amt=Math.abs(t.amount||0);
+        const isIncome=t.transaction_type==='income';
+        return`<tr>
+          <td style="font-size:12px">${fmtD(t.transaction_date)}</td>
+          <td style="font-size:12px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${t.projects?.name||'—'}</td>
+          <td style="font-size:12px">${t.vendor||'—'}</td>
+          <td style="font-size:12px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${t.description||'—'}</td>
+          <td style="font-size:11px;color:var(--t2)">${t.cost_codes?`${t.cost_codes.code} ${t.cost_codes.name}`:'—'}</td>
+          <td style="text-align:right;font-weight:500;${isIncome?'color:var(--gtx)':'color:var(--text)'}">${isIncome?'+':'−'}${fmt(amt)}</td>
+          <td><span class="badge bg-${isIncome?'green':t.is_allowance?'blue':'gray'}">${t.transaction_type}</span></td>
+          <td style="text-align:center">${t.quickbooks_synced?'<span style="color:var(--green);font-size:14px">✓</span>':'<span style="color:var(--t3);font-size:12px">—</span>'}</td>
+        </tr>`;
+      }).join('')}
+    </tbody>
+  </table>`;
+}
+
+function filterTxns(type,btn){
+  document.querySelectorAll('#main .fb').forEach(b=>b.classList.remove('on'));btn.classList.add('on');
+  let f=window._txns;
+  if(type==='income')f=f.filter(t=>t.transaction_type==='income');
+  else if(type==='expense')f=f.filter(t=>t.transaction_type==='expense');
+  else if(type==='allowance')f=f.filter(t=>t.is_allowance);
+  else if(type==='unsynced')f=f.filter(t=>!t.quickbooks_synced);
+  document.getElementById('txn-table').innerHTML=renderTxnTable(f);
+}
+
+function exportToCSV(){
+  if(!window._txns||!window._txns.length){toast('No transactions to export','err');return;}
+  const headers=['Date','Project','Vendor','Description','Cost Code','Amount','Type','Allowance','QB Synced'];
+  const rows=window._txns.map(t=>[
+    t.transaction_date||'',
+    (t.projects?.name||'').replace(/,/g,' '),
+    (t.vendor||'').replace(/,/g,' '),
+    (t.description||'').replace(/,/g,' '),
+    t.cost_codes?`${t.cost_codes.code} ${t.cost_codes.name}`:'',
+    t.amount||0,
+    t.transaction_type||'',
+    t.is_allowance?'Yes':'No',
+    t.quickbooks_synced?'Yes':'No',
+  ]);
+  const csv=[headers,...rows].map(r=>r.join(',')).join('\n');
+  const blob=new Blob([csv],{type:'text/csv'});
+  const url=URL.createObjectURL(blob);
+  const a=document.createElement('a');a.href=url;a.download='mud-marble-transactions.csv';a.click();
+  URL.revokeObjectURL(url);
+  toast('CSV exported');
+}
+
+// ══════════════════════════════════════════════════
+// SUBCONTRACTOR INTELLIGENCE
+// ══════════════════════════════════════════════════
+async function pSubIntelligence(){
+  const [subs,txns,cos,projs]=await Promise.all([
+    db('subcontractors','?order=company_name.asc'),
+    db('transactions','?order=transaction_date.desc&select=*,projects(name,contract_value),cost_codes(code,name)'),
+    db('change_orders','?order=created_at.desc&select=*,projects(name)'),
+    db('projects','?is_archived=eq.false&select=id,name,contract_value,status'),
+  ]);
+
+  // Compute business KPIs from real data
+  const totalContractValue=projs.reduce((s,p)=>s+(p.contract_value||0),0);
+  const totalExpenses=txns.filter(t=>t.transaction_type==='expense').reduce((s,t)=>s+Math.abs(t.amount||0),0);
+  const totalRevenue=txns.filter(t=>t.transaction_type==='income').reduce((s,t)=>s+Math.abs(t.amount||0),0);
+  const avgProjectValue=projs.length?totalContractValue/projs.length:0;
+  const overallMargin=totalRevenue>0?Math.round((totalRevenue-totalExpenses)/totalRevenue*100):0;
+
+  // CO analysis
+  const coByType={oversight:cos.filter(c=>c.co_type==='oversight'),client_addition:cos.filter(c=>c.co_type==='client_addition'),unforeseen:cos.filter(c=>c.co_type==='unforeseen')};
+  const coTotalValue=cos.reduce((s,c)=>s+(c.owner_price||0),0);
+  const approvedCOs=cos.filter(c=>c.status==='approved');
+  const coApprovalRate=cos.length>0?Math.round(approvedCOs.length/cos.length*100):0;
+
+  // Spend by cost code category
+  const byCategory={};
+  txns.filter(t=>t.transaction_type==='expense'&&t.cost_codes).forEach(t=>{
+    const cat=t.cost_codes.code.split('.')[0];
+    if(!byCategory[cat])byCategory[cat]={code:cat,total:0,count:0};
+    byCategory[cat].total+=Math.abs(t.amount||0);
+    byCategory[cat].count++;
+  });
+  const topCategories=Object.values(byCategory).sort((a,b)=>b.total-a.total).slice(0,8);
+  const maxCatVal=topCategories.length?topCategories[0].total:1;
+
+  // Referral source analysis
+  const refSources={};
+  projs.forEach(p=>{});// placeholder — would need client join
+
+  document.getElementById('main').innerHTML=`
+    <div class="ph"><div><h1>Business Intelligence</h1><p>Insights to run Mud & Marble smarter — powered by your real data</p></div></div>
+
+    <!-- Top KPIs -->
+    <div style="display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px;margin-bottom:20px">
+      <div class="metric"><div class="m-label">Avg project value</div><div class="m-val" style="font-size:17px">${fmt(avgProjectValue)}</div><div class="m-sub">across ${projs.length} projects</div></div>
+      <div class="metric"><div class="m-label">Overall margin</div><div class="m-val" style="font-size:20px;${overallMargin>=20?'color:var(--green)':overallMargin>=10?'color:var(--amber)':'color:var(--red)'}">${overallMargin}%</div><div class="m-sub">target: 20–35%</div></div>
+      <div class="metric"><div class="m-label">CO approval rate</div><div class="m-val" style="font-size:20px">${coApprovalRate}%</div><div class="m-sub">${approvedCOs.length} of ${cos.length} COs</div></div>
+      <div class="metric"><div class="m-label">CO revenue added</div><div class="m-val" style="font-size:17px;color:var(--gtx)">${fmt(coTotalValue)}</div><div class="m-sub">from change orders</div></div>
+    </div>
+
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:16px">
+
+      <!-- Change order breakdown -->
+      <div class="owner-card">
+        <div class="ibt" style="margin-bottom:14px">Change order breakdown</div>
+        ${[
+          {label:'Oversight (your misses)',key:'oversight',color:'var(--amber)',desc:'Scope missed in estimate'},
+          {label:'Client additions',key:'client_addition',color:'var(--blue)',desc:'Client-requested extras'},
+          {label:'Unforeseen conditions',key:'unforeseen',color:'var(--red)',desc:'Discovered during work'},
+        ].map(row=>{
+          const items=coByType[row.key];const val=items.reduce((s,c)=>s+(c.owner_price||0),0);const pct=cos.length>0?Math.round(items.length/cos.length*100):0;
+          return`<div style="margin-bottom:14px">
+            <div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:4px">
+              <div><span style="font-size:13px;font-weight:500">${row.label}</span><span style="font-size:11px;color:var(--t2);margin-left:6px">${row.desc}</span></div>
+              <div style="text-align:right"><span style="font-size:13px;font-weight:600">${fmt(val)}</span><span style="font-size:11px;color:var(--t2);margin-left:6px">${items.length} COs</span></div>
+            </div>
+            <div style="height:8px;background:var(--bg);border-radius:4px;overflow:hidden">
+              <div style="height:100%;width:${pct}%;background:${row.color};border-radius:4px;transition:width .5s"></div>
+            </div>
+            <div style="font-size:11px;color:var(--t2);margin-top:2px">${pct}% of all change orders</div>
+          </div>`;
+        }).join('')}
+        ${coByType.oversight.length>0?`<div style="background:var(--abg);border-radius:var(--r);padding:10px 12px;font-size:12px;color:var(--atx);margin-top:8px"><i class="ti ti-bulb" style="font-size:14px;vertical-align:-2px;margin-right:6px"></i><strong>Insight:</strong> ${Math.round(coByType.oversight.length/cos.length*100)}% of your COs are oversight. Every oversight CO is a margin hit. Reviewing past oversight COs by cost code can tighten your estimating.</div>`:''}
+      </div>
+
+      <!-- Spend by cost code -->
+      <div class="owner-card">
+        <div class="ibt" style="margin-bottom:14px">Top spend categories</div>
+        ${topCategories.length?topCategories.map(c=>{
+          const pct=Math.round(c.total/maxCatVal*100);
+          const catNames={'01':'Preliminary','02':'Business ops','03':'Site work','04':'Foundation','05':'Framing','06':'Roofing','07':'Plumbing','08':'Electrical','09':'HVAC','10':'Drywall','11':'Glass','12':'Carpentry','13':'Doors/Windows','14':'Paint','15':'Flooring/Tile','16':'Appliances','17':'Masonry','18':'Exterior','19':'Cleanup','20':'Allowances'};
+          return`<div style="display:flex;align-items:center;gap:10px;margin-bottom:10px">
+            <div style="font-size:11px;color:var(--t2);width:80px;flex-shrink:0">${catNames[c.code]||'Cat '+c.code}</div>
+            <div style="flex:1;height:14px;background:var(--bg);border-radius:3px;overflow:hidden">
+              <div style="height:100%;width:${pct}%;background:var(--blue);border-radius:3px"></div>
+            </div>
+            <div style="font-size:12px;font-weight:500;width:70px;text-align:right;flex-shrink:0">${fmt(c.total)}</div>
+          </div>`;
+        }).join(''):`<div style="font-size:13px;color:var(--t2)">Add transactions with cost codes to see spend breakdown.</div>`}
+      </div>
+    </div>
+
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:16px">
+
+      <!-- Project performance table -->
+      <div class="owner-card">
+        <div class="ibt" style="margin-bottom:12px">Project performance vs estimate</div>
+        <table class="tbl">
+          <thead><tr><th>Project</th><th style="text-align:right">Contract</th><th style="text-align:right">COs</th><th style="text-align:right">Status</th></tr></thead>
+          <tbody>
+            ${projs.filter(p=>['active','complete','punch_list'].includes(p.status)).slice(0,8).map(p=>{
+              const projCOs=cos.filter(c=>c.project_id===p.id);
+              const coVal=projCOs.reduce((s,c)=>s+(c.owner_price||0),0);
+              const coCount=projCOs.length;
+              return`<tr>
+                <td style="font-size:12px;font-weight:500;max-width:120px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${p.name.replace(/\|.*/,'').trim()}</td>
+                <td style="text-align:right;font-size:12px">${fmt(p.contract_value)}</td>
+                <td style="text-align:right;font-size:12px;${coVal>0?'color:var(--gtx)':''}">${coVal>0?'+'+fmt(coVal):'—'}</td>
+                <td style="text-align:right">${sb(p.status)}</td>
+              </tr>`;
+            }).join('')||'<tr><td colspan="4" style="text-align:center;color:var(--t2);padding:16px">No active projects</td></tr>'}
+          </tbody>
+        </table>
+      </div>
+
+      <!-- Business health scorecard -->
+      <div class="owner-card">
+        <div class="ibt" style="margin-bottom:14px">Business health scorecard</div>
+        ${[
+          {label:'Gross margin',value:`${overallMargin}%`,target:'20–35%',good:overallMargin>=20,warn:overallMargin>=10&&overallMargin<20,tip:'Gross margin below 20% means overhead is eating your profit. Review markup rates.'},
+          {label:'Avg project size',value:fmt(avgProjectValue),target:'>$100K',good:avgProjectValue>=100000,warn:avgProjectValue>=50000&&avgProjectValue<100000,tip:'Larger projects typically yield better margins. Each new small project resets your overhead clock.'},
+          {label:'CO approval rate',value:`${coApprovalRate}%`,target:'>80%',good:coApprovalRate>=80,warn:coApprovalRate>=60&&coApprovalRate<80,tip:'Low approval rate suggests COs are being rejected or disputed. Review your CO communication process.'},
+          {label:'Oversight CO rate',value:`${cos.length>0?Math.round(coByType.oversight.length/cos.length*100):0}%`,target:'<20%',good:cos.length>0&&coByType.oversight.length/cos.length<0.2,warn:cos.length>0&&coByType.oversight.length/cos.length<0.35,tip:'High oversight rate means your estimates have gaps. Review which cost codes generate the most oversight COs.'},
+        ].map(item=>{
+          const color=item.good?'var(--green)':item.warn?'var(--amber)':'var(--red)';
+          const icon=item.good?'ti-circle-check':item.warn?'ti-alert-triangle':'ti-circle-x';
+          return`<div style="display:flex;align-items:flex-start;gap:12px;padding:10px 0;border-bottom:1px solid var(--border)">
+            <i class="ti ${icon}" style="font-size:18px;color:${color};flex-shrink:0;margin-top:1px"></i>
+            <div style="flex:1">
+              <div style="display:flex;justify-content:space-between;align-items:baseline">
+                <span style="font-size:13px;font-weight:500">${item.label}</span>
+                <span style="font-size:14px;font-weight:700;color:${color}">${item.value}</span>
+              </div>
+              <div style="font-size:11px;color:var(--t2);margin-top:2px">Target: ${item.target}</div>
+              ${!item.good?`<div style="font-size:11px;color:${color};margin-top:3px;line-height:1.4">${item.tip}</div>`:''}
+            </div>
+          </div>`;
+        }).join('')}
+        <div style="margin-top:12px;background:var(--bbg);border-radius:var(--r);padding:10px 12px;font-size:12px;color:var(--btx)">
+          <i class="ti ti-info-circle" style="font-size:13px;vertical-align:-2px;margin-right:4px"></i>
+          Scorecard updates automatically as you add transactions and change orders.
+        </div>
+      </div>
+    </div>
+
+    <!-- Subcontractor roster with intelligence -->
+    <div class="owner-card" style="margin-bottom:0">
+      <div class="ibt" style="margin-bottom:14px">Subcontractor roster & compliance</div>
+      ${subs.length?`<table class="tbl">
+        <thead><tr>
+          <th>Company</th>
+          <th>Trade</th>
+          <th>Contact</th>
+          <th>Phone</th>
+          <th style="text-align:center">W9</th>
+          <th style="text-align:center">Insurance</th>
+          <th style="text-align:center">Rating</th>
+          <th style="text-align:center">Preferred</th>
+        </tr></thead>
+        <tbody>
+          ${subs.map(s=>{
+            const insExp=s.insurance_expiry?new Date(s.insurance_expiry):null;
+            const insExpiring=insExp&&insExp<new Date(Date.now()+30*864e5);
+            const insExpired=insExp&&insExp<new Date();
+            return`<tr>
+              <td style="font-weight:500">${s.company_name}</td>
+              <td style="font-size:12px;color:var(--t2)">${s.trade||'—'}</td>
+              <td style="font-size:12px">${s.contact_name||'—'}</td>
+              <td style="font-size:12px">${s.phone||'—'}</td>
+              <td style="text-align:center">${s.w9_on_file?'<span style="color:var(--green);font-size:16px">✓</span>':'<span class="badge bg-amber" style="font-size:10px">Missing</span>'}</td>
+              <td style="text-align:center">${insExpired?'<span class="badge bg-red">Expired</span>':insExpiring?`<span class="badge bg-amber">${fmtD(s.insurance_expiry)}</span>`:insExp?`<span style="font-size:11px;color:var(--t2)">${fmtD(s.insurance_expiry)}</span>`:'<span style="color:var(--t3);font-size:11px">—</span>'}</td>
+              <td style="text-align:center">${s.rating?'★'.repeat(s.rating)+'☆'.repeat(5-s.rating):'—'}</td>
+              <td style="text-align:center">${s.preferred?'<span class="badge bg-green">Yes</span>':'—'}</td>
+            </tr>`;
+          }).join('')}
+        </tbody>
+      </table>`:`<div class="empty"><i class="ti ti-tools"></i><div class="empty-t">No subcontractors yet</div><div class="empty-s">Add subs from the Subcontractors page to see intelligence here.</div></div>`}
+    </div>`;
+}
+
+// ══════════════════════════════════════════════════
+// ADD TRANSACTION MODAL
+// ══════════════════════════════════════════════════
+async function mNewTransaction(){
+  const [projs,codes]=await Promise.all([
+    db('projects','?is_archived=eq.false&order=name.asc&select=id,name'),
+    db('cost_codes','?is_active=eq.true&order=code.asc&limit=200'),
+  ]);
+  showM(`<div class="mo" onclick="if(event.target===this)closeM()"><div class="mb wide">
+    <div class="mt">Add transaction</div><div id="merr"></div>
+    <div class="fr">
+      <div class="fg"><label class="fl">Date</label><input class="fi" id="txd" type="date" value="${new Date().toISOString().split('T')[0]}"></div>
+      <div class="fg"><label class="fl">Project</label><select class="fi" id="txp"><option value="">— Select project —</option>${projs.map(p=>`<option value="${p.id}">${p.name.replace(/\|.*/,'').trim()}</option>`).join('')}</select></div>
+    </div>
+    <div class="fr">
+      <div class="fg"><label class="fl">Vendor / payer</label><input class="fi" id="txv" placeholder="Vendor name or client name"></div>
+      <div class="fg"><label class="fl">Transaction type</label><select class="fi" id="txty"><option value="expense">Expense</option><option value="income">Income</option><option value="credit">Credit / refund</option></select></div>
+    </div>
+    <div class="fr">
+      <div class="fg"><label class="fl">Amount ($)</label><input class="fi" id="txa" type="number" placeholder="0.00"></div>
+      <div class="fg"><label class="fl">Payment source</label><select class="fi" id="txps"><option value="checking">Checking account</option><option value="credit_card">Credit card</option><option value="cash">Cash</option><option value="other">Other</option></select></div>
+    </div>
+    <div class="fr">
+      <div class="fg"><label class="fl">Cost code</label><select class="fi" id="txcc"><option value="">— Select —</option>${codes.map(c=>`<option value="${c.id}">${c.code} — ${c.name}</option>`).join('')}</select></div>
+      <div class="fg"><label class="fl">Description</label><input class="fi" id="txde" placeholder="What was this for?"></div>
+    </div>
+    <div style="display:flex;gap:20px;margin-bottom:14px">
+      <label style="display:flex;align-items:center;gap:8px;font-size:13px;cursor:pointer"><input type="checkbox" id="txal"> Allowance (no markup)</label>
+      <label style="display:flex;align-items:center;gap:8px;font-size:13px;cursor:pointer"><input type="checkbox" id="txco"> Change order related</label>
+      <label style="display:flex;align-items:center;gap:8px;font-size:13px;cursor:pointer"><input type="checkbox" id="txqb"> Synced to QuickBooks</label>
+    </div>
+    <div class="fg"><label class="fl">Notes</label><textarea class="fi" id="txnt" placeholder="Additional notes..."></textarea></div>
+    <div class="ma"><button class="btn" onclick="closeM()">Cancel</button><button class="btn btn-p" onclick="saveTxn()"><i class="ti ti-check"></i> Add transaction</button></div>
+  </div></div>`);
+}
+
+async function saveTxn(){
+  const amt=parseFloat(document.getElementById('txa').value);
+  if(!amt){document.getElementById('merr').innerHTML='<div class="merr">Amount required.</div>';return;}
+  const pid=document.getElementById('txp').value;
+  if(!pid){document.getElementById('merr').innerHTML='<div class="merr">Project required.</div>';return;}
+  try{
+    await dbPost('transactions',{
+      project_id:pid,
+      transaction_date:document.getElementById('txd').value,
+      vendor:document.getElementById('txv').value.trim(),
+      transaction_type:document.getElementById('txty').value,
+      amount:document.getElementById('txty').value==='income'?amt:-amt,
+      payment_source:document.getElementById('txps').value,
+      cost_code_id:document.getElementById('txcc').value||null,
+      description:document.getElementById('txde').value.trim(),
+      is_allowance:document.getElementById('txal').checked,
+      is_change_order:document.getElementById('txco').checked,
+      quickbooks_synced:document.getElementById('txqb').checked,
+      notes:document.getElementById('txnt').value.trim(),
+    });
+    closeM();toast('Transaction added');
+    await pInhouse();
+  }catch(e){document.getElementById('merr').innerHTML=`<div class="merr">${e.message}</div>`;}
+}
+
 // ── Boot ─────────────────────────────────────────
 nav('dashboard');
 </script>
 </body>
 </html>
- 
