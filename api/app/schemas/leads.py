@@ -11,7 +11,7 @@ class LeadCreate(BaseModel):
     email: Optional[str] = None
     project_address: Optional[str] = None
     project_type: Optional[str] = None
-    how_heard: Optional[str] = None
+    initial_contact_method: Optional[str] = None
     budget_range_min: Optional[float] = None
     budget_range_max: Optional[float] = None
     estimated_revenue_min: Optional[float] = None
@@ -20,7 +20,8 @@ class LeadCreate(BaseModel):
     referral_name: Optional[str] = None
     funding_type: Optional[str] = None
     vetting_score: Optional[int] = None
-    notes: Optional[str] = None
+    form_submission_raw: Optional[str] = None
+    assigned_to: Optional[str] = None
     status: str = "new"
 
 
