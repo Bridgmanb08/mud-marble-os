@@ -6,6 +6,9 @@ import { ProtectedRoute } from './components/layout/ProtectedRoute';
 import Login from './pages/Login';
 import Dashboard from './pages/Dashboard';
 import Leads from './pages/Leads';
+import Projects from './pages/Projects';
+import ProjectDetail from './pages/ProjectDetail';
+import Clients from './pages/Clients';
 import ComingSoon from './pages/ComingSoon';
 
 export default function App() {
@@ -23,9 +26,10 @@ export default function App() {
             }
           >
             <Route index element={<Dashboard />} />
-            <Route path="projects" element={<ComingSoon title="Projects" />} />
+            <Route path="projects" element={<Projects />} />
+            <Route path="projects/:id" element={<ProjectDetail />} />
             <Route path="leads" element={<Leads />} />
-            <Route path="clients" element={<ComingSoon title="Clients" />} />
+            <Route path="clients" element={<Clients />} />
             <Route path="estimates" element={<ComingSoon title="Estimates" />} />
             <Route path="invoices" element={<ComingSoon title="Invoices" />} />
             <Route path="change-orders" element={<ComingSoon title="Change Orders" />} />
