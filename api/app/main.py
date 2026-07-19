@@ -2,7 +2,19 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from .config import settings
-from .routers import ai, auth, clients, dashboard, leads, projects, users
+from .routers import (
+    ai,
+    auth,
+    change_orders,
+    clients,
+    dashboard,
+    estimates,
+    invoices,
+    leads,
+    projects,
+    transactions,
+    users,
+)
 
 app = FastAPI(title="Mud & Marble OS API")
 
@@ -27,3 +39,7 @@ app.include_router(ai.router, prefix="/api")
 app.include_router(users.router, prefix="/api")
 app.include_router(projects.router, prefix="/api")
 app.include_router(clients.router, prefix="/api")
+app.include_router(estimates.router, prefix="/api")
+app.include_router(invoices.router, prefix="/api")
+app.include_router(change_orders.router, prefix="/api")
+app.include_router(transactions.router, prefix="/api")
