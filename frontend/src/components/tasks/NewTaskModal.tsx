@@ -7,11 +7,12 @@ interface NewTaskModalProps {
   onClose: () => void;
   onSaved: () => void;
   defaultStatus?: string;
+  defaultProjectId?: string;
 }
 
-export function NewTaskModal({ onClose, onSaved, defaultStatus }: NewTaskModalProps) {
+export function NewTaskModal({ onClose, onSaved, defaultStatus, defaultProjectId }: NewTaskModalProps) {
   const [projects, setProjects] = useState<Project[]>([]);
-  const [projectId, setProjectId] = useState('');
+  const [projectId, setProjectId] = useState(defaultProjectId || '');
   const [title, setTitle] = useState('');
   const [assignedTo, setAssignedTo] = useState('');
   const [phase, setPhase] = useState('');

@@ -151,6 +151,25 @@ export interface Estimate {
   projects?: ProjectBrief;
 }
 
+export interface EstimateLineItem {
+  id: string;
+  estimate_id: string;
+  cost_code_id: string | null;
+  bucket: string;
+  description: string;
+  day_labor_cost: number;
+  material_cost: number;
+  subcontractor_cost: number;
+  contingency: number;
+  builder_cost: number;
+  markup_type: string | null;
+  markup_value: number;
+  owner_price: number;
+  notes_internal: string | null;
+  notes_external: string | null;
+  sort_order: number;
+}
+
 export interface Invoice {
   id: string;
   project_id: string;

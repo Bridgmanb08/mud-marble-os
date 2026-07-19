@@ -6,11 +6,12 @@ import type { Project } from '../../types';
 interface NewInvoiceModalProps {
   onClose: () => void;
   onCreated: () => void;
+  defaultProjectId?: string;
 }
 
-export function NewInvoiceModal({ onClose, onCreated }: NewInvoiceModalProps) {
+export function NewInvoiceModal({ onClose, onCreated, defaultProjectId }: NewInvoiceModalProps) {
   const [projects, setProjects] = useState<Project[]>([]);
-  const [projectId, setProjectId] = useState('');
+  const [projectId, setProjectId] = useState(defaultProjectId || '');
   const [invoiceNumber, setInvoiceNumber] = useState('');
   const [invoiceType, setInvoiceType] = useState('progress');
   const [amountDue, setAmountDue] = useState('');
