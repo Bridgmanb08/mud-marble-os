@@ -1,5 +1,60 @@
 export type LeadStatus = 'new' | 'contacted' | 'qualified' | 'converted' | 'disqualified';
 
+export interface ClientBrief {
+  id: string;
+  first_name: string | null;
+  last_name: string | null;
+}
+
+export interface Project {
+  id: string;
+  name: string;
+  address: string | null;
+  zip: string | null;
+  status: string;
+  project_type: string | null;
+  start_date: string | null;
+  estimated_completion: string | null;
+  internal_notes: string | null;
+  city: string | null;
+  state: string | null;
+  client_id: string | null;
+  contract_value: number | null;
+  health_status: string | null;
+  is_archived: boolean;
+  created_at: string;
+  clients: ClientBrief | null;
+}
+
+export interface ProjectNote {
+  id: string;
+  project_id: string;
+  author: string;
+  note_type: string;
+  content: string;
+  is_client_visible: boolean;
+  created_at: string;
+}
+
+export interface Client {
+  id: string;
+  first_name: string;
+  last_name: string | null;
+  phone: string | null;
+  email: string | null;
+  referral_name: string | null;
+  funding_type: string | null;
+  preferred_contact_method: string | null;
+  spouse_partner_name: string | null;
+  notes: string | null;
+  is_active: boolean;
+  is_advocate: boolean;
+  is_repeat_client: boolean;
+  referral_gift_sent: boolean;
+  lifetime_value: number | null;
+  created_at: string | null;
+}
+
 export interface Lead {
   id: string;
   first_name: string | null;
