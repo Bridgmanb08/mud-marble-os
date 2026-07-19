@@ -14,6 +14,7 @@ import Invoices from './pages/Invoices';
 import ChangeOrders from './pages/ChangeOrders';
 import InHouse from './pages/InHouse';
 import Tasks from './pages/Tasks';
+import Schedule from './pages/Schedule';
 import ComingSoon from './pages/ComingSoon';
 
 export default function App() {
@@ -40,7 +41,7 @@ export default function App() {
             <Route path="change-orders" element={<ChangeOrders />} />
             <Route path="inhouse" element={<InHouse />} />
             <Route path="tasks" element={<Tasks />} />
-            <Route path="schedule" element={<ComingSoon title="Schedule" />} />
+            <Route path="schedule" element={<Schedule />} />
             <Route path="subcontractors" element={<ComingSoon title="Subcontractors" />} />
             <Route path="sub-intelligence" element={<ComingSoon title="Sub Intelligence" />} />
           </Route>
