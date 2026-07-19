@@ -1,11 +1,26 @@
 from collections import defaultdict
 from typing import Optional
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, HTTPException
 
 from ..deps import CurrentUser, get_current_user
-from ..schemas.tasks import ReorderRequest, TaskCreate, TaskOut, TaskUpdate
-from ..supabase_client import db_get, db_patch, db_post
+from ..schemas.tasks import (
+    BoardViewCreate,
+    BoardViewOut,
+    BoardViewUpdate,
+    CommentCreate,
+    CommentOut,
+    DependencyCreate,
+    DependencyOut,
+    ReorderRequest,
+    SubtaskCreate,
+    SubtaskOut,
+    SubtaskUpdate,
+    TaskCreate,
+    TaskOut,
+    TaskUpdate,
+)
+from ..supabase_client import db_delete, db_get, db_patch, db_post
 
 router = APIRouter(prefix="/tasks", tags=["tasks"])
 
@@ -90,9 +105,101 @@ async def reorder_tasks(body: ReorderRequest, _: CurrentUser = Depends(get_curre
     return {"ok": True}
 
 
+@router.get("/views", response_model=list[BoardViewOut])
+async def list_views(current_user: CurrentUser = Depends(get_current_user)):
+    return await db_get("board_views", f"?user_id=eq.{current_user.id}&order=position.asc")
+
+
+@router.post("/views", response_model=BoardViewOut)
+async def create_view(body: BoardViewCreate, current_user: CurrentUser = Depends(get_current_user)):
+    rows = await db_post("board_views", {**body.model_dump(), "user_id": current_user.id})
+    return rows[0]
+
+
+@router.patch("/views/{view_id}", response_model=BoardViewOut)
+async def update_view(view_id: str, body: BoardViewUpdate, current_user: CurrentUser = Depends(get_current_user)):
+    await _require_owned("board_views", view_id, current_user)
+    rows = await db_patch("board_views", view_id, body.model_dump(exclude_none=True))
+    return rows[0]
+
+
+@router.delete("/views/{view_id}")
+async def delete_view(view_id: str, current_user: CurrentUser = Depends(get_current_user)):
+    await _require_owned("board_views", view_id, current_user)
+    await db_delete("board_views", view_id)
+    return {"ok": True}
+
+
+async def _require_owned(table: str, record_id: str, current_user: CurrentUser) -> None:
+    rows = await db_get(table, f"?id=eq.{record_id}&select=user_id")
+    if not rows or rows[0]["user_id"] != current_user.id:
+        raise HTTPException(status_code=404, detail="Not found")
+
+
+@router.get("/{task_id}/subtasks", response_model=list[SubtaskOut])
+async def list_subtasks(task_id: str, _: CurrentUser = Depends(get_current_user)):
+    return await db_get("task_subtasks", f"?task_id=eq.{task_id}&order=position.asc")
+
+
+@router.post("/{task_id}/subtasks", response_model=SubtaskOut)
+async def create_subtask(task_id: str, body: SubtaskCreate, _: CurrentUser = Depends(get_current_user)):
+    rows = await db_post("task_subtasks", {**body.model_dump(), "task_id": task_id})
+    return rows[0]
+
+
+@router.patch("/{task_id}/subtasks/{subtask_id}", response_model=SubtaskOut)
+async def update_subtask(task_id: str, subtask_id: str, body: SubtaskUpdate, _: CurrentUser = Depends(get_current_user)):
+    rows = await db_patch("task_subtasks", subtask_id, body.model_dump(exclude_none=True))
+    return rows[0]
+
+
+@router.delete("/{task_id}/subtasks/{subtask_id}")
+async def delete_subtask(task_id: str, subtask_id: str, _: CurrentUser = Depends(get_current_user)):
+    await db_delete("task_subtasks", subtask_id)
+    return {"ok": True}
+
+
+@router.get("/{task_id}/dependencies", response_model=list[DependencyOut])
+async def list_dependencies(task_id: str, _: CurrentUser = Depends(get_current_user)):
+    return await db_get("task_dependencies", f"?task_id=eq.{task_id}")
+
+
+@router.post("/{task_id}/dependencies", response_model=DependencyOut)
+async def create_dependency(task_id: str, body: DependencyCreate, _: CurrentUser = Depends(get_current_user)):
+    if body.depends_on_id == task_id:
+        raise HTTPException(status_code=400, detail="A task cannot depend on itself")
+    rows = await db_post("task_dependencies", {"task_id": task_id, "depends_on_id": body.depends_on_id})
+    return rows[0]
+
+
+@router.delete("/{task_id}/dependencies/{dependency_id}")
+async def delete_dependency(task_id: str, dependency_id: str, _: CurrentUser = Depends(get_current_user)):
+    await db_delete("task_dependencies", dependency_id)
+    return {"ok": True}
+
+
+@router.get("/{task_id}/comments", response_model=list[CommentOut])
+async def list_comments(task_id: str, _: CurrentUser = Depends(get_current_user)):
+    return await db_get("task_comments", f"?task_id=eq.{task_id}&order=created_at.desc")
+
+
+@router.post("/{task_id}/comments", response_model=CommentOut)
+async def create_comment(task_id: str, body: CommentCreate, current_user: CurrentUser = Depends(get_current_user)):
+    rows = await db_post(
+        "task_comments", {"task_id": task_id, "author": current_user.name or current_user.email, "content": body.content}
+    )
+    return rows[0]
+
+
 @router.patch("/{task_id}", response_model=TaskOut)
 async def update_task(task_id: str, body: TaskUpdate, _: CurrentUser = Depends(get_current_user)):
     await db_patch("schedule_items", task_id, body.model_dump(exclude_none=True))
     full = await db_get("schedule_items", f"?id=eq.{task_id}&select=*,projects(name)")
     enriched = await _enrich(full)
     return enriched[0]
+
+
+@router.delete("/{task_id}")
+async def delete_task(task_id: str, _: CurrentUser = Depends(get_current_user)):
+    await db_delete("schedule_items", task_id)
+    return {"ok": True}

@@ -1,27 +1,26 @@
 import { useEffect, useState, type FormEvent } from 'react';
 import { api, ApiError } from '../../api/client';
 import { Modal } from '../ui/Modal';
-import type { Project, Task } from '../../types';
+import type { Project } from '../../types';
 
 interface NewTaskModalProps {
   onClose: () => void;
   onSaved: () => void;
   defaultStatus?: string;
-  task?: Task;
 }
 
-export function NewTaskModal({ onClose, onSaved, defaultStatus, task }: NewTaskModalProps) {
+export function NewTaskModal({ onClose, onSaved, defaultStatus }: NewTaskModalProps) {
   const [projects, setProjects] = useState<Project[]>([]);
-  const [projectId, setProjectId] = useState(task?.project_id || '');
-  const [title, setTitle] = useState(task?.title || '');
-  const [assignedTo, setAssignedTo] = useState(task?.assigned_to || '');
-  const [phase, setPhase] = useState(task?.phase || '');
-  const [status, setStatus] = useState(task?.status || defaultStatus || 'upcoming');
-  const [priority, setPriority] = useState(task?.priority || 'normal');
-  const [scheduledStart, setScheduledStart] = useState(task?.scheduled_start?.slice(0, 10) || '');
-  const [scheduledEnd, setScheduledEnd] = useState(task?.scheduled_end?.slice(0, 10) || '');
-  const [notes, setNotes] = useState(task?.notes || '');
-  const [isMilestone, setIsMilestone] = useState(task?.is_milestone || false);
+  const [projectId, setProjectId] = useState('');
+  const [title, setTitle] = useState('');
+  const [assignedTo, setAssignedTo] = useState('');
+  const [phase, setPhase] = useState('');
+  const [status, setStatus] = useState(defaultStatus || 'upcoming');
+  const [priority, setPriority] = useState('normal');
+  const [scheduledStart, setScheduledStart] = useState('');
+  const [scheduledEnd, setScheduledEnd] = useState('');
+  const [notes, setNotes] = useState('');
+  const [isMilestone, setIsMilestone] = useState(false);
   const [error, setError] = useState('');
   const [saving, setSaving] = useState(false);
 
@@ -50,11 +49,7 @@ export function NewTaskModal({ onClose, onSaved, defaultStatus, task }: NewTaskM
       is_milestone: isMilestone,
     };
     try {
-      if (task) {
-        await api.patch(`/tasks/${task.id}`, payload);
-      } else {
-        await api.post('/tasks', payload);
-      }
+      await api.post('/tasks', payload);
       onSaved();
     } catch (err) {
       setError(err instanceof ApiError ? err.message : 'Failed to save task');
@@ -64,7 +59,7 @@ export function NewTaskModal({ onClose, onSaved, defaultStatus, task }: NewTaskM
   }
 
   return (
-    <Modal title={task ? 'Edit task' : 'New task'} onClose={onClose} wide>
+    <Modal title="New task" onClose={onClose} wide>
       <form onSubmit={handleSubmit}>
         {error && <div className="merr">{error}</div>}
         <div className="fg">
@@ -134,7 +129,7 @@ export function NewTaskModal({ onClose, onSaved, defaultStatus, task }: NewTaskM
             Cancel
           </button>
           <button type="submit" className="btn btn-p" disabled={saving}>
-            {saving ? 'Saving…' : task ? 'Save changes' : 'Create task'}
+            {saving ? 'Saving…' : 'Create task'}
           </button>
         </div>
       </form>

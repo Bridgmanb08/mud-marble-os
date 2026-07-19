@@ -63,3 +63,74 @@ class ReorderItem(BaseModel):
 
 class ReorderRequest(BaseModel):
     items: list[ReorderItem]
+
+
+class SubtaskCreate(BaseModel):
+    title: str
+
+
+class SubtaskUpdate(BaseModel):
+    title: Optional[str] = None
+    is_complete: Optional[bool] = None
+    position: Optional[int] = None
+
+
+class SubtaskOut(BaseModel):
+    id: str
+    task_id: str
+    title: str
+    is_complete: bool
+    position: int
+    created_at: str
+
+
+class DependencyCreate(BaseModel):
+    depends_on_id: str
+
+
+class DependencyOut(BaseModel):
+    id: str
+    task_id: str
+    depends_on_id: str
+    created_at: str
+
+
+class CommentCreate(BaseModel):
+    content: str
+
+
+class CommentOut(BaseModel):
+    id: str
+    task_id: str
+    author: str
+    content: str
+    created_at: str
+
+
+class BoardViewCreate(BaseModel):
+    name: str
+    view_type: str = "kanban"
+    group_by: Optional[str] = None
+    filters: dict = {}
+    sort_by: Optional[str] = None
+
+
+class BoardViewUpdate(BaseModel):
+    name: Optional[str] = None
+    view_type: Optional[str] = None
+    group_by: Optional[str] = None
+    filters: Optional[dict] = None
+    sort_by: Optional[str] = None
+    position: Optional[int] = None
+
+
+class BoardViewOut(BaseModel):
+    id: str
+    user_id: str
+    name: str
+    view_type: str
+    group_by: Optional[str] = None
+    filters: dict = {}
+    sort_by: Optional[str] = None
+    position: int
+    created_at: str

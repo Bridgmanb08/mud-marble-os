@@ -5,9 +5,10 @@ interface ModalProps {
   onClose: () => void;
   children: ReactNode;
   wide?: boolean;
+  xl?: boolean;
 }
 
-export function Modal({ title, onClose, children, wide }: ModalProps) {
+export function Modal({ title, onClose, children, wide, xl }: ModalProps) {
   return (
     <div
       className="mo"
@@ -15,7 +16,7 @@ export function Modal({ title, onClose, children, wide }: ModalProps) {
         if (e.target === e.currentTarget) onClose();
       }}
     >
-      <div className={`mb${wide ? ' wide' : ''}`}>
+      <div className={`mb${xl ? ' xl' : wide ? ' wide' : ''}`}>
         <div className="mt">{title}</div>
         {children}
       </div>
