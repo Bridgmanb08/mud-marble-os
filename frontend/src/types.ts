@@ -50,3 +50,20 @@ export interface DashboardSummary {
     created_at: string;
   }[];
 }
+
+export interface ExtractedTask {
+  title: string;
+  assigned_to: string | null;
+  project: string | null;
+  priority: string | null;
+}
+
+export interface ExtractedProjectUpdate {
+  project: string | null;
+  update: string;
+}
+
+export interface ParseTranscriptResponse {
+  tasks: ExtractedTask[];
+  project_updates: ExtractedProjectUpdate[];
+}
