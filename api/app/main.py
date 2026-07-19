@@ -2,7 +2,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from .config import settings
-from .routers import auth, dashboard, leads
+from .routers import ai, auth, dashboard, leads
 
 app = FastAPI(title="Mud & Marble OS API")
 
@@ -23,3 +23,4 @@ async def health():
 app.include_router(auth.router, prefix="/api")
 app.include_router(leads.router, prefix="/api")
 app.include_router(dashboard.router, prefix="/api")
+app.include_router(ai.router, prefix="/api")

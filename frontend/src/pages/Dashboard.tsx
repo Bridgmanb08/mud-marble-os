@@ -3,6 +3,7 @@ import { api } from '../api/client';
 import { MetricCard } from '../components/ui/MetricCard';
 import { fmt, fmtD } from '../lib/format';
 import { useToast } from '../components/ui/Toast';
+import { FathomImportCard } from '../components/dashboard/FathomImportCard';
 import type { DashboardSummary } from '../types';
 
 const HEALTH_DOT: Record<string, string> = { green: 'dot-g', yellow: 'dot-a', red: 'dot-r' };
@@ -96,6 +97,8 @@ export default function Dashboard() {
                 <div style={{ fontSize: 13, color: 'var(--t2)' }}>No upcoming tasks.</div>
               )}
             </div>
+
+            <FathomImportCard />
 
             <div className="card" style={{ padding: 20, gridColumn: '1 / -1' }}>
               <div className="st" style={{ marginBottom: 12 }}>
