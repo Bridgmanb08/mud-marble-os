@@ -61,6 +61,82 @@ export interface BoardView {
   created_at: string;
 }
 
+export interface Subcontractor {
+  id: string;
+  company_name: string;
+  trade: string | null;
+  contact_name: string | null;
+  phone: string | null;
+  email: string | null;
+  insurance_expiry: string | null;
+  license_number: string | null;
+  rating: number | null;
+  preferred: boolean;
+  w9_on_file: boolean;
+  notes: string | null;
+  is_active: boolean;
+  created_at: string;
+}
+
+export interface ChangeOrderTypeBreakdown {
+  key: string;
+  label: string;
+  count: number;
+  total: number;
+  pct: number;
+}
+
+export interface SpendCategory {
+  code: string;
+  total: number;
+  count: number;
+}
+
+export interface ProjectPerformance {
+  project_id: string;
+  project_name: string;
+  contract_value: number;
+  co_total: number;
+  co_count: number;
+  status: string;
+}
+
+export interface ScorecardItem {
+  key: string;
+  label: string;
+  value: string;
+  target: string;
+  status: 'good' | 'warn' | 'bad';
+}
+
+export interface SubcontractorCompliance {
+  id: string;
+  company_name: string;
+  trade: string | null;
+  contact_name: string | null;
+  phone: string | null;
+  w9_on_file: boolean;
+  insurance_expiry: string | null;
+  insurance_status: 'none' | 'ok' | 'expiring' | 'expired';
+  rating: number | null;
+  preferred: boolean;
+}
+
+export interface SubIntelligenceSummary {
+  avg_project_value: number;
+  project_count: number;
+  overall_margin: number;
+  co_approval_rate: number;
+  co_approved_count: number;
+  co_total_count: number;
+  co_total_value: number;
+  co_breakdown: ChangeOrderTypeBreakdown[];
+  spend_by_category: SpendCategory[];
+  project_performance: ProjectPerformance[];
+  scorecard: ScorecardItem[];
+  subcontractors: SubcontractorCompliance[];
+}
+
 export interface Estimate {
   id: string;
   project_id: string;

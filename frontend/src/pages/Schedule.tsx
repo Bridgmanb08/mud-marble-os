@@ -159,6 +159,7 @@ export default function Schedule() {
                         className="btn-reset"
                         onClick={() => openTask(t.id)}
                         style={{
+                          display: 'block',
                           width: '100%',
                           textAlign: 'left',
                           fontSize: 11,
