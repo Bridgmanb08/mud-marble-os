@@ -1,17 +1,18 @@
 import { useEffect, useMemo, useState } from 'react';
-import { IconPlus, IconLayoutKanban, IconTable, IconBookmark, IconTrash } from '@tabler/icons-react';
+import { IconPlus, IconLayoutKanban, IconTable, IconTimeline, IconBookmark, IconTrash } from '@tabler/icons-react';
 import { api } from '../api/client';
 import { useToast } from '../components/ui/Toast';
 import { Modal } from '../components/ui/Modal';
 import type { BoardView, Task } from '../types';
 import { KanbanBoard } from '../components/tasks/KanbanBoard';
 import { TableView, type TaskGroupBy } from '../components/tasks/TableView';
+import { TimelineView } from '../components/tasks/TimelineView';
 import { NewTaskModal } from '../components/tasks/NewTaskModal';
 import { TaskDetailDrawer } from '../components/tasks/TaskDetailDrawer';
 
 export default function Tasks() {
   const [tasks, setTasks] = useState<Task[] | null>(null);
-  const [view, setView] = useState<'kanban' | 'table'>('kanban');
+  const [view, setView] = useState<'kanban' | 'table' | 'timeline'>('kanban');
   const [groupBy, setGroupBy] = useState<TaskGroupBy>('none');
   const [projectFilter, setProjectFilter] = useState('');
   const [assigneeFilter, setAssigneeFilter] = useState('');
@@ -59,7 +60,7 @@ export default function Tasks() {
 
   function applyView(v: BoardView) {
     setActiveViewId(v.id);
-    setView(v.view_type === 'table' ? 'table' : 'kanban');
+    setView(v.view_type === 'table' ? 'table' : v.view_type === 'timeline' ? 'timeline' : 'kanban');
     setGroupBy((v.group_by as TaskGroupBy) || 'none');
     const f = v.filters || {};
     setProjectFilter((f.project_id as string) || '');
@@ -140,6 +141,13 @@ export default function Tasks() {
               onClick={() => setView('table')}
             >
               <IconTable size={14} /> Table
+            </button>
+            <button
+              className="btn btn-sm btn-ghost"
+              style={{ background: view === 'timeline' ? 'var(--surface)' : undefined, boxShadow: view === 'timeline' ? '0 1px 3px rgba(0,0,0,.08)' : undefined }}
+              onClick={() => setView('timeline')}
+            >
+              <IconTimeline size={14} /> Timeline
             </button>
           </div>
           <button className="btn btn-p btn-sm" onClick={() => openNew('upcoming')}>
@@ -231,8 +239,10 @@ export default function Tasks() {
         </div>
       ) : view === 'kanban' ? (
         <KanbanBoard tasks={filtered} onTaskClick={openEdit} onAddTask={openNew} onChanged={load} />
-      ) : (
+      ) : view === 'table' ? (
         <TableView tasks={filtered} onTaskClick={openEdit} groupBy={groupBy} onGroupByChange={setGroupBy} />
+      ) : (
+        <TimelineView tasks={filtered} onTaskClick={openEdit} />
       )}
 
       {showModal && (

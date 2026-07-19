@@ -128,6 +128,7 @@ textarea.fi{resize:vertical;min-height:80px;}
 .tab.on{color:var(--text);font-weight:500;border-bottom-color:var(--accent);}
 .tab.disabled{color:var(--t3);cursor:not-allowed;}
 .tb{background:var(--surface);border:1px solid var(--border);border-top:none;border-radius:0 0 var(--rl) var(--rl);padding:20px;min-height:200px;}
+.btn-reset{background:none;border:none;padding:0;margin:0;font-family:inherit;color:inherit;display:block;}
 
 /* Info grid (project detail, etc.) */
 .ig{display:grid;grid-template-columns:1fr 1fr;gap:20px;}
