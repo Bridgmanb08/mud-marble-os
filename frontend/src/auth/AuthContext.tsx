@@ -5,6 +5,8 @@ export interface CurrentUser {
   id: string;
   email: string;
   name: string;
+  role: string;
+  is_admin: boolean;
 }
 
 interface AuthContextValue {

@@ -21,7 +21,11 @@ async def login(body: LoginRequest, response: Response):
     if not verify_password(body.password, user["password_hash"]):
         raise HTTPException(status_code=401, detail="Invalid email or password")
 
-    token = create_access_token(user_id=str(user["id"]), email=user["email"], name=user.get("name", ""))
+    role = user.get("role", "member")
+    is_admin = user.get("is_admin", False)
+    token = create_access_token(
+        user_id=str(user["id"]), email=user["email"], name=user.get("name", ""), role=role, is_admin=is_admin
+    )
     response.set_cookie(
         key=COOKIE_NAME,
         value=token,
@@ -31,7 +35,7 @@ async def login(body: LoginRequest, response: Response):
         samesite="lax",
         path="/",
     )
-    return UserOut(id=str(user["id"]), email=user["email"], name=user.get("name", ""))
+    return UserOut(id=str(user["id"]), email=user["email"], name=user.get("name", ""), role=role, is_admin=is_admin)
 
 
 @router.post("/logout")
@@ -42,4 +46,10 @@ async def logout(response: Response):
 
 @router.get("/me", response_model=UserOut)
 async def me(current_user: CurrentUser = Depends(get_current_user)):
-    return UserOut(id=current_user.id, email=current_user.email, name=current_user.name)
+    return UserOut(
+        id=current_user.id,
+        email=current_user.email,
+        name=current_user.name,
+        role=current_user.role,
+        is_admin=current_user.is_admin,
+    )

@@ -6,6 +6,8 @@ Requires SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY set in your shell environmen
 Usage:
     cd api && source .venv/bin/activate  # needs passlib[bcrypt] installed, see api/requirements.txt
     python ../scripts/create_user.py
+
+Roles used by the dashboard's default widget layout: owner, ops, cfo, assistant, design, member.
 """
 
 import getpass
@@ -27,6 +29,8 @@ def main() -> None:
 
     name = input("Name: ").strip()
     email = input("Email: ").strip()
+    role = input("Role [owner/ops/cfo/assistant/design/member] (default: member): ").strip() or "member"
+    is_admin = input("Is this user an admin? (y/N): ").strip().lower() == "y"
     password = getpass.getpass("Password: ")
     confirm = getpass.getpass("Confirm password: ")
     if password != confirm:
@@ -43,13 +47,13 @@ def main() -> None:
             "Content-Type": "application/json",
             "Prefer": "return=representation",
         },
-        json={"name": name, "email": email, "password_hash": password_hash},
+        json={"name": name, "email": email, "password_hash": password_hash, "role": role, "is_admin": is_admin},
     )
     if not r.is_success:
         print(f"Failed: {r.status_code} {r.text}", file=sys.stderr)
         sys.exit(1)
 
-    print(f"Created user {email}.")
+    print(f"Created user {email} (role={role}, admin={is_admin}).")
 
 
 if __name__ == "__main__":

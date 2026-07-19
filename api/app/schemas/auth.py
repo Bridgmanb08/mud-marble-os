@@ -10,3 +10,5 @@ class UserOut(BaseModel):
     id: str
     email: str
     name: str
+    role: str
+    is_admin: bool
