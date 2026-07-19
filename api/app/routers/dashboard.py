@@ -1,11 +1,23 @@
 import asyncio
+import json
 from collections import defaultdict
 from datetime import datetime, timezone
 from typing import Optional
 
+from anthropic import AsyncAnthropic
 from fastapi import APIRouter, Depends, HTTPException
+from pydantic import ValidationError
 
+from ..config import settings
+from ..custom_widget_spec import (
+    NUMERIC_FIELDS,
+    SOURCE_FIELDS,
+    CustomWidgetSpec,
+    SpecValidationError,
+    validate_spec,
+)
 from ..deps import CurrentUser, get_current_user
+from ..schemas.custom_widget import CreateCustomWidgetRequest, CustomWidgetOut
 from ..schemas.dashboard import (
     ActivityItem,
     ActiveProject,
@@ -23,10 +35,35 @@ from ..schemas.dashboard import (
     UpcomingTask,
 )
 from ..schemas.layout import LayoutOut, LayoutUpdate, WidgetItem
-from ..supabase_client import db_get, db_patch, db_post
+from ..supabase_client import db_delete, db_get, db_patch, db_post
 from ..widget_catalog import default_widgets_for_role
 
 router = APIRouter(prefix="/dashboard", tags=["dashboard"])
+
+CUSTOM_WIDGET_PROMPT = """You turn a plain-English dashboard request into a strict JSON spec for a \
+construction-company project management dashboard.
+
+Available data sources and their fields (you MUST only use these — nothing else exists):
+{sources}
+
+Numeric fields (only these may be used for "sum" or "avg" aggregation):
+{numeric}
+
+Respond with ONLY a JSON object, no markdown, no explanation, in this exact shape:
+{{
+  "title": "short widget title",
+  "spec": {{
+    "source": "<one of the sources above>",
+    "filters": [{{"field": "<field name>", "op": "eq|neq|gt|gte|lt|lte|contains", "value": <string, number, or boolean>}}],
+    "aggregation": "count|sum|avg|list",
+    "aggregation_field": "<numeric field name, only if aggregation is sum or avg, else omit>"
+  }}
+}}
+
+If the request doesn't clearly map to one of the available sources, pick the closest reasonable match \
+rather than refusing — "aggregation":"list" with no filters is a safe fallback.
+
+User's request: {prompt}"""
 
 ALEX_MONTHLY_TARGET = 7600.0
 
@@ -360,3 +397,62 @@ async def update_layout(body: LayoutUpdate, current_user: CurrentUser = Depends(
     else:
         await db_post("dashboard_layouts", {"user_id": target_id, "widgets": widgets})
     return LayoutOut(widgets=body.widgets)
+
+
+@router.get("/custom-widgets", response_model=list[CustomWidgetOut])
+async def list_custom_widgets(current_user: CurrentUser = Depends(get_current_user)):
+    rows = await db_get(
+        "custom_widgets", f"?user_id=eq.{current_user.id}&select=id,title,spec&order=created_at.desc"
+    )
+    return [CustomWidgetOut(id=r["id"], title=r["title"], spec=CustomWidgetSpec(**r["spec"])) for r in rows]
+
+
+@router.post("/custom-widgets", response_model=CustomWidgetOut)
+async def create_custom_widget(
+    body: CreateCustomWidgetRequest, current_user: CurrentUser = Depends(get_current_user)
+):
+    if not settings.anthropic_api_key:
+        raise HTTPException(status_code=503, detail="ANTHROPIC_API_KEY is not configured")
+
+    sources_desc = "\n".join(f"- {s}: {', '.join(sorted(fields))}" for s, fields in SOURCE_FIELDS.items())
+    numeric_desc = "\n".join(
+        f"- {s}: {', '.join(sorted(fields)) or '(none)'}" for s, fields in NUMERIC_FIELDS.items()
+    )
+
+    client = AsyncAnthropic(api_key=settings.anthropic_api_key)
+    message = await client.messages.create(
+        model="claude-sonnet-4-6",
+        max_tokens=500,
+        messages=[
+            {
+                "role": "user",
+                "content": CUSTOM_WIDGET_PROMPT.format(
+                    sources=sources_desc, numeric=numeric_desc, prompt=body.prompt[:500]
+                ),
+            }
+        ],
+    )
+    raw = message.content[0].text if message.content else "{}"
+    raw = raw.replace("```json", "").replace("```", "").strip()
+
+    try:
+        parsed = json.loads(raw)
+        spec = CustomWidgetSpec(**parsed["spec"])
+        title = (parsed.get("title") or body.prompt[:60]).strip()
+        validate_spec(spec)
+    except (json.JSONDecodeError, KeyError, ValidationError, SpecValidationError) as e:
+        raise HTTPException(status_code=422, detail=f"Couldn't turn that into a widget: {e}")
+
+    rows = await db_post(
+        "custom_widgets", {"user_id": current_user.id, "title": title, "spec": spec.model_dump()}
+    )
+    return CustomWidgetOut(id=rows[0]["id"], title=title, spec=spec)
+
+
+@router.delete("/custom-widgets/{widget_id}")
+async def delete_custom_widget(widget_id: str, current_user: CurrentUser = Depends(get_current_user)):
+    existing = await db_get("custom_widgets", f"?id=eq.{widget_id}&user_id=eq.{current_user.id}&select=id")
+    if not existing:
+        raise HTTPException(status_code=404, detail="Not found")
+    await db_delete("custom_widgets", widget_id)
+    return {"ok": True}

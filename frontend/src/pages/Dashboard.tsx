@@ -8,13 +8,15 @@ import {
   type DragEndEvent,
 } from '@dnd-kit/core';
 import { SortableContext, verticalListSortingStrategy, arrayMove } from '@dnd-kit/sortable';
-import { IconSettings } from '@tabler/icons-react';
+import { IconSettings, IconPlus } from '@tabler/icons-react';
 import { api } from '../api/client';
 import { useToast } from '../components/ui/Toast';
 import { useAuth } from '../auth/AuthContext';
 import { WidgetShell } from '../components/dashboard/WidgetShell';
 import { WIDGET_REGISTRY } from '../components/dashboard/widgetRegistry';
-import type { DashboardSummary, DashboardLayout, UserSummary, WidgetItem } from '../types';
+import { AddWidgetModal } from '../components/dashboard/AddWidgetModal';
+import { CustomWidgetRenderer } from '../components/dashboard/widgets/CustomWidget';
+import type { DashboardSummary, DashboardLayout, UserSummary, WidgetItem, CustomWidget, WidgetId } from '../types';
 
 export default function Dashboard() {
   const { user } = useAuth();
@@ -24,8 +26,10 @@ export default function Dashboard() {
   const [users, setUsers] = useState<UserSummary[]>([]);
   const [data, setData] = useState<DashboardSummary | null>(null);
   const [widgets, setWidgets] = useState<WidgetItem[] | null>(null);
+  const [customWidgets, setCustomWidgets] = useState<CustomWidget[]>([]);
   const [editMode, setEditMode] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [showAddWidget, setShowAddWidget] = useState(false);
 
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 5 } }));
 
@@ -33,6 +37,10 @@ export default function Dashboard() {
     if (!user) return;
     setViewingUserId(user.id);
     api.get<DashboardSummary>('/dashboard').then(setData).catch(() => toast('Failed to load dashboard', true));
+    api
+      .get<CustomWidget[]>('/dashboard/custom-widgets')
+      .then(setCustomWidgets)
+      .catch(() => {});
     if (user.is_admin) {
       api.get<UserSummary[]>('/users').then(setUsers).catch(() => {});
     }
@@ -62,6 +70,10 @@ export default function Dashboard() {
     setWidgets((prev) => prev && prev.map((w) => (w.id === id ? { ...w, visible: !w.visible } : w)));
   }
 
+  function addWidget(id: string) {
+    setWidgets((prev) => (prev ? [...prev, { id, visible: true }] : prev));
+  }
+
   async function handleSave() {
     if (!widgets) return;
     setSaving(true);
@@ -81,6 +93,7 @@ export default function Dashboard() {
   const dateStr = new Date().toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' });
   const viewingSelf = viewingUserId === user?.id;
   const viewingUserName = viewingSelf ? user?.name : users.find((u) => u.id === viewingUserId)?.name;
+  const customWidgetById = new Map(customWidgets.map((w) => [`custom:${w.id}`, w]));
 
   return (
     <>
@@ -113,6 +126,9 @@ export default function Dashboard() {
             </button>
           ) : (
             <>
+              <button className="btn btn-sm" onClick={() => setShowAddWidget(true)}>
+                <IconPlus size={14} /> Add widget
+              </button>
               <button className="btn btn-sm" onClick={() => setEditMode(false)} disabled={saving}>
                 Cancel
               </button>
@@ -133,26 +149,44 @@ export default function Dashboard() {
           <SortableContext items={widgets.map((w) => w.id)} strategy={verticalListSortingStrategy}>
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
               {widgets.map((w) => {
-                const def = WIDGET_REGISTRY[w.id];
-                if (!def) return null;
-                const Component = def.Component;
+                const custom = w.id.startsWith('custom:') ? customWidgetById.get(w.id) : undefined;
+                const def = custom ? undefined : WIDGET_REGISTRY[w.id as WidgetId];
+                if (!custom && !def) return null;
                 return (
                   <WidgetShell
                     key={w.id}
                     id={w.id}
-                    title={def.title}
+                    title={custom ? custom.title : def!.title}
                     editMode={editMode}
                     visible={w.visible}
                     onToggleVisible={() => toggleVisible(w.id)}
-                    wide={def.wide}
+                    wide={custom ? true : def!.wide}
                   >
-                    <Component data={data} />
+                    {custom ? <CustomWidgetRenderer spec={custom.spec} data={data} /> : (() => {
+                      const Component = def!.Component;
+                      return <Component data={data} />;
+                    })()}
                   </WidgetShell>
                 );
               })}
             </div>
           </SortableContext>
         </DndContext>
+      )}
+
+      {showAddWidget && widgets && (
+        <AddWidgetModal
+          onClose={() => setShowAddWidget(false)}
+          existingIds={widgets.map((w) => w.id)}
+          customWidgets={customWidgets}
+          onAddBuiltIn={(id) => addWidget(id)}
+          onAddCustom={(id) => addWidget(`custom:${id}`)}
+          onCustomWidgetCreated={(widget) => {
+            setCustomWidgets((prev) => [widget, ...prev]);
+            addWidget(`custom:${widget.id}`);
+            toast('Widget created');
+          }}
+        />
       )}
     </>
   );
