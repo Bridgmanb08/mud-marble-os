@@ -4,6 +4,27 @@ export interface ProjectBrief {
   name: string;
 }
 
+export interface Task {
+  id: string;
+  project_id: string | null;
+  title: string;
+  assigned_to: string | null;
+  phase: string | null;
+  status: string;
+  priority: string;
+  position: number;
+  scheduled_start: string | null;
+  scheduled_end: string | null;
+  notes: string | null;
+  is_milestone: boolean;
+  created_at: string;
+  projects: ProjectBrief | null;
+  subtask_total: number;
+  subtask_complete: number;
+  comment_count: number;
+  blocked: boolean;
+}
+
 export interface Estimate {
   id: string;
   project_id: string;
