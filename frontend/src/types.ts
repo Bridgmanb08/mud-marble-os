@@ -1,5 +1,81 @@
 export type LeadStatus = 'new' | 'contacted' | 'qualified' | 'converted' | 'disqualified';
 
+export interface ProjectBrief {
+  name: string;
+}
+
+export interface Estimate {
+  id: string;
+  project_id: string;
+  version: number;
+  status: string;
+  pm_fee_total: number | null;
+  notes_internal: string | null;
+  grand_total_owner_price: number | null;
+  construction_total_owner_price: number | null;
+  allowance_total: number | null;
+  created_at: string;
+  projects?: ProjectBrief;
+}
+
+export interface Invoice {
+  id: string;
+  project_id: string;
+  invoice_number: string | null;
+  invoice_type: string;
+  amount_due: number;
+  amount_paid: number | null;
+  due_date: string | null;
+  notes_external: string | null;
+  status: string;
+  issued_at: string | null;
+  created_at: string;
+  projects: ProjectBrief | null;
+}
+
+export interface ChangeOrder {
+  id: string;
+  project_id: string;
+  co_number: number | null;
+  title: string;
+  co_type: string;
+  owner_price: number;
+  builder_cost: number | null;
+  description: string | null;
+  discovered_by: string | null;
+  status: string;
+  sent_at: string | null;
+  created_at: string;
+  projects: ProjectBrief | null;
+  sop_breach: boolean;
+}
+
+export interface Transaction {
+  id: string;
+  project_id: string;
+  transaction_date: string;
+  vendor: string | null;
+  transaction_type: string;
+  amount: number;
+  payment_source: string | null;
+  cost_code_id: string | null;
+  description: string | null;
+  is_allowance: boolean;
+  is_change_order: boolean;
+  quickbooks_synced: boolean;
+  notes: string | null;
+  created_at: string;
+  projects: ProjectBrief | null;
+  cost_codes: { code: string; name: string } | null;
+}
+
+export interface CostCode {
+  id: string;
+  code: string;
+  name: string;
+  is_active: boolean;
+}
+
 export interface ClientBrief {
   id: string;
   first_name: string | null;

@@ -8,6 +8,7 @@ from anthropic import AsyncAnthropic
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import ValidationError
 
+from ..change_order_utils import compute_sop_breach
 from ..config import settings
 from ..custom_widget_spec import (
     NUMERIC_FIELDS,
@@ -178,7 +179,7 @@ async def get_dashboard(_: CurrentUser = Depends(get_current_user)):
                 project_name=(co.get("projects") or {}).get("name"),
                 status=co["status"],
                 hours_since_sent=hours_since_sent,
-                sop_breach=bool(co.get("status") == "sent" and hours_since_sent and hours_since_sent > 24),
+                sop_breach=compute_sop_breach(co.get("status"), co.get("sent_at"), now),
             )
         )
 

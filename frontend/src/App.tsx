@@ -9,6 +9,10 @@ import Leads from './pages/Leads';
 import Projects from './pages/Projects';
 import ProjectDetail from './pages/ProjectDetail';
 import Clients from './pages/Clients';
+import Estimates from './pages/Estimates';
+import Invoices from './pages/Invoices';
+import ChangeOrders from './pages/ChangeOrders';
+import InHouse from './pages/InHouse';
 import ComingSoon from './pages/ComingSoon';
 
 export default function App() {
@@ -30,10 +34,10 @@ export default function App() {
             <Route path="projects/:id" element={<ProjectDetail />} />
             <Route path="leads" element={<Leads />} />
             <Route path="clients" element={<Clients />} />
-            <Route path="estimates" element={<ComingSoon title="Estimates" />} />
-            <Route path="invoices" element={<ComingSoon title="Invoices" />} />
-            <Route path="change-orders" element={<ComingSoon title="Change Orders" />} />
-            <Route path="inhouse" element={<ComingSoon title="In-House Sheet" />} />
+            <Route path="estimates" element={<Estimates />} />
+            <Route path="invoices" element={<Invoices />} />
+            <Route path="change-orders" element={<ChangeOrders />} />
+            <Route path="inhouse" element={<InHouse />} />
             <Route path="tasks" element={<ComingSoon title="Task Board" />} />
             <Route path="schedule" element={<ComingSoon title="Schedule" />} />
             <Route path="subcontractors" element={<ComingSoon title="Subcontractors" />} />
