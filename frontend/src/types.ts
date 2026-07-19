@@ -49,6 +49,87 @@ export interface DashboardSummary {
     content: string;
     created_at: string;
   }[];
+  contractor_milestones: {
+    id: string;
+    title: string;
+    project_name: string | null;
+    assigned_to: string | null;
+    scheduled_end: string | null;
+    days_until_due: number | null;
+    overdue: boolean;
+  }[];
+  client_communications: {
+    project_id: string;
+    project_name: string;
+    last_contact_at: string | null;
+    days_since_contact: number | null;
+    overdue: boolean;
+  }[];
+  change_orders_action: {
+    id: string;
+    co_number: number | null;
+    title: string;
+    project_name: string | null;
+    status: string;
+    hours_since_sent: number | null;
+    sop_breach: boolean;
+  }[];
+  ar_aging: { bucket: string; total: number; count: number }[];
+  ar_aging_detail: {
+    project_name: string;
+    client_name: string | null;
+    amount_outstanding: number;
+    days_overdue: number;
+  }[];
+  project_profitability: {
+    project_id: string;
+    project_name: string;
+    estimated: number;
+    actual_spend: number;
+    variance: number;
+  }[];
+  qbo_sync: { unsynced_count: number; total_count: number; most_recent_transaction_date: string | null };
+  cash_position: { total_income: number; total_expense: number; net: number };
+  alex_cost: { month_to_date_spend: number; monthly_target: number; pct_of_target: number };
+  design_projects: {
+    project_id: string;
+    project_name: string;
+    timeline_pct: number | null;
+    task_completion_pct: number | null;
+    at_risk: boolean;
+  }[];
+}
+
+export type WidgetId =
+  | 'key_metrics'
+  | 'active_project_health'
+  | 'upcoming_tasks'
+  | 'recent_activity'
+  | 'fathom_import'
+  | 'contractor_milestones'
+  | 'client_communications'
+  | 'change_orders_action'
+  | 'ar_aging'
+  | 'project_profitability'
+  | 'qbo_sync'
+  | 'cash_position'
+  | 'alex_cost'
+  | 'design_projects';
+
+export interface WidgetItem {
+  id: WidgetId;
+  visible: boolean;
+}
+
+export interface DashboardLayout {
+  widgets: WidgetItem[];
+}
+
+export interface UserSummary {
+  id: string;
+  name: string;
+  email: string;
+  role: string;
 }
 
 export interface ExtractedTask {

@@ -1,126 +1,158 @@
 import { useEffect, useState } from 'react';
+import {
+  DndContext,
+  closestCenter,
+  PointerSensor,
+  useSensor,
+  useSensors,
+  type DragEndEvent,
+} from '@dnd-kit/core';
+import { SortableContext, verticalListSortingStrategy, arrayMove } from '@dnd-kit/sortable';
+import { IconSettings } from '@tabler/icons-react';
 import { api } from '../api/client';
-import { MetricCard } from '../components/ui/MetricCard';
-import { fmt, fmtD } from '../lib/format';
 import { useToast } from '../components/ui/Toast';
-import { FathomImportCard } from '../components/dashboard/FathomImportCard';
-import type { DashboardSummary } from '../types';
-
-const HEALTH_DOT: Record<string, string> = { green: 'dot-g', yellow: 'dot-a', red: 'dot-r' };
+import { useAuth } from '../auth/AuthContext';
+import { WidgetShell } from '../components/dashboard/WidgetShell';
+import { WIDGET_REGISTRY } from '../components/dashboard/widgetRegistry';
+import type { DashboardSummary, DashboardLayout, UserSummary, WidgetItem } from '../types';
 
 export default function Dashboard() {
-  const [data, setData] = useState<DashboardSummary | null>(null);
+  const { user } = useAuth();
   const toast = useToast();
 
+  const [viewingUserId, setViewingUserId] = useState<string>('');
+  const [users, setUsers] = useState<UserSummary[]>([]);
+  const [data, setData] = useState<DashboardSummary | null>(null);
+  const [widgets, setWidgets] = useState<WidgetItem[] | null>(null);
+  const [editMode, setEditMode] = useState(false);
+  const [saving, setSaving] = useState(false);
+
+  const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 5 } }));
+
   useEffect(() => {
-    api
-      .get<DashboardSummary>('/dashboard')
-      .then(setData)
-      .catch((e) => toast(e instanceof Error ? e.message : 'Failed to load dashboard', true));
+    if (!user) return;
+    setViewingUserId(user.id);
+    api.get<DashboardSummary>('/dashboard').then(setData).catch(() => toast('Failed to load dashboard', true));
+    if (user.is_admin) {
+      api.get<UserSummary[]>('/users').then(setUsers).catch(() => {});
+    }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [user]);
+
+  useEffect(() => {
+    if (!viewingUserId) return;
+    setEditMode(false);
+    const query = viewingUserId !== user?.id ? `?user_id=${viewingUserId}` : '';
+    api
+      .get<DashboardLayout>(`/dashboard/layout${query}`)
+      .then((l) => setWidgets(l.widgets))
+      .catch(() => toast('Failed to load dashboard layout', true));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [viewingUserId]);
+
+  function handleDragEnd(event: DragEndEvent) {
+    const { active, over } = event;
+    if (!over || active.id === over.id || !widgets) return;
+    const oldIndex = widgets.findIndex((w) => w.id === active.id);
+    const newIndex = widgets.findIndex((w) => w.id === over.id);
+    setWidgets(arrayMove(widgets, oldIndex, newIndex));
+  }
+
+  function toggleVisible(id: string) {
+    setWidgets((prev) => prev && prev.map((w) => (w.id === id ? { ...w, visible: !w.visible } : w)));
+  }
+
+  async function handleSave() {
+    if (!widgets) return;
+    setSaving(true);
+    try {
+      const body: { user_id?: string; widgets: WidgetItem[] } = { widgets };
+      if (viewingUserId !== user?.id) body.user_id = viewingUserId;
+      await api.put('/dashboard/layout', body);
+      toast('Dashboard saved');
+      setEditMode(false);
+    } catch (e) {
+      toast(e instanceof Error ? e.message : 'Failed to save layout', true);
+    } finally {
+      setSaving(false);
+    }
+  }
 
   const dateStr = new Date().toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' });
+  const viewingSelf = viewingUserId === user?.id;
+  const viewingUserName = viewingSelf ? user?.name : users.find((u) => u.id === viewingUserId)?.name;
 
   return (
     <>
       <div className="ph">
         <div>
-          <h1>Good morning.</h1>
+          <h1>{viewingSelf ? 'Good morning.' : `Viewing: ${viewingUserName || '…'}`}</h1>
           <p>{dateStr}</p>
+        </div>
+        <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+          {user?.is_admin && users.length > 0 && (
+            <select
+              className="fi"
+              style={{ width: 'auto' }}
+              value={viewingUserId}
+              onChange={(e) => setViewingUserId(e.target.value)}
+            >
+              <option value={user.id}>Me ({user.name})</option>
+              {users
+                .filter((u) => u.id !== user.id)
+                .map((u) => (
+                  <option key={u.id} value={u.id}>
+                    {u.name}
+                  </option>
+                ))}
+            </select>
+          )}
+          {!editMode ? (
+            <button className="btn btn-sm" onClick={() => setEditMode(true)}>
+              <IconSettings size={14} /> Customize dashboard
+            </button>
+          ) : (
+            <>
+              <button className="btn btn-sm" onClick={() => setEditMode(false)} disabled={saving}>
+                Cancel
+              </button>
+              <button className="btn btn-p btn-sm" onClick={handleSave} disabled={saving}>
+                {saving ? 'Saving…' : 'Save'}
+              </button>
+            </>
+          )}
         </div>
       </div>
 
-      {!data ? (
+      {!data || !widgets ? (
         <div className="empty">
           <div className="empty-t">Loading…</div>
         </div>
       ) : (
-        <>
-          <div className="metrics">
-            <MetricCard label="Active builds" value={data.active_project_count} sub="on the tools now" />
-            <MetricCard label="Total contract value" value={fmt(data.total_contract_value)} />
-            <MetricCard label="Collected" value={fmt(data.total_collected)} sub={`${data.pct_collected}% of invoiced`} valueColor="var(--green)" />
-            <MetricCard
-              label="Outstanding"
-              value={fmt(data.total_outstanding)}
-              valueColor={data.total_outstanding > 0 ? 'var(--atx)' : undefined}
-            />
-          </div>
-
-          {(data.overdue_invoices > 0 || data.open_change_orders > 0) && (
-            <div className="alert alert-a">
-              <strong>Needs attention:</strong>{' '}
-              {data.overdue_invoices > 0 && `${data.overdue_invoices} overdue invoice(s). `}
-              {data.open_change_orders > 0 && `${data.open_change_orders} change order(s) awaiting action.`}
+        <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
+          <SortableContext items={widgets.map((w) => w.id)} strategy={verticalListSortingStrategy}>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
+              {widgets.map((w) => {
+                const def = WIDGET_REGISTRY[w.id];
+                if (!def) return null;
+                const Component = def.Component;
+                return (
+                  <WidgetShell
+                    key={w.id}
+                    id={w.id}
+                    title={def.title}
+                    editMode={editMode}
+                    visible={w.visible}
+                    onToggleVisible={() => toggleVisible(w.id)}
+                    wide={def.wide}
+                  >
+                    <Component data={data} />
+                  </WidgetShell>
+                );
+              })}
             </div>
-          )}
-
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
-            <div className="card" style={{ padding: 20 }}>
-              <div className="st" style={{ marginBottom: 12 }}>
-                Active project health
-              </div>
-              {data.active_projects.length ? (
-                data.active_projects.map((p) => (
-                  <div key={p.id} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '8px 0', borderBottom: '1px solid var(--border)' }}>
-                    <span className={`dot ${HEALTH_DOT[p.health_status || 'green']}`} />
-                    <div style={{ flex: 1 }}>
-                      <div style={{ fontSize: 12, fontWeight: 500 }}>{p.name}</div>
-                      <div style={{ fontSize: 11, color: 'var(--t2)' }}>{p.client_name || 'No client'}</div>
-                    </div>
-                  </div>
-                ))
-              ) : (
-                <div style={{ fontSize: 13, color: 'var(--t2)' }}>No active projects.</div>
-              )}
-            </div>
-
-            <div className="card" style={{ padding: 20 }}>
-              <div className="st" style={{ marginBottom: 12 }}>
-                Upcoming tasks
-              </div>
-              {data.upcoming_tasks.length ? (
-                data.upcoming_tasks.map((t) => (
-                  <div key={t.id} style={{ display: 'flex', gap: 10, padding: '7px 0', borderBottom: '1px solid var(--border)' }}>
-                    <div style={{ flex: 1, minWidth: 0 }}>
-                      <div style={{ fontSize: 12, fontWeight: 500 }}>{t.title}</div>
-                      <div style={{ fontSize: 11, color: 'var(--t2)' }}>
-                        {t.project_name || ''}
-                        {t.assigned_to ? ` · ${t.assigned_to}` : ''}
-                      </div>
-                    </div>
-                    <div style={{ fontSize: 11, color: 'var(--t3)' }}>{fmtD(t.scheduled_end)}</div>
-                  </div>
-                ))
-              ) : (
-                <div style={{ fontSize: 13, color: 'var(--t2)' }}>No upcoming tasks.</div>
-              )}
-            </div>
-
-            <FathomImportCard />
-
-            <div className="card" style={{ padding: 20, gridColumn: '1 / -1' }}>
-              <div className="st" style={{ marginBottom: 12 }}>
-                Recent activity
-              </div>
-              {data.recent_activity.length ? (
-                data.recent_activity.map((n) => (
-                  <div key={n.id} style={{ padding: '8px 0', borderBottom: '1px solid var(--border)' }}>
-                    <div style={{ fontSize: 12 }}>
-                      <strong>{n.author || 'Someone'}</strong> logged a {(n.note_type || 'note').replace('_', ' ')} on{' '}
-                      <em>{n.project_name || 'a project'}</em>
-                    </div>
-                    <div style={{ fontSize: 12, color: 'var(--t2)', marginTop: 2 }}>{n.content.slice(0, 120)}</div>
-                    <div style={{ fontSize: 11, color: 'var(--t3)', marginTop: 2 }}>{fmtD(n.created_at)}</div>
-                  </div>
-                ))
-              ) : (
-                <div style={{ fontSize: 13, color: 'var(--t2)' }}>No recent activity.</div>
-              )}
-            </div>
-          </div>
-        </>
+          </SortableContext>
+        </DndContext>
       )}
     </>
   );
