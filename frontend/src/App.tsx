@@ -15,7 +15,8 @@ import ChangeOrders from './pages/ChangeOrders';
 import InHouse from './pages/InHouse';
 import Tasks from './pages/Tasks';
 import Schedule from './pages/Schedule';
-import ComingSoon from './pages/ComingSoon';
+import Subcontractors from './pages/Subcontractors';
+import SubIntelligence from './pages/SubIntelligence';
 
 export default function App() {
   return (
@@ -42,8 +43,8 @@ export default function App() {
             <Route path="inhouse" element={<InHouse />} />
             <Route path="tasks" element={<Tasks />} />
             <Route path="schedule" element={<Schedule />} />
-            <Route path="subcontractors" element={<ComingSoon title="Subcontractors" />} />
-            <Route path="sub-intelligence" element={<ComingSoon title="Sub Intelligence" />} />
+            <Route path="subcontractors" element={<Subcontractors />} />
+            <Route path="sub-intelligence" element={<SubIntelligence />} />
           </Route>
         </Routes>
       </ToastProvider>
