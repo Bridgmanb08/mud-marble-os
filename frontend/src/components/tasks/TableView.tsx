@@ -3,12 +3,21 @@ import { fmtD } from '../../lib/format';
 import type { Task } from '../../types';
 
 type SortKey = 'title' | 'status' | 'priority' | 'scheduled_end' | 'assigned_to';
-type GroupBy = 'none' | 'project' | 'assigned_to' | 'status';
+export type TaskGroupBy = 'none' | 'project' | 'assigned_to' | 'status';
 
-export function TableView({ tasks, onTaskClick }: { tasks: Task[]; onTaskClick: (id: string) => void }) {
+export function TableView({
+  tasks,
+  onTaskClick,
+  groupBy,
+  onGroupByChange,
+}: {
+  tasks: Task[];
+  onTaskClick: (id: string) => void;
+  groupBy: TaskGroupBy;
+  onGroupByChange: (g: TaskGroupBy) => void;
+}) {
   const [sortKey, setSortKey] = useState<SortKey>('scheduled_end');
   const [sortDir, setSortDir] = useState<'asc' | 'desc'>('asc');
-  const [groupBy, setGroupBy] = useState<GroupBy>('none');
 
   function toggleSort(key: SortKey) {
     if (sortKey === key) setSortDir((d) => (d === 'asc' ? 'desc' : 'asc'));
@@ -48,7 +57,7 @@ export function TableView({ tasks, onTaskClick }: { tasks: Task[]; onTaskClick: 
   return (
     <>
       <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: 10 }}>
-        <select className="fi" style={{ width: 'auto' }} value={groupBy} onChange={(e) => setGroupBy(e.target.value as GroupBy)}>
+        <select className="fi" style={{ width: 'auto' }} value={groupBy} onChange={(e) => onGroupByChange(e.target.value as TaskGroupBy)}>
           <option value="none">No grouping</option>
           <option value="project">Group by project</option>
           <option value="assigned_to">Group by assignee</option>

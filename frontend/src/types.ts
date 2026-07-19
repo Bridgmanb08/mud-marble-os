@@ -25,6 +25,42 @@ export interface Task {
   blocked: boolean;
 }
 
+export interface TaskSubtask {
+  id: string;
+  task_id: string;
+  title: string;
+  is_complete: boolean;
+  position: number;
+  created_at: string;
+}
+
+export interface TaskDependency {
+  id: string;
+  task_id: string;
+  depends_on_id: string;
+  created_at: string;
+}
+
+export interface TaskComment {
+  id: string;
+  task_id: string;
+  author: string;
+  content: string;
+  created_at: string;
+}
+
+export interface BoardView {
+  id: string;
+  user_id: string;
+  name: string;
+  view_type: string;
+  group_by: string | null;
+  filters: Record<string, unknown>;
+  sort_by: string | null;
+  position: number;
+  created_at: string;
+}
+
 export interface Estimate {
   id: string;
   project_id: string;
