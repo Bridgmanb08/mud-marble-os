@@ -117,7 +117,7 @@ export type WidgetId =
   | 'design_projects';
 
 export interface WidgetItem {
-  id: WidgetId;
+  id: WidgetId | string;
   visible: boolean;
 }
 
@@ -130,6 +130,36 @@ export interface UserSummary {
   name: string;
   email: string;
   role: string;
+}
+
+export type CustomWidgetSource =
+  | 'active_projects'
+  | 'upcoming_tasks'
+  | 'recent_activity'
+  | 'contractor_milestones'
+  | 'client_communications'
+  | 'change_orders_action'
+  | 'ar_aging_detail'
+  | 'project_profitability'
+  | 'design_projects';
+
+export interface CustomWidgetFilter {
+  field: string;
+  op: 'eq' | 'neq' | 'gt' | 'gte' | 'lt' | 'lte' | 'contains';
+  value: string | number | boolean;
+}
+
+export interface CustomWidgetSpec {
+  source: CustomWidgetSource;
+  filters: CustomWidgetFilter[];
+  aggregation: 'count' | 'sum' | 'avg' | 'list';
+  aggregation_field?: string | null;
+}
+
+export interface CustomWidget {
+  id: string;
+  title: string;
+  spec: CustomWidgetSpec;
 }
 
 export interface ExtractedTask {
