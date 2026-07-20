@@ -92,7 +92,12 @@ async def list_tasks(
 
 @router.post("", response_model=TaskOut)
 async def create_task(body: TaskCreate, _: CurrentUser = Depends(get_current_user)):
-    rows = await db_post("schedule_items", body.model_dump(exclude_none=True))
+    data = body.model_dump(exclude_none=True)
+    siblings = await db_get(
+        "schedule_items", f"?status=eq.{body.status}&order=position.desc&limit=1&select=position"
+    )
+    data["position"] = (siblings[0]["position"] + 1) if siblings else 0
+    rows = await db_post("schedule_items", data)
     full = await db_get("schedule_items", f"?id=eq.{rows[0]['id']}&select=*,projects(name),subcontractors(company_name,trade)")
     enriched = await _enrich(full)
     return enriched[0]
@@ -164,10 +169,36 @@ async def list_dependencies(task_id: str, _: CurrentUser = Depends(get_current_u
     return await db_get("task_dependencies", f"?task_id=eq.{task_id}")
 
 
+async def _would_create_cycle(task_id: str, depends_on_id: str) -> bool:
+    """Would adding "task_id depends on depends_on_id" create a circular chain?
+
+    True if depends_on_id can already (transitively) reach task_id via existing
+    dependency edges -- meaning task_id is already an upstream prerequisite of
+    depends_on_id, so the new edge would close a loop.
+    """
+    all_deps = await db_get("task_dependencies", "?select=task_id,depends_on_id")
+    graph: dict[str, list[str]] = defaultdict(list)
+    for d in all_deps:
+        graph[d["task_id"]].append(d["depends_on_id"])
+    visited: set[str] = set()
+    stack = [depends_on_id]
+    while stack:
+        current = stack.pop()
+        if current == task_id:
+            return True
+        if current in visited:
+            continue
+        visited.add(current)
+        stack.extend(graph.get(current, []))
+    return False
+
+
 @router.post("/{task_id}/dependencies", response_model=DependencyOut)
 async def create_dependency(task_id: str, body: DependencyCreate, _: CurrentUser = Depends(get_current_user)):
     if body.depends_on_id == task_id:
         raise HTTPException(status_code=400, detail="A task cannot depend on itself")
+    if await _would_create_cycle(task_id, body.depends_on_id):
+        raise HTTPException(status_code=400, detail="This would create a circular dependency")
     rows = await db_post("task_dependencies", {"task_id": task_id, "depends_on_id": body.depends_on_id})
     return rows[0]
 

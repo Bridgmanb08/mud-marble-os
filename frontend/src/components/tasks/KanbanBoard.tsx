@@ -14,6 +14,7 @@ import { SortableContext, verticalListSortingStrategy, useSortable, arrayMove, s
 import { CSS } from '@dnd-kit/utilities';
 import { IconMessageCircle, IconChecklist, IconLock } from '@tabler/icons-react';
 import { api } from '../../api/client';
+import { useToast } from '../ui/Toast';
 import { fmtD } from '../../lib/format';
 import type { Task } from '../../types';
 
@@ -31,8 +32,11 @@ const PRIORITY_COLOR: Record<string, string> = {
   urgent: 'var(--red)',
 };
 
-function TaskCard({ task, onClick }: { task: Task; onClick: () => void }) {
-  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: task.id });
+function TaskCard({ task, onClick, dragDisabled }: { task: Task; onClick: () => void; dragDisabled: boolean }) {
+  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
+    id: task.id,
+    disabled: dragDisabled,
+  });
   const overdue = task.scheduled_end && new Date(task.scheduled_end) < new Date() && task.status !== 'complete';
 
   return (
@@ -84,13 +88,14 @@ function TaskCard({ task, onClick }: { task: Task; onClick: () => void }) {
   );
 }
 
-function Column({ id, label, taskIds, tasksById, onTaskClick, onAddTask }: {
+function Column({ id, label, taskIds, tasksById, onTaskClick, onAddTask, dragDisabled }: {
   id: string;
   label: string;
   taskIds: string[];
   tasksById: Map<string, Task>;
   onTaskClick: (id: string) => void;
   onAddTask: () => void;
+  dragDisabled: boolean;
 }) {
   const { setNodeRef } = useDroppable({ id });
   return (
@@ -103,7 +108,7 @@ function Column({ id, label, taskIds, tasksById, onTaskClick, onAddTask }: {
         {taskIds.map((id) => {
           const t = tasksById.get(id);
           if (!t) return null;
-          return <TaskCard key={id} task={t} onClick={() => onTaskClick(id)} />;
+          return <TaskCard key={id} task={t} onClick={() => onTaskClick(id)} dragDisabled={dragDisabled} />;
         })}
       </SortableContext>
       <button className="btn btn-ghost btn-sm" style={{ width: '100%', marginTop: 6, color: 'var(--t2)', justifyContent: 'center' }} onClick={onAddTask}>
@@ -118,12 +123,15 @@ export function KanbanBoard({
   onTaskClick,
   onAddTask,
   onChanged,
+  filtersActive,
 }: {
   tasks: Task[];
   onTaskClick: (id: string) => void;
   onAddTask: (status: string) => void;
   onChanged: () => void;
+  filtersActive?: boolean;
 }) {
+  const toast = useToast();
   const [columns, setColumns] = useState<Record<string, string[]>>({});
   const tasksById = new Map(tasks.map((t) => [t.id, t]));
 
@@ -182,26 +190,36 @@ export function KanbanBoard({
     try {
       await api.patch('/tasks/reorder', { items });
       onChanged();
-    } catch {
-      // reverting isn't critical here since onChanged will resync from the server on next load
+    } catch (e) {
+      toast(e instanceof Error ? e.message : 'Failed to save the new order — reloading', true);
+      onChanged();
     }
   }
 
   return (
-    <DndContext sensors={sensors} collisionDetection={closestCorners} onDragOver={handleDragOver} onDragEnd={handleDragEnd}>
-      <div className="board">
-        {COLUMNS.map((col) => (
-          <Column
-            key={col.id}
-            id={col.id}
-            label={col.label}
-            taskIds={columns[col.id] || []}
-            tasksById={tasksById}
-            onTaskClick={onTaskClick}
-            onAddTask={() => onAddTask(col.id)}
-          />
-        ))}
-      </div>
-    </DndContext>
+    <>
+      {filtersActive && (
+        <div className="alert alert-a" style={{ marginBottom: 12 }}>
+          Clear filters to drag-and-drop reorder tasks — reordering while a filter hides other tasks in the same
+          column could scramble their order.
+        </div>
+      )}
+      <DndContext sensors={sensors} collisionDetection={closestCorners} onDragOver={handleDragOver} onDragEnd={handleDragEnd}>
+        <div className="board">
+          {COLUMNS.map((col) => (
+            <Column
+              key={col.id}
+              id={col.id}
+              label={col.label}
+              taskIds={columns[col.id] || []}
+              tasksById={tasksById}
+              onTaskClick={onTaskClick}
+              onAddTask={() => onAddTask(col.id)}
+              dragDisabled={Boolean(filtersActive)}
+            />
+          ))}
+        </div>
+      </DndContext>
+    </>
   );
 }

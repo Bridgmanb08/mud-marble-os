@@ -43,6 +43,10 @@ export function NewTaskModal({ onClose, onSaved, defaultStatus, defaultProjectId
       setError('Title is required.');
       return;
     }
+    if (scheduledStart && scheduledEnd && scheduledEnd < scheduledStart) {
+      setError('Due date cannot be before the start date.');
+      return;
+    }
     setSaving(true);
     setError('');
     const payload = {

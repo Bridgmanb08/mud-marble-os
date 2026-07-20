@@ -70,25 +70,33 @@ export default function Tasks() {
 
   async function saveCurrentView() {
     if (!newViewName.trim()) return;
-    const created = await api.post<BoardView>('/tasks/views', {
-      name: newViewName.trim(),
-      view_type: view,
-      group_by: groupBy,
-      filters: { project_id: projectFilter, assigned_to: assigneeFilter, status: statusFilter },
-    });
-    setViews((prev) => [...prev, created]);
-    setActiveViewId(created.id);
-    setShowSaveViewModal(false);
-    setNewViewName('');
-    toast('View saved');
+    try {
+      const created = await api.post<BoardView>('/tasks/views', {
+        name: newViewName.trim(),
+        view_type: view,
+        group_by: groupBy,
+        filters: { project_id: projectFilter, assigned_to: assigneeFilter, status: statusFilter },
+      });
+      setViews((prev) => [...prev, created]);
+      setActiveViewId(created.id);
+      setShowSaveViewModal(false);
+      setNewViewName('');
+      toast('View saved');
+    } catch (e) {
+      toast(e instanceof Error ? e.message : 'Failed to save view', true);
+    }
   }
 
   async function deleteActiveView() {
     if (!activeViewId) return;
-    await api.delete(`/tasks/views/${activeViewId}`);
-    setViews((prev) => prev.filter((v) => v.id !== activeViewId));
-    setActiveViewId('');
-    toast('View deleted');
+    try {
+      await api.delete(`/tasks/views/${activeViewId}`);
+      setViews((prev) => prev.filter((v) => v.id !== activeViewId));
+      setActiveViewId('');
+      toast('View deleted');
+    } catch (e) {
+      toast(e instanceof Error ? e.message : 'Failed to delete view', true);
+    }
   }
 
   const projectOptions = useMemo(() => {
@@ -113,6 +121,8 @@ export default function Tasks() {
         (!statusFilter || t.status === statusFilter)
     );
   }, [tasks, projectFilter, assigneeFilter, statusFilter]);
+
+  const filtersActive = Boolean(projectFilter || assigneeFilter || statusFilter);
 
   const total = filtered.length;
   const inProgress = filtered.filter((t) => t.status === 'in_progress').length;
@@ -238,7 +248,7 @@ export default function Tasks() {
           <div className="empty-t">Loading…</div>
         </div>
       ) : view === 'kanban' ? (
-        <KanbanBoard tasks={filtered} onTaskClick={openEdit} onAddTask={openNew} onChanged={load} />
+        <KanbanBoard tasks={filtered} onTaskClick={openEdit} onAddTask={openNew} onChanged={load} filtersActive={filtersActive} />
       ) : view === 'table' ? (
         <TableView tasks={filtered} onTaskClick={openEdit} groupBy={groupBy} onGroupByChange={setGroupBy} />
       ) : (

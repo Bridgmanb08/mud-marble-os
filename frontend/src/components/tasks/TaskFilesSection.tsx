@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { IconFile, IconFileTypePdf, IconPhoto, IconTrash, IconUpload, IconVideo } from '@tabler/icons-react';
 import { api } from '../../api/client';
+import { useToast } from '../ui/Toast';
 import { uploadProjectFile } from '../../lib/fileUpload';
 import { FilePreviewModal } from '../projects/FilePreviewModal';
 import type { ProjectFile } from '../../types';
@@ -18,6 +19,7 @@ interface TaskFilesSectionProps {
 }
 
 export function TaskFilesSection({ taskId, projectId }: TaskFilesSectionProps) {
+  const toast = useToast();
   const [linked, setLinked] = useState<ProjectFile[]>([]);
   const [projectFiles, setProjectFiles] = useState<ProjectFile[]>([]);
   const [pickId, setPickId] = useState('');
@@ -43,14 +45,22 @@ export function TaskFilesSection({ taskId, projectId }: TaskFilesSectionProps) {
 
   async function linkExisting() {
     if (!pickId) return;
-    await api.post(`/files/${pickId}/tasks/${taskId}`);
-    setPickId('');
-    loadLinked();
+    try {
+      await api.post(`/files/${pickId}/tasks/${taskId}`);
+      setPickId('');
+      loadLinked();
+    } catch (e) {
+      toast(e instanceof Error ? e.message : 'Failed to attach file', true);
+    }
   }
 
   async function unlink(fileId: string) {
-    await api.delete(`/files/${fileId}/tasks/${taskId}`);
-    loadLinked();
+    try {
+      await api.delete(`/files/${fileId}/tasks/${taskId}`);
+      loadLinked();
+    } catch (e) {
+      toast(e instanceof Error ? e.message : 'Failed to remove file', true);
+    }
   }
 
   async function handleUpload(fileList: FileList | null) {
@@ -62,6 +72,8 @@ export function TaskFilesSection({ taskId, projectId }: TaskFilesSectionProps) {
       }
       loadLinked();
       loadProjectFiles();
+    } catch (e) {
+      toast(e instanceof Error ? e.message : 'Upload failed', true);
     } finally {
       setUploading(false);
     }
