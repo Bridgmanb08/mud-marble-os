@@ -2,6 +2,7 @@ import { useEffect, useState, type FormEvent } from 'react';
 import { IconTrash, IconLock } from '@tabler/icons-react';
 import { api, ApiError } from '../../api/client';
 import { Modal } from '../ui/Modal';
+import { useToast } from '../ui/Toast';
 import { TaskFilesSection } from './TaskFilesSection';
 import { openDatePicker } from '../../lib/datePicker';
 import type { CostCode, Project, Subcontractor, Task, TaskComment, TaskDependency, TaskSubtask, UserDirectoryEntry } from '../../types';
@@ -15,6 +16,7 @@ interface TaskDetailDrawerProps {
 }
 
 export function TaskDetailDrawer({ task, allTasks, onClose, onSaved, onDeleted }: TaskDetailDrawerProps) {
+  const toast = useToast();
   const [projects, setProjects] = useState<Project[]>([]);
   const [directory, setDirectory] = useState<UserDirectoryEntry[]>([]);
   const [costCodes, setCostCodes] = useState<CostCode[]>([]);
@@ -69,6 +71,10 @@ export function TaskDetailDrawer({ task, allTasks, onClose, onSaved, onDeleted }
       setError('Title is required.');
       return;
     }
+    if (scheduledStart && scheduledEnd && scheduledEnd < scheduledStart) {
+      setError('Due date cannot be before the start date.');
+      return;
+    }
     setSaving(true);
     setError('');
     try {
@@ -93,51 +99,87 @@ export function TaskDetailDrawer({ task, allTasks, onClose, onSaved, onDeleted }
     }
   }
 
+  function errMsg(err: unknown): string {
+    return err instanceof ApiError ? err.message : 'Something went wrong. Please try again.';
+  }
+
   async function handleDelete() {
     if (!confirm('Delete this task? This cannot be undone.')) return;
-    await api.delete(`/tasks/${task.id}`);
-    onDeleted();
+    try {
+      await api.delete(`/tasks/${task.id}`);
+      onDeleted();
+    } catch (err) {
+      toast(errMsg(err), true);
+    }
   }
 
   async function addSubtask() {
     if (!newSubtask.trim()) return;
-    await api.post(`/tasks/${task.id}/subtasks`, { title: newSubtask.trim() });
-    setNewSubtask('');
-    loadSubtasks();
+    try {
+      await api.post(`/tasks/${task.id}/subtasks`, { title: newSubtask.trim() });
+      setNewSubtask('');
+      loadSubtasks();
+    } catch (err) {
+      toast(errMsg(err), true);
+    }
   }
 
   async function toggleSubtask(s: TaskSubtask) {
-    await api.patch(`/tasks/${task.id}/subtasks/${s.id}`, { is_complete: !s.is_complete });
-    loadSubtasks();
+    try {
+      await api.patch(`/tasks/${task.id}/subtasks/${s.id}`, { is_complete: !s.is_complete });
+      loadSubtasks();
+    } catch (err) {
+      toast(errMsg(err), true);
+    }
   }
 
   async function deleteSubtask(s: TaskSubtask) {
-    await api.delete(`/tasks/${task.id}/subtasks/${s.id}`);
-    loadSubtasks();
+    try {
+      await api.delete(`/tasks/${task.id}/subtasks/${s.id}`);
+      loadSubtasks();
+    } catch (err) {
+      toast(errMsg(err), true);
+    }
   }
 
   async function addDependency() {
     if (!newDependencyId) return;
-    await api.post(`/tasks/${task.id}/dependencies`, { depends_on_id: newDependencyId });
-    setNewDependencyId('');
-    loadDependencies();
+    try {
+      await api.post(`/tasks/${task.id}/dependencies`, { depends_on_id: newDependencyId });
+      setNewDependencyId('');
+      loadDependencies();
+    } catch (err) {
+      toast(errMsg(err), true);
+    }
   }
 
   async function removeDependency(d: TaskDependency) {
-    await api.delete(`/tasks/${task.id}/dependencies/${d.id}`);
-    loadDependencies();
+    try {
+      await api.delete(`/tasks/${task.id}/dependencies/${d.id}`);
+      loadDependencies();
+    } catch (err) {
+      toast(errMsg(err), true);
+    }
   }
 
   async function postComment() {
     if (!newComment.trim()) return;
-    await api.post(`/tasks/${task.id}/comments`, { content: newComment.trim() });
-    setNewComment('');
-    loadComments();
+    try {
+      await api.post(`/tasks/${task.id}/comments`, { content: newComment.trim() });
+      setNewComment('');
+      loadComments();
+    } catch (err) {
+      toast(errMsg(err), true);
+    }
   }
 
-  const dependencyOptions = allTasks.filter(
-    (t) => t.id !== task.id && !dependencies.some((d) => d.depends_on_id === t.id)
-  );
+  const dependencyOptions = allTasks
+    .filter((t) => t.id !== task.id && !dependencies.some((d) => d.depends_on_id === t.id))
+    .sort((a, b) => {
+      const aSame = a.project_id === task.project_id ? 0 : 1;
+      const bSame = b.project_id === task.project_id ? 0 : 1;
+      return aSame - bSame;
+    });
   const blockedByIncomplete = dependencies.some((d) => tasksById.get(d.depends_on_id)?.status !== 'complete');
 
   return (
@@ -279,6 +321,9 @@ export function TaskDetailDrawer({ task, allTasks, onClose, onSaved, onDeleted }
                 <span style={{ flex: 1, fontSize: 13, color: done ? 'var(--t2)' : undefined }}>
                   {done ? '✓ ' : '⏳ '}
                   {blocker?.title || 'Unknown task'}
+                  {blocker && blocker.project_id !== task.project_id && (
+                    <span style={{ color: 'var(--t3)' }}> — {blocker.projects?.name?.replace(/\|.*/, '').trim() || 'other project'}</span>
+                  )}
                 </span>
                 <button type="button" className="btn btn-ghost btn-sm" onClick={() => removeDependency(d)}>
                   <IconTrash size={13} />
@@ -292,6 +337,7 @@ export function TaskDetailDrawer({ task, allTasks, onClose, onSaved, onDeleted }
               {dependencyOptions.map((t) => (
                 <option key={t.id} value={t.id}>
                   {t.title}
+                  {t.project_id !== task.project_id ? ` — ${t.projects?.name?.replace(/\|.*/, '').trim() || 'other project'}` : ''}
                 </option>
               ))}
             </select>

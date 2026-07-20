@@ -20,7 +20,12 @@ async function request<T>(path: string, options: RequestInit = {}): Promise<T> {
     let message = res.statusText;
     try {
       const body = await res.json();
-      message = body.detail || message;
+      if (typeof body.detail === 'string') {
+        message = body.detail;
+      } else if (Array.isArray(body.detail) && body.detail[0]?.msg) {
+        // FastAPI/pydantic validation errors come back as a list of {msg, loc, type}
+        message = body.detail[0].msg;
+      }
     } catch {
       // no JSON body
     }

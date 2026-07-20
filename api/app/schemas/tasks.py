@@ -1,6 +1,11 @@
 from typing import Optional
 
-from pydantic import BaseModel
+from pydantic import BaseModel, model_validator
+
+
+def _check_date_order(scheduled_start: Optional[str], scheduled_end: Optional[str]) -> None:
+    if scheduled_start and scheduled_end and scheduled_end < scheduled_start:
+        raise ValueError("Due date cannot be before the start date")
 
 
 class TaskCreate(BaseModel):
@@ -16,6 +21,11 @@ class TaskCreate(BaseModel):
     notes: Optional[str] = None
     is_milestone: bool = False
 
+    @model_validator(mode="after")
+    def _validate_dates(self):
+        _check_date_order(self.scheduled_start, self.scheduled_end)
+        return self
+
 
 class TaskUpdate(BaseModel):
     title: Optional[str] = None
@@ -30,6 +40,11 @@ class TaskUpdate(BaseModel):
     is_milestone: Optional[bool] = None
     position: Optional[int] = None
     project_id: Optional[str] = None
+
+    @model_validator(mode="after")
+    def _validate_dates(self):
+        _check_date_order(self.scheduled_start, self.scheduled_end)
+        return self
 
 
 class ProjectBrief(BaseModel):
