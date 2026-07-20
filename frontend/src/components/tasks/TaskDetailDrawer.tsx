@@ -2,6 +2,7 @@ import { useEffect, useState, type FormEvent } from 'react';
 import { IconTrash, IconLock } from '@tabler/icons-react';
 import { api, ApiError } from '../../api/client';
 import { Modal } from '../ui/Modal';
+import { TaskFilesSection } from './TaskFilesSection';
 import { openDatePicker } from '../../lib/datePicker';
 import type { CostCode, Project, Task, TaskComment, TaskDependency, TaskSubtask, UserDirectoryEntry } from '../../types';
 
@@ -312,6 +313,8 @@ export function TaskDetailDrawer({ task, allTasks, onClose, onSaved, onDeleted }
           ))}
           {comments.length === 0 && <div style={{ fontSize: 12, color: 'var(--t2)' }}>No comments yet.</div>}
         </div>
+
+        <TaskFilesSection taskId={task.id} projectId={projectId || null} />
 
         <div className="ma">
           <button type="button" className="btn" style={{ color: 'var(--red)' }} onClick={handleDelete}>

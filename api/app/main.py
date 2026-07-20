@@ -9,6 +9,7 @@ from .routers import (
     clients,
     dashboard,
     estimates,
+    files,
     invoices,
     leads,
     notifications,
@@ -44,6 +45,7 @@ app.include_router(users.router, prefix="/api")
 app.include_router(projects.router, prefix="/api")
 app.include_router(clients.router, prefix="/api")
 app.include_router(estimates.router, prefix="/api")
+app.include_router(files.router, prefix="/api")
 app.include_router(invoices.router, prefix="/api")
 app.include_router(change_orders.router, prefix="/api")
 app.include_router(transactions.router, prefix="/api")

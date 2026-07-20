@@ -10,8 +10,9 @@ import { NewChangeOrderModal } from '../components/change-orders/NewChangeOrderM
 import { NewInvoiceModal } from '../components/invoices/NewInvoiceModal';
 import { NewTaskModal } from '../components/tasks/NewTaskModal';
 import { TaskDetailDrawer } from '../components/tasks/TaskDetailDrawer';
+import { FilesTab } from '../components/projects/FilesTab';
 
-const TABS = ['Overview', 'Notes', 'Estimate', 'Change Orders', 'Invoices', 'Schedule'];
+const TABS = ['Overview', 'Notes', 'Estimate', 'Change Orders', 'Invoices', 'Schedule', 'Files'];
 
 const NOTE_COLORS: Record<string, string> = {
   site_visit: 'var(--blue)',
@@ -317,6 +318,8 @@ export default function ProjectDetail() {
             )}
           </>
         )}
+
+        {tab === 'Files' && id && <FilesTab projectId={id} tasks={tasks} />}
 
         {tab === 'Schedule' && (
           <>
