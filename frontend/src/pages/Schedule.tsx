@@ -1,10 +1,11 @@
 import { useEffect, useMemo, useState } from 'react';
-import { IconChevronLeft, IconChevronRight, IconCalendar, IconList } from '@tabler/icons-react';
+import { IconChevronLeft, IconChevronRight, IconCalendar, IconList, IconUsersGroup } from '@tabler/icons-react';
 import { api } from '../api/client';
 import { useToast } from '../components/ui/Toast';
 import { fmtD } from '../lib/format';
-import type { Task } from '../types';
+import type { Project, Task } from '../types';
 import { TaskDetailDrawer } from '../components/tasks/TaskDetailDrawer';
+import { SubcontractorScheduleGrid } from '../components/schedule/SubcontractorScheduleGrid';
 
 const STATUS_COLOR: Record<string, string> = {
   upcoming: 'var(--border-md)',
@@ -20,7 +21,9 @@ function dateKey(d: Date): string {
 
 export default function Schedule() {
   const [tasks, setTasks] = useState<Task[] | null>(null);
-  const [view, setView] = useState<'calendar' | 'list'>('calendar');
+  const [projects, setProjects] = useState<Project[]>([]);
+  const [projectId, setProjectId] = useState('');
+  const [view, setView] = useState<'calendar' | 'list' | 'subs'>('calendar');
   const [cursor, setCursor] = useState(() => {
     const d = new Date();
     d.setDate(1);
@@ -40,12 +43,18 @@ export default function Schedule() {
 
   useEffect(() => {
     load();
+    api.get<Project[]>('/projects').then(setProjects).catch(() => {});
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  const filteredTasks = useMemo(() => {
+    if (!projectId) return tasks || [];
+    return (tasks || []).filter((t) => t.project_id === projectId);
+  }, [tasks, projectId]);
+
   const tasksByDay = useMemo(() => {
     const map = new Map<string, Task[]>();
-    for (const t of tasks || []) {
+    for (const t of filteredTasks) {
       const d = t.scheduled_end || t.scheduled_start;
       if (!d) continue;
       const key = dateKey(new Date(d));
@@ -53,13 +62,13 @@ export default function Schedule() {
       map.get(key)!.push(t);
     }
     return map;
-  }, [tasks]);
+  }, [filteredTasks]);
 
   const datedSorted = useMemo(() => {
-    return (tasks || [])
+    return filteredTasks
       .filter((t) => t.scheduled_end || t.scheduled_start)
       .sort((a, b) => new Date(a.scheduled_end || a.scheduled_start!).getTime() - new Date(b.scheduled_end || b.scheduled_start!).getTime());
-  }, [tasks]);
+  }, [filteredTasks]);
 
   const monthLabel = cursor.toLocaleDateString('en-US', { month: 'long', year: 'numeric' });
 
@@ -89,24 +98,45 @@ export default function Schedule() {
     <>
       <div className="ph">
         <div>
-          <h1>Schedule</h1>
-          <p>Task and milestone calendar across all active projects</p>
+          <h1>
+            {view === 'subs' ? 'Subcontractor Schedule' : projectId ? projects.find((p) => p.id === projectId)?.name.replace(/\|.*/, '').trim() : 'Global Schedule'}
+          </h1>
+          <p>{view === 'subs' ? "See where each subcontractor is booked, week by week, across every job" : 'Task and milestone calendar across all active projects'}</p>
         </div>
-        <div style={{ display: 'flex', background: 'var(--bg)', border: '1px solid var(--border)', borderRadius: 8, padding: 3, gap: 2 }}>
-          <button
-            className="btn btn-sm btn-ghost"
-            style={{ background: view === 'calendar' ? 'var(--surface)' : undefined, boxShadow: view === 'calendar' ? '0 1px 3px rgba(0,0,0,.08)' : undefined }}
-            onClick={() => setView('calendar')}
-          >
-            <IconCalendar size={14} /> Calendar
-          </button>
-          <button
-            className="btn btn-sm btn-ghost"
-            style={{ background: view === 'list' ? 'var(--surface)' : undefined, boxShadow: view === 'list' ? '0 1px 3px rgba(0,0,0,.08)' : undefined }}
-            onClick={() => setView('list')}
-          >
-            <IconList size={14} /> List
-          </button>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+          {view !== 'subs' && (
+            <select className="fi" style={{ width: 'auto' }} value={projectId} onChange={(e) => setProjectId(e.target.value)}>
+              <option value="">Schedule by: All projects</option>
+              {projects.map((p) => (
+                <option key={p.id} value={p.id}>
+                  {p.name.replace(/\|.*/, '').trim()}
+                </option>
+              ))}
+            </select>
+          )}
+          <div style={{ display: 'flex', background: 'var(--bg)', border: '1px solid var(--border)', borderRadius: 8, padding: 3, gap: 2 }}>
+            <button
+              className="btn btn-sm btn-ghost"
+              style={{ background: view === 'calendar' ? 'var(--surface)' : undefined, boxShadow: view === 'calendar' ? '0 1px 3px rgba(0,0,0,.08)' : undefined }}
+              onClick={() => setView('calendar')}
+            >
+              <IconCalendar size={14} /> Calendar
+            </button>
+            <button
+              className="btn btn-sm btn-ghost"
+              style={{ background: view === 'list' ? 'var(--surface)' : undefined, boxShadow: view === 'list' ? '0 1px 3px rgba(0,0,0,.08)' : undefined }}
+              onClick={() => setView('list')}
+            >
+              <IconList size={14} /> List
+            </button>
+            <button
+              className="btn btn-sm btn-ghost"
+              style={{ background: view === 'subs' ? 'var(--surface)' : undefined, boxShadow: view === 'subs' ? '0 1px 3px rgba(0,0,0,.08)' : undefined }}
+              onClick={() => setView('subs')}
+            >
+              <IconUsersGroup size={14} /> Subcontractors
+            </button>
+          </div>
         </div>
       </div>
 
@@ -185,7 +215,7 @@ export default function Schedule() {
             </div>
           ))}
         </div>
-      ) : (
+      ) : view === 'list' ? (
         <div className="card">
           {datedSorted.length === 0 ? (
             <div className="empty">
@@ -218,6 +248,8 @@ export default function Schedule() {
             </table>
           )}
         </div>
+      ) : (
+        <SubcontractorScheduleGrid tasks={tasks || []} onOpenTask={openTask} />
       )}
 
       {detailTask && (

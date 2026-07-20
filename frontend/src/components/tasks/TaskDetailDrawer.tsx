@@ -4,7 +4,7 @@ import { api, ApiError } from '../../api/client';
 import { Modal } from '../ui/Modal';
 import { TaskFilesSection } from './TaskFilesSection';
 import { openDatePicker } from '../../lib/datePicker';
-import type { CostCode, Project, Task, TaskComment, TaskDependency, TaskSubtask, UserDirectoryEntry } from '../../types';
+import type { CostCode, Project, Subcontractor, Task, TaskComment, TaskDependency, TaskSubtask, UserDirectoryEntry } from '../../types';
 
 interface TaskDetailDrawerProps {
   task: Task;
@@ -18,9 +18,11 @@ export function TaskDetailDrawer({ task, allTasks, onClose, onSaved, onDeleted }
   const [projects, setProjects] = useState<Project[]>([]);
   const [directory, setDirectory] = useState<UserDirectoryEntry[]>([]);
   const [costCodes, setCostCodes] = useState<CostCode[]>([]);
+  const [subcontractors, setSubcontractors] = useState<Subcontractor[]>([]);
   const [title, setTitle] = useState(task.title);
   const [projectId, setProjectId] = useState(task.project_id || '');
   const [assignedTo, setAssignedTo] = useState(task.assigned_to || '');
+  const [subcontractorId, setSubcontractorId] = useState(task.subcontractor_id || '');
   const [phase, setPhase] = useState(task.phase || '');
   const [status, setStatus] = useState(task.status);
   const [priority, setPriority] = useState(task.priority);
@@ -44,6 +46,7 @@ export function TaskDetailDrawer({ task, allTasks, onClose, onSaved, onDeleted }
     api.get<Project[]>('/projects').then(setProjects).catch(() => {});
     api.get<UserDirectoryEntry[]>('/users/directory').then(setDirectory).catch(() => {});
     api.get<CostCode[]>('/transactions/cost-codes').then(setCostCodes).catch(() => {});
+    api.get<Subcontractor[]>('/subcontractors').then(setSubcontractors).catch(() => {});
     loadSubtasks();
     loadDependencies();
     loadComments();
@@ -73,6 +76,7 @@ export function TaskDetailDrawer({ task, allTasks, onClose, onSaved, onDeleted }
         project_id: projectId || null,
         title: title.trim(),
         assigned_to: assignedTo || null,
+        subcontractor_id: subcontractorId || null,
         phase: phase.trim() || null,
         status,
         priority,
@@ -165,6 +169,18 @@ export function TaskDetailDrawer({ task, allTasks, onClose, onSaved, onDeleted }
               ))}
             </datalist>
           </div>
+        </div>
+        <div className="fg">
+          <label className="fl">Subcontractor</label>
+          <select className="fi" value={subcontractorId} onChange={(e) => setSubcontractorId(e.target.value)}>
+            <option value="">— None —</option>
+            {subcontractors.map((s) => (
+              <option key={s.id} value={s.id}>
+                {s.company_name}
+                {s.trade ? ` (${s.trade})` : ''}
+              </option>
+            ))}
+          </select>
         </div>
         <div className="fr3">
           <div className="fg">

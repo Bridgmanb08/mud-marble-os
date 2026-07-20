@@ -4,11 +4,17 @@ export interface ProjectBrief {
   name: string;
 }
 
+export interface SubcontractorBrief {
+  company_name: string;
+  trade: string | null;
+}
+
 export interface Task {
   id: string;
   project_id: string | null;
   title: string;
   assigned_to: string | null;
+  subcontractor_id: string | null;
   phase: string | null;
   status: string;
   priority: string;
@@ -19,6 +25,7 @@ export interface Task {
   is_milestone: boolean;
   created_at: string;
   projects: ProjectBrief | null;
+  subcontractors: SubcontractorBrief | null;
   subtask_total: number;
   subtask_complete: number;
   comment_count: number;
@@ -173,7 +180,7 @@ export interface EstimateLineItem {
   markup_type: string;
   markup_value: number;
   owner_price: number;
-  estimated_hours: number | null;
+  estimated_days: number | null;
   notes_internal: string | null;
   notes_external: string | null;
   sort_order: number;
@@ -194,7 +201,7 @@ export interface LineItemReference {
   markup_type: string;
   markup_value: number;
   owner_price: number;
-  estimated_hours: number | null;
+  estimated_days: number | null;
   notes_internal: string | null;
   notes_external: string | null;
   created_at: string;

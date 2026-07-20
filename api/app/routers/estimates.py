@@ -98,7 +98,7 @@ async def search_line_items(
                 markup_type=r["markup_type"],
                 markup_value=r["markup_value"],
                 owner_price=r["owner_price"],
-                estimated_hours=r.get("estimated_hours"),
+                estimated_days=r.get("estimated_days"),
                 notes_internal=r.get("notes_internal"),
                 notes_external=r.get("notes_external"),
                 created_at=r["created_at"],

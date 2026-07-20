@@ -7,6 +7,7 @@ class TaskCreate(BaseModel):
     project_id: Optional[str] = None
     title: str
     assigned_to: Optional[str] = None
+    subcontractor_id: Optional[str] = None
     phase: Optional[str] = None
     status: str = "upcoming"
     priority: str = "normal"
@@ -19,6 +20,7 @@ class TaskCreate(BaseModel):
 class TaskUpdate(BaseModel):
     title: Optional[str] = None
     assigned_to: Optional[str] = None
+    subcontractor_id: Optional[str] = None
     phase: Optional[str] = None
     status: Optional[str] = None
     priority: Optional[str] = None
@@ -34,11 +36,17 @@ class ProjectBrief(BaseModel):
     name: str
 
 
+class SubcontractorBrief(BaseModel):
+    company_name: str
+    trade: Optional[str] = None
+
+
 class TaskOut(BaseModel):
     id: str
     project_id: Optional[str] = None
     title: str
     assigned_to: Optional[str] = None
+    subcontractor_id: Optional[str] = None
     phase: Optional[str] = None
     status: str
     priority: str = "normal"
@@ -49,6 +57,7 @@ class TaskOut(BaseModel):
     is_milestone: bool = False
     created_at: str
     projects: Optional[ProjectBrief] = None
+    subcontractors: Optional[SubcontractorBrief] = None
     subtask_total: int = 0
     subtask_complete: int = 0
     comment_count: int = 0
