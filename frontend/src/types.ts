@@ -173,10 +173,31 @@ export interface EstimateLineItem {
   markup_type: string;
   markup_value: number;
   owner_price: number;
+  estimated_hours: number | null;
   notes_internal: string | null;
   notes_external: string | null;
   sort_order: number;
   cost_codes: { code: string; name: string } | null;
+}
+
+export interface LineItemReference {
+  id: string;
+  estimate_id: string;
+  project_name: string | null;
+  title: string;
+  description: string | null;
+  quantity: number;
+  unit: string | null;
+  unit_cost: number;
+  cost_type: string;
+  builder_cost: number;
+  markup_type: string;
+  markup_value: number;
+  owner_price: number;
+  estimated_hours: number | null;
+  notes_internal: string | null;
+  notes_external: string | null;
+  created_at: string;
 }
 
 export interface Invoice {

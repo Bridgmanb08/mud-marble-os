@@ -1,8 +1,9 @@
 import { useEffect, useState, type FormEvent } from 'react';
+import { IconSearch, IconChevronDown, IconChevronUp } from '@tabler/icons-react';
 import { api, ApiError } from '../../api/client';
 import { Modal } from '../ui/Modal';
 import { fmt } from '../../lib/format';
-import type { CostCode, EstimateLineItem } from '../../types';
+import type { CostCode, EstimateLineItem, LineItemReference } from '../../types';
 
 interface LineItemModalProps {
   estimateId: string;
@@ -40,14 +41,61 @@ export function LineItemModal({ estimateId, item, defaultBucket, defaultGroupNam
   const [costType, setCostType] = useState(item?.cost_type || 'none');
   const [markupType, setMarkupType] = useState(item?.markup_type || 'percent');
   const [markupValue, setMarkupValue] = useState(String(item?.markup_value ?? 0));
+  const [estimatedHours, setEstimatedHours] = useState(item?.estimated_hours != null ? String(item.estimated_hours) : '');
   const [notesInternal, setNotesInternal] = useState(item?.notes_internal || '');
   const [notesExternal, setNotesExternal] = useState(item?.notes_external || '');
   const [error, setError] = useState('');
   const [saving, setSaving] = useState(false);
 
+  const [showReference, setShowReference] = useState(!item);
+  const [refQuery, setRefQuery] = useState('');
+  const [refResults, setRefResults] = useState<LineItemReference[]>([]);
+  const [refLoading, setRefLoading] = useState(false);
+  const [refSearched, setRefSearched] = useState(false);
+  const [expandedRefId, setExpandedRefId] = useState<string | null>(null);
+
   useEffect(() => {
     api.get<CostCode[]>('/transactions/cost-codes').then(setCostCodes).catch(() => {});
   }, []);
+
+  useEffect(() => {
+    if (showReference && costCodeId) {
+      searchReferences();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [showReference, costCodeId]);
+
+  async function searchReferences() {
+    if (!costCodeId && !refQuery.trim()) return;
+    setRefLoading(true);
+    setRefSearched(true);
+    try {
+      const params = new URLSearchParams();
+      if (costCodeId) params.set('cost_code_id', costCodeId);
+      if (refQuery.trim()) params.set('q', refQuery.trim());
+      params.set('exclude_estimate_id', estimateId);
+      const results = await api.get<LineItemReference[]>(`/estimates/line-items/search?${params.toString()}`);
+      setRefResults(results);
+    } catch {
+      setRefResults([]);
+    } finally {
+      setRefLoading(false);
+    }
+  }
+
+  function useReference(ref: LineItemReference) {
+    setTitle(ref.title);
+    setDescription(ref.description || '');
+    setQuantity(String(ref.quantity));
+    setUnit(ref.unit || '');
+    setUnitCost(String(ref.unit_cost));
+    setCostType(ref.cost_type);
+    setMarkupType(ref.markup_type);
+    setMarkupValue(String(ref.markup_value));
+    setEstimatedHours(ref.estimated_hours != null ? String(ref.estimated_hours) : '');
+    setNotesInternal(ref.notes_internal || '');
+    setNotesExternal(ref.notes_external || '');
+  }
 
   const qty = parseFloat(quantity) || 0;
   const cost = parseFloat(unitCost) || 0;
@@ -77,6 +125,7 @@ export function LineItemModal({ estimateId, item, defaultBucket, defaultGroupNam
       cost_type: costType,
       markup_type: markupType,
       markup_value: markup,
+      estimated_hours: estimatedHours.trim() ? parseFloat(estimatedHours) : null,
       notes_internal: notesInternal.trim() || null,
       notes_external: notesExternal.trim() || null,
     };
@@ -104,6 +153,96 @@ export function LineItemModal({ estimateId, item, defaultBucket, defaultGroupNam
     <Modal title={item ? 'Edit line item' : 'Add line item'} onClose={onClose} wide>
       <form onSubmit={handleSubmit}>
         {error && <div className="merr">{error}</div>}
+
+        <div className="card" style={{ padding: 14, marginBottom: 16, background: 'var(--bg)' }}>
+          <button
+            type="button"
+            className="btn-reset"
+            style={{ display: 'flex', alignItems: 'center', gap: 8, width: '100%', cursor: 'pointer', fontSize: 13, fontWeight: 500 }}
+            onClick={() => setShowReference((v) => !v)}
+          >
+            <IconSearch size={14} />
+            Reference from another job
+            <div style={{ flex: 1 }} />
+            {showReference ? <IconChevronUp size={14} /> : <IconChevronDown size={14} />}
+          </button>
+          {showReference && (
+            <div style={{ marginTop: 12 }}>
+              <div style={{ display: 'flex', gap: 8, marginBottom: 10 }}>
+                <input
+                  className="fi"
+                  placeholder="Search by name, e.g. drywall, tile…"
+                  value={refQuery}
+                  onChange={(e) => setRefQuery(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter') {
+                      e.preventDefault();
+                      searchReferences();
+                    }
+                  }}
+                />
+                <button type="button" className="btn btn-sm" onClick={searchReferences} disabled={refLoading}>
+                  {refLoading ? 'Searching…' : 'Search'}
+                </button>
+              </div>
+              {!costCodeId && !refQuery && !refSearched && (
+                <div style={{ fontSize: 12, color: 'var(--t2)' }}>Pick a cost code below, or search by name, to see how you've priced similar work on other jobs.</div>
+              )}
+              {refSearched && refResults.length === 0 && !refLoading && (
+                <div style={{ fontSize: 12, color: 'var(--t2)' }}>No matching line items found on other jobs.</div>
+              )}
+              {refResults.map((r) => {
+                const expanded = expandedRefId === r.id;
+                return (
+                  <div key={r.id} style={{ border: '1px solid var(--border)', borderRadius: 8, padding: 10, marginBottom: 6, background: 'var(--surface)' }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 10 }}>
+                      <div style={{ flex: 1, minWidth: 0 }}>
+                        <div style={{ fontSize: 12, color: 'var(--t2)' }}>{r.project_name || 'Unknown project'}</div>
+                        <div style={{ fontSize: 13, fontWeight: 500 }}>{r.title}</div>
+                        <div style={{ fontSize: 12, color: 'var(--t2)', marginTop: 2 }}>
+                          {r.quantity}
+                          {r.unit ? ` ${r.unit}` : ''} @ {fmt(r.unit_cost)} · builder {fmt(r.builder_cost)} · client {fmt(r.owner_price)}
+                          {r.estimated_hours != null ? ` · ~${r.estimated_hours}h` : ''}
+                        </div>
+                      </div>
+                      <div style={{ display: 'flex', gap: 6, flexShrink: 0 }}>
+                        <button type="button" className="btn btn-ghost btn-sm" onClick={() => setExpandedRefId(expanded ? null : r.id)}>
+                          {expanded ? 'Hide' : 'Details'}
+                        </button>
+                        <button type="button" className="btn btn-p btn-sm" onClick={() => useReference(r)}>
+                          Use this
+                        </button>
+                      </div>
+                    </div>
+                    {expanded && (
+                      <div style={{ marginTop: 8, paddingTop: 8, borderTop: '1px solid var(--border)', fontSize: 12 }}>
+                        {r.description && (
+                          <div style={{ marginBottom: 6 }}>
+                            <strong>Description:</strong> {r.description}
+                          </div>
+                        )}
+                        {r.notes_internal && (
+                          <div style={{ marginBottom: 6 }}>
+                            <strong>Internal notes:</strong> {r.notes_internal}
+                          </div>
+                        )}
+                        {r.notes_external && (
+                          <div>
+                            <strong>Client-facing notes:</strong> {r.notes_external}
+                          </div>
+                        )}
+                        {!r.description && !r.notes_internal && !r.notes_external && (
+                          <div style={{ color: 'var(--t2)' }}>No additional notes on this item.</div>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </div>
+
         <div className="fr">
           <div className="fg">
             <label className="fl">Item name</label>
@@ -165,7 +304,7 @@ export function LineItemModal({ estimateId, item, defaultBucket, defaultGroupNam
             <input className="fi" type="number" value={unitCost} onChange={(e) => setUnitCost(e.target.value)} />
           </div>
         </div>
-        <div className="fr">
+        <div className="fr3">
           <div className="fg">
             <label className="fl">Markup type</label>
             <select className="fi" value={markupType} onChange={(e) => setMarkupType(e.target.value)}>
@@ -176,6 +315,10 @@ export function LineItemModal({ estimateId, item, defaultBucket, defaultGroupNam
           <div className="fg">
             <label className="fl">Markup value</label>
             <input className="fi" type="number" value={markupValue} onChange={(e) => setMarkupValue(e.target.value)} />
+          </div>
+          <div className="fg">
+            <label className="fl">Est. hours</label>
+            <input className="fi" type="number" value={estimatedHours} onChange={(e) => setEstimatedHours(e.target.value)} placeholder="Optional" />
           </div>
         </div>
         <div className="fr">
