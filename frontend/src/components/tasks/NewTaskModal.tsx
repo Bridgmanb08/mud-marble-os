@@ -2,7 +2,7 @@ import { useEffect, useState, type FormEvent } from 'react';
 import { api, ApiError } from '../../api/client';
 import { Modal } from '../ui/Modal';
 import { openDatePicker } from '../../lib/datePicker';
-import type { CostCode, Project, UserDirectoryEntry } from '../../types';
+import type { CostCode, Project, Subcontractor, UserDirectoryEntry } from '../../types';
 
 interface NewTaskModalProps {
   onClose: () => void;
@@ -15,9 +15,11 @@ export function NewTaskModal({ onClose, onSaved, defaultStatus, defaultProjectId
   const [projects, setProjects] = useState<Project[]>([]);
   const [directory, setDirectory] = useState<UserDirectoryEntry[]>([]);
   const [costCodes, setCostCodes] = useState<CostCode[]>([]);
+  const [subcontractors, setSubcontractors] = useState<Subcontractor[]>([]);
   const [projectId, setProjectId] = useState(defaultProjectId || '');
   const [title, setTitle] = useState('');
   const [assignedTo, setAssignedTo] = useState('');
+  const [subcontractorId, setSubcontractorId] = useState('');
   const [phase, setPhase] = useState('');
   const [status, setStatus] = useState(defaultStatus || 'upcoming');
   const [priority, setPriority] = useState('normal');
@@ -32,6 +34,7 @@ export function NewTaskModal({ onClose, onSaved, defaultStatus, defaultProjectId
     api.get<Project[]>('/projects').then(setProjects).catch(() => {});
     api.get<UserDirectoryEntry[]>('/users/directory').then(setDirectory).catch(() => {});
     api.get<CostCode[]>('/transactions/cost-codes').then(setCostCodes).catch(() => {});
+    api.get<Subcontractor[]>('/subcontractors').then(setSubcontractors).catch(() => {});
   }, []);
 
   async function handleSubmit(e: FormEvent) {
@@ -46,6 +49,7 @@ export function NewTaskModal({ onClose, onSaved, defaultStatus, defaultProjectId
       project_id: projectId || null,
       title: title.trim(),
       assigned_to: assignedTo || null,
+      subcontractor_id: subcontractorId || null,
       phase: phase.trim() || null,
       status,
       priority,
@@ -99,6 +103,18 @@ export function NewTaskModal({ onClose, onSaved, defaultStatus, defaultProjectId
               ))}
             </datalist>
           </div>
+        </div>
+        <div className="fg">
+          <label className="fl">Subcontractor</label>
+          <select className="fi" value={subcontractorId} onChange={(e) => setSubcontractorId(e.target.value)}>
+            <option value="">— None —</option>
+            {subcontractors.map((s) => (
+              <option key={s.id} value={s.id}>
+                {s.company_name}
+                {s.trade ? ` (${s.trade})` : ''}
+              </option>
+            ))}
+          </select>
         </div>
         <div className="fr3">
           <div className="fg">

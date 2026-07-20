@@ -41,7 +41,7 @@ export default function EstimateWorksheet() {
   const [savingMeta, setSavingMeta] = useState(false);
   const [showItemModal, setShowItemModal] = useState(false);
   const [editingItem, setEditingItem] = useState<EstimateLineItem | undefined>(undefined);
-  const [newItemDefaults, setNewItemDefaults] = useState<{ bucket: string; group: string } | undefined>(undefined);
+  const [newItemDefaults, setNewItemDefaults] = useState<{ bucket: string } | undefined>(undefined);
   const [duplicating, setDuplicating] = useState(false);
 
   async function load() {
@@ -88,8 +88,8 @@ export default function EstimateWorksheet() {
   const builderCostTotal = items.reduce((s, i) => s + (i.builder_cost || 0), 0);
   const clientPriceTotal = estimate.grand_total_owner_price || 0;
   const profitTotal = clientPriceTotal - builderCostTotal;
-  const hoursTotal = items.reduce((s, i) => s + (i.estimated_hours || 0), 0);
-  const hasHours = items.some((i) => i.estimated_hours != null);
+  const daysTotal = items.reduce((s, i) => s + (i.estimated_days || 0), 0);
+  const hasDays = items.some((i) => i.estimated_days != null);
 
   async function saveMeta() {
     if (!id) return;
@@ -143,9 +143,9 @@ export default function EstimateWorksheet() {
     window.open(`/api/estimates/${id}/export/excel`, '_blank');
   }
 
-  function openNewItem(bucket: string, group: string) {
+  function openNewItem(bucket: string) {
     setEditingItem(undefined);
-    setNewItemDefaults({ bucket, group });
+    setNewItemDefaults({ bucket });
     setShowItemModal(true);
   }
   function openEditItem(item: EstimateLineItem) {
@@ -267,17 +267,17 @@ export default function EstimateWorksheet() {
           </div>
           {estimate.sent_at && <div className="m-sub">Sent {fmtD(estimate.sent_at)}</div>}
         </div>
-        {hasHours && (
+        {hasDays && (
           <div className="metric">
-            <div className="m-label">Estimated hours</div>
-            <div className="m-val" style={{ fontSize: 17 }}>{hoursTotal.toLocaleString()}h</div>
+            <div className="m-label">Estimated workdays</div>
+            <div className="m-val" style={{ fontSize: 17 }}>{daysTotal.toLocaleString()} days</div>
           </div>
         )}
       </div>
 
       <div className="sh">
         <div className="st">Worksheet</div>
-        <button className="btn btn-p btn-sm" onClick={() => openNewItem('construction', '')}>
+        <button className="btn btn-p btn-sm" onClick={() => openNewItem('construction')}>
           <IconPlus size={14} /> Add line item
         </button>
       </div>
@@ -292,7 +292,7 @@ export default function EstimateWorksheet() {
           <div key={groupName} className="card" style={{ padding: 16, marginBottom: 12 }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
               <div className="ibt" style={{ margin: 0, border: 'none', padding: 0 }}>{groupName}</div>
-              <button className="btn btn-ghost btn-sm" onClick={() => openNewItem(groupItems[0].bucket, groupName)}>
+              <button className="btn btn-ghost btn-sm" onClick={() => openNewItem(groupItems[0].bucket)}>
                 <IconPlus size={13} /> Add to group
               </button>
             </div>
@@ -300,11 +300,11 @@ export default function EstimateWorksheet() {
               <thead>
                 <tr>
                   <th>Item</th>
-                  <th style={{ textAlign: 'right' }}>Qty/Unit</th>
+                  <th style={{ textAlign: 'right' }}>Qty</th>
                   <th style={{ textAlign: 'right' }}>Unit price</th>
                   <th style={{ textAlign: 'right' }}>Builder cost</th>
                   <th style={{ textAlign: 'right' }}>Client price</th>
-                  {hasHours && <th style={{ textAlign: 'right' }}>Hours</th>}
+                  {hasDays && <th style={{ textAlign: 'right' }}>Workdays</th>}
                 </tr>
               </thead>
               <tbody>
@@ -318,14 +318,11 @@ export default function EstimateWorksheet() {
                         </div>
                       )}
                     </td>
-                    <td style={{ textAlign: 'right' }}>
-                      {item.quantity}
-                      {item.unit ? ` ${item.unit}` : ''}
-                    </td>
+                    <td style={{ textAlign: 'right' }}>{item.quantity}</td>
                     <td style={{ textAlign: 'right' }}>{fmt(item.unit_cost)}</td>
                     <td style={{ textAlign: 'right' }}>{fmt(item.builder_cost)}</td>
                     <td style={{ textAlign: 'right', fontWeight: 500 }}>{fmt(item.owner_price)}</td>
-                    {hasHours && <td style={{ textAlign: 'right' }}>{item.estimated_hours != null ? `${item.estimated_hours}h` : '—'}</td>}
+                    {hasDays && <td style={{ textAlign: 'right' }}>{item.estimated_days != null ? item.estimated_days : '—'}</td>}
                   </tr>
                 ))}
               </tbody>
@@ -339,7 +336,6 @@ export default function EstimateWorksheet() {
           estimateId={id}
           item={editingItem}
           defaultBucket={newItemDefaults?.bucket}
-          defaultGroupName={newItemDefaults?.group}
           onClose={() => setShowItemModal(false)}
           onSaved={() => {
             setShowItemModal(false);

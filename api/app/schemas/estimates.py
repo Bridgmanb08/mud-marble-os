@@ -67,7 +67,7 @@ class LineItemCreate(BaseModel):
     cost_type: str = "none"
     markup_type: str = "percent"
     markup_value: float = 0
-    estimated_hours: Optional[float] = None
+    estimated_days: Optional[float] = None
     notes_internal: Optional[str] = None
     notes_external: Optional[str] = None
     sort_order: int = 0
@@ -85,7 +85,7 @@ class LineItemUpdate(BaseModel):
     cost_type: Optional[str] = None
     markup_type: Optional[str] = None
     markup_value: Optional[float] = None
-    estimated_hours: Optional[float] = None
+    estimated_days: Optional[float] = None
     notes_internal: Optional[str] = None
     notes_external: Optional[str] = None
     sort_order: Optional[int] = None
@@ -107,7 +107,7 @@ class LineItemOut(BaseModel):
     markup_type: str
     markup_value: float
     owner_price: float
-    estimated_hours: Optional[float] = None
+    estimated_days: Optional[float] = None
     notes_internal: Optional[str] = None
     notes_external: Optional[str] = None
     sort_order: int
@@ -128,7 +128,7 @@ class LineItemReference(BaseModel):
     markup_type: str
     markup_value: float
     owner_price: float
-    estimated_hours: Optional[float] = None
+    estimated_days: Optional[float] = None
     notes_internal: Optional[str] = None
     notes_external: Optional[str] = None
     created_at: str

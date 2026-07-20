@@ -79,7 +79,7 @@ async def list_tasks(
     assigned_to: Optional[str] = None,
     _: CurrentUser = Depends(get_current_user),
 ):
-    query = "?order=position.asc&select=*,projects(name)"
+    query = "?order=position.asc&select=*,projects(name),subcontractors(company_name,trade)"
     if project_id:
         query += f"&project_id=eq.{project_id}"
     if status:
@@ -93,7 +93,7 @@ async def list_tasks(
 @router.post("", response_model=TaskOut)
 async def create_task(body: TaskCreate, _: CurrentUser = Depends(get_current_user)):
     rows = await db_post("schedule_items", body.model_dump(exclude_none=True))
-    full = await db_get("schedule_items", f"?id=eq.{rows[0]['id']}&select=*,projects(name)")
+    full = await db_get("schedule_items", f"?id=eq.{rows[0]['id']}&select=*,projects(name),subcontractors(company_name,trade)")
     enriched = await _enrich(full)
     return enriched[0]
 
@@ -194,7 +194,7 @@ async def create_comment(task_id: str, body: CommentCreate, current_user: Curren
 @router.patch("/{task_id}", response_model=TaskOut)
 async def update_task(task_id: str, body: TaskUpdate, _: CurrentUser = Depends(get_current_user)):
     await db_patch("schedule_items", task_id, body.model_dump(exclude_none=True))
-    full = await db_get("schedule_items", f"?id=eq.{task_id}&select=*,projects(name)")
+    full = await db_get("schedule_items", f"?id=eq.{task_id}&select=*,projects(name),subcontractors(company_name,trade)")
     enriched = await _enrich(full)
     return enriched[0]
 
