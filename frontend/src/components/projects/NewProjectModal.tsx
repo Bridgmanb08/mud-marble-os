@@ -1,6 +1,7 @@
 import { useState, type FormEvent } from 'react';
 import { api, ApiError } from '../../api/client';
 import { Modal } from '../ui/Modal';
+import { openDatePicker } from '../../lib/datePicker';
 
 interface NewProjectModalProps {
   onClose: () => void;
@@ -85,11 +86,11 @@ export function NewProjectModal({ onClose, onCreated }: NewProjectModalProps) {
         <div className="fr">
           <div className="fg">
             <label className="fl">Start date</label>
-            <input className="fi" type="date" value={startDate} onChange={(e) => setStartDate(e.target.value)} />
+            <input className="fi" type="date" value={startDate} onClick={openDatePicker} onChange={(e) => setStartDate(e.target.value)} />
           </div>
           <div className="fg">
             <label className="fl">Est. completion</label>
-            <input className="fi" type="date" value={estimatedCompletion} onChange={(e) => setEstimatedCompletion(e.target.value)} />
+            <input className="fi" type="date" value={estimatedCompletion} onClick={openDatePicker} onChange={(e) => setEstimatedCompletion(e.target.value)} />
           </div>
         </div>
         <div className="fg">

@@ -1,6 +1,7 @@
 import { useState, type FormEvent } from 'react';
 import { api, ApiError } from '../../api/client';
 import { Modal } from '../ui/Modal';
+import { MentionTextarea } from '../ui/MentionTextarea';
 
 interface NewNoteModalProps {
   projectId: string;
@@ -65,12 +66,11 @@ export function NewNoteModal({ projectId, onClose, onCreated }: NewNoteModalProp
         </div>
         <div className="fg">
           <label className="fl">Note</label>
-          <textarea
-            className="fi"
-            style={{ minHeight: 120 }}
+          <MentionTextarea
+            style={{ minHeight: 120, width: '100%' }}
             value={content}
-            onChange={(e) => setContent(e.target.value)}
-            placeholder="What happened, what was decided, what's next…"
+            onChange={setContent}
+            placeholder="What happened, what was decided, what's next… Type @ to tag someone"
           />
         </div>
         <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 14 }}>

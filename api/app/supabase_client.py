@@ -43,5 +43,10 @@ async def db_patch(table: str, record_id: str, data: dict) -> list[dict]:
     return r.json()
 
 
+async def db_patch_query(table: str, query: str, data: dict) -> list[dict]:
+    r = await _request("PATCH", f"{_base_url()}/{table}{query}", json=data)
+    return r.json()
+
+
 async def db_delete(table: str, record_id: str) -> None:
     await _request("DELETE", f"{_base_url()}/{table}?id=eq.{record_id}")

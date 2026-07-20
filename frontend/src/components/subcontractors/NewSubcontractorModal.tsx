@@ -1,6 +1,7 @@
 import { useState, type FormEvent } from 'react';
 import { api, ApiError } from '../../api/client';
 import { Modal } from '../ui/Modal';
+import { openDatePicker } from '../../lib/datePicker';
 import type { Subcontractor } from '../../types';
 
 interface NewSubcontractorModalProps {
@@ -90,7 +91,7 @@ export function NewSubcontractorModal({ onClose, onSaved, sub }: NewSubcontracto
         <div className="fr3">
           <div className="fg">
             <label className="fl">Insurance expiry</label>
-            <input className="fi" type="date" value={insuranceExpiry} onChange={(e) => setInsuranceExpiry(e.target.value)} />
+            <input className="fi" type="date" value={insuranceExpiry} onClick={openDatePicker} onChange={(e) => setInsuranceExpiry(e.target.value)} />
           </div>
           <div className="fg">
             <label className="fl">License #</label>

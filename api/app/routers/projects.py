@@ -3,6 +3,7 @@ from typing import Optional
 from fastapi import APIRouter, Depends, HTTPException
 
 from ..deps import CurrentUser, get_current_user
+from ..mentions import create_mention_notifications
 from ..schemas.projects import ProjectCreate, ProjectNoteCreate, ProjectNoteOut, ProjectOut, ProjectUpdate
 from ..supabase_client import db_get, db_patch, db_post
 
@@ -48,7 +49,18 @@ async def list_project_notes(project_id: str, _: CurrentUser = Depends(get_curre
 
 @router.post("/{project_id}/notes", response_model=ProjectNoteOut)
 async def create_project_note(
-    project_id: str, body: ProjectNoteCreate, _: CurrentUser = Depends(get_current_user)
+    project_id: str, body: ProjectNoteCreate, current_user: CurrentUser = Depends(get_current_user)
 ):
     rows = await db_post("project_notes", {"project_id": project_id, **body.model_dump()})
-    return rows[0]
+    note = rows[0]
+    proj = await db_get("projects", f"?id=eq.{project_id}&select=name")
+    project_name = proj[0]["name"].split("|")[0].strip() if proj else "a project"
+    await create_mention_notifications(
+        content=body.content,
+        project_id=project_id,
+        source_type="project_note",
+        source_id=note["id"],
+        message=f"{current_user.name or current_user.email} mentioned you in a note on {project_name}",
+        exclude_user_id=current_user.id,
+    )
+    return note

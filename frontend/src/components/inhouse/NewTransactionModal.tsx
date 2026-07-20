@@ -1,6 +1,7 @@
 import { useEffect, useState, type FormEvent } from 'react';
 import { api, ApiError } from '../../api/client';
 import { Modal } from '../ui/Modal';
+import { openDatePicker } from '../../lib/datePicker';
 import type { CostCode, Project } from '../../types';
 
 interface NewTransactionModalProps {
@@ -72,7 +73,7 @@ export function NewTransactionModal({ onClose, onCreated }: NewTransactionModalP
         <div className="fr">
           <div className="fg">
             <label className="fl">Date</label>
-            <input className="fi" type="date" value={date} onChange={(e) => setDate(e.target.value)} />
+            <input className="fi" type="date" value={date} onClick={openDatePicker} onChange={(e) => setDate(e.target.value)} />
           </div>
           <div className="fg">
             <label className="fl">Project</label>

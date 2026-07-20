@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { IconFileDollar } from '@tabler/icons-react';
 import { api } from '../api/client';
 import { useToast } from '../components/ui/Toast';
@@ -15,6 +16,7 @@ const STATUS_BADGE: Record<string, string> = {
 export default function Estimates() {
   const [estimates, setEstimates] = useState<Estimate[] | null>(null);
   const toast = useToast();
+  const navigate = useNavigate();
 
   useEffect(() => {
     api
@@ -85,8 +87,8 @@ export default function Estimates() {
             </thead>
             <tbody>
               {estimates.map((e) => (
-                <tr key={e.id}>
-                  <td style={{ fontWeight: 500 }}>{e.projects?.name || '—'}</td>
+                <tr key={e.id} onClick={() => navigate(`/estimates/${e.id}`)} style={{ cursor: 'pointer' }}>
+                  <td style={{ fontWeight: 500 }}>{e.title || e.projects?.name || '—'}</td>
                   <td>v{e.version}</td>
                   <td>{fmt(e.pm_fee_total)}</td>
                   <td>{fmt(e.construction_total_owner_price)}</td>

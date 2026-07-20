@@ -4,7 +4,7 @@ import { IconArrowLeft, IconPlus } from '@tabler/icons-react';
 import { api } from '../api/client';
 import { useToast } from '../components/ui/Toast';
 import { fmt, fmtD } from '../lib/format';
-import type { ChangeOrder, Estimate, EstimateLineItem, Invoice, Project, ProjectNote, Task } from '../types';
+import type { ChangeOrder, Estimate, Invoice, Project, ProjectNote, Task } from '../types';
 import { NewNoteModal } from '../components/projects/NewNoteModal';
 import { NewChangeOrderModal } from '../components/change-orders/NewChangeOrderModal';
 import { NewInvoiceModal } from '../components/invoices/NewInvoiceModal';
@@ -23,7 +23,7 @@ const NOTE_COLORS: Record<string, string> = {
 const CO_TYPE_BADGE: Record<string, string> = { oversight: 'bg-amber', client_addition: 'bg-blue', unforeseen: 'bg-red' };
 const CO_STATUS_BADGE: Record<string, string> = { pending: 'bg-gray', sent: 'bg-amber', approved: 'bg-green', rejected: 'bg-red' };
 const INVOICE_STATUS_BADGE: Record<string, string> = { draft: 'bg-gray', sent: 'bg-amber', paid: 'bg-green', overdue: 'bg-red', void: 'bg-gray' };
-const BUCKET_LABEL: Record<string, string> = { pm_fee: 'PM Fee', construction: 'Construction', allowance: 'Allowance' };
+const ESTIMATE_STATUS_BADGE: Record<string, string> = { draft: 'bg-gray', sent_to_client: 'bg-blue', approved: 'bg-green', rejected: 'bg-red' };
 
 export default function ProjectDetail() {
   const { id } = useParams<{ id: string }>();
@@ -32,7 +32,6 @@ export default function ProjectDetail() {
   const [project, setProject] = useState<Project | null>(null);
   const [notes, setNotes] = useState<ProjectNote[]>([]);
   const [estimates, setEstimates] = useState<Estimate[]>([]);
-  const [lineItems, setLineItems] = useState<EstimateLineItem[]>([]);
   const [changeOrders, setChangeOrders] = useState<ChangeOrder[]>([]);
   const [invoices, setInvoices] = useState<Invoice[]>([]);
   const [tasks, setTasks] = useState<Task[]>([]);
@@ -55,14 +54,7 @@ export default function ProjectDetail() {
 
   async function loadEstimates() {
     if (!id) return;
-    const ests = await api.get<Estimate[]>(`/estimates?project_id=${id}`).catch(() => []);
-    setEstimates(ests);
-    const latest = ests[0];
-    if (latest) {
-      setLineItems(await api.get<EstimateLineItem[]>(`/estimates/${latest.id}/items`).catch(() => []));
-    } else {
-      setLineItems([]);
-    }
+    setEstimates(await api.get<Estimate[]>(`/estimates?project_id=${id}`).catch(() => []));
   }
 
   async function loadChangeOrders() {
@@ -106,21 +98,14 @@ export default function ProjectDetail() {
     if (!id) return;
     setStartingEstimate(true);
     try {
-      await api.post('/estimates', { project_id: id, version: 1, status: 'draft', pm_fee_total: 0 });
-      toast('Estimate started');
-      await loadEstimates();
+      const nextVersion = estimates.length ? Math.max(...estimates.map((e) => e.version)) + 1 : 1;
+      const created = await api.post<Estimate>('/estimates', { project_id: id, version: nextVersion, status: 'draft', pm_fee_total: 0 });
+      navigate(`/estimates/${created.id}`);
     } catch (e) {
       toast(e instanceof Error ? e.message : 'Failed to start estimate', true);
     } finally {
       setStartingEstimate(false);
     }
-  }
-
-  const latestEstimate = estimates[0];
-  const linesByBucket: Record<string, EstimateLineItem[]> = {};
-  for (const li of lineItems) {
-    if (!linesByBucket[li.bucket]) linesByBucket[li.bucket] = [];
-    linesByBucket[li.bucket].push(li);
   }
 
   function openTask(taskId: string) {
@@ -214,67 +199,42 @@ export default function ProjectDetail() {
 
         {tab === 'Estimate' && (
           <>
-            {!latestEstimate ? (
+            <div className="sh">
+              <div className="st">{estimates.length} version{estimates.length === 1 ? '' : 's'}</div>
+              <button className="btn btn-p btn-sm" onClick={startEstimate} disabled={startingEstimate}>
+                <IconPlus size={14} /> {startingEstimate ? 'Starting…' : 'New estimate'}
+              </button>
+            </div>
+            {estimates.length === 0 ? (
               <div className="empty">
                 <div className="empty-t">No estimate yet</div>
-                <div className="empty-s" style={{ marginBottom: 14 }}>Start an estimate to break down costs by PM fee, construction, and allowances.</div>
-                <button className="btn btn-p btn-sm" onClick={startEstimate} disabled={startingEstimate}>
-                  <IconPlus size={14} /> {startingEstimate ? 'Starting…' : 'Start estimate'}
-                </button>
+                <div className="empty-s">Start an estimate to build out a proposal worksheet with grouped line items, markup, and PDF export.</div>
               </div>
             ) : (
-              <>
-                <div className="sh">
-                  <div className="st">
-                    Version {latestEstimate.version} · <span className="badge bg-gray">{latestEstimate.status.replace(/_/g, ' ')}</span>
-                  </div>
-                </div>
-                <div className="metrics" style={{ marginBottom: 20 }}>
-                  <div className="metric">
-                    <div className="m-label">PM fee</div>
-                    <div className="m-val" style={{ fontSize: 17 }}>{fmt(latestEstimate.pm_fee_total)}</div>
-                  </div>
-                  <div className="metric">
-                    <div className="m-label">Construction</div>
-                    <div className="m-val" style={{ fontSize: 17 }}>{fmt(latestEstimate.construction_total_owner_price)}</div>
-                  </div>
-                  <div className="metric">
-                    <div className="m-label">Allowances</div>
-                    <div className="m-val" style={{ fontSize: 17 }}>{fmt(latestEstimate.allowance_total)}</div>
-                  </div>
-                  <div className="metric">
-                    <div className="m-label">Grand total</div>
-                    <div className="m-val" style={{ fontSize: 17, fontWeight: 700 }}>{fmt(latestEstimate.grand_total_owner_price)}</div>
-                  </div>
-                </div>
-                {Object.keys(linesByBucket).length === 0 ? (
-                  <div className="empty-s">No line items yet.</div>
-                ) : (
-                  Object.entries(linesByBucket).map(([bucket, items]) => (
-                    <div key={bucket} style={{ marginBottom: 18 }}>
-                      <div className="ibt">{BUCKET_LABEL[bucket] || bucket}</div>
-                      <table className="tbl">
-                        <thead>
-                          <tr>
-                            <th>Description</th>
-                            <th style={{ textAlign: 'right' }}>Builder cost</th>
-                            <th style={{ textAlign: 'right' }}>Owner price</th>
-                          </tr>
-                        </thead>
-                        <tbody>
-                          {items.map((li) => (
-                            <tr key={li.id}>
-                              <td>{li.description}</td>
-                              <td style={{ textAlign: 'right' }}>{fmt(li.builder_cost)}</td>
-                              <td style={{ textAlign: 'right', fontWeight: 500 }}>{fmt(li.owner_price)}</td>
-                            </tr>
-                          ))}
-                        </tbody>
-                      </table>
-                    </div>
-                  ))
-                )}
-              </>
+              <table className="tbl">
+                <thead>
+                  <tr>
+                    <th>Title</th>
+                    <th>Version</th>
+                    <th style={{ textAlign: 'right' }}>Grand total</th>
+                    <th>Status</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {[...estimates]
+                    .sort((a, b) => b.version - a.version)
+                    .map((e) => (
+                      <tr key={e.id} onClick={() => navigate(`/estimates/${e.id}`)} style={{ cursor: 'pointer' }}>
+                        <td style={{ fontWeight: 500 }}>{e.title || `Version ${e.version}`}</td>
+                        <td>v{e.version}</td>
+                        <td style={{ textAlign: 'right' }}>{fmt(e.grand_total_owner_price)}</td>
+                        <td>
+                          <span className={`badge ${ESTIMATE_STATUS_BADGE[e.status] || 'bg-gray'}`}>{e.status.replace(/_/g, ' ')}</span>
+                        </td>
+                      </tr>
+                    ))}
+                </tbody>
+              </table>
             )}
           </>
         )}

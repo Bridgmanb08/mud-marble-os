@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { IconLogout, IconChevronDown } from '@tabler/icons-react';
 import { useAuth } from '../../auth/AuthContext';
+import { NotificationBell } from './NotificationBell';
 
 export function Topbar() {
   const { user, logout } = useAuth();
@@ -13,7 +14,8 @@ export function Topbar() {
         <span className="logo-name">Mud &amp; Marble</span>
         <span className="logo-sub">OS</span>
       </div>
-      <div className="topbar-right" style={{ position: 'relative' }}>
+      <div className="topbar-right" style={{ position: 'relative', display: 'flex', alignItems: 'center', gap: 10 }}>
+        <NotificationBell />
         <button className="btn btn-sm btn-ghost" onClick={() => setMenuOpen((v) => !v)}>
           {user?.name || user?.email}
           <IconChevronDown size={14} />
