@@ -23,6 +23,8 @@ Supabase (Postgres via REST) for storage, deployed as a single Vercel project.
 | `JWT_SECRET_KEY` | api | random 32+ byte secret, e.g. `openssl rand -hex 32` |
 | `ANTHROPIC_API_KEY` | api | for the Fathom-transcript task extraction feature |
 | `FRONTEND_ORIGIN` | api | your deployed origin, for CORS (defaults to `http://localhost:5173`) |
+| `VITE_SUPABASE_URL` | frontend (build-time) | same Supabase URL as above — the browser uploads/downloads project files directly to Supabase Storage via short-lived signed URLs, so it needs to know where to send them |
+| `VITE_SUPABASE_ANON_KEY` | frontend (build-time) | the **anon** key (not service-role) — safe to embed in the client bundle by design; Supabase Storage still requires it on requests alongside the signed token |
 
 ## First-time setup
 

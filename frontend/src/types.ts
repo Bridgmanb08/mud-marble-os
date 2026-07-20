@@ -284,6 +284,28 @@ export interface Project {
   clients: ClientBrief | null;
 }
 
+export interface ProjectFile {
+  id: string;
+  project_id: string;
+  uploaded_by: string | null;
+  file_name: string;
+  file_type: 'photo' | 'video' | 'plan' | 'other' | string;
+  mime_type: string | null;
+  size_bytes: number | null;
+  storage_path: string;
+  created_at: string;
+  task_ids: string[];
+}
+
+export interface UploadUrlResponse {
+  upload_url: string;
+  storage_path: string;
+}
+
+export interface DownloadUrlResponse {
+  download_url: string;
+}
+
 export interface ProjectNote {
   id: string;
   project_id: string;
