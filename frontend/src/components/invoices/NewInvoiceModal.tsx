@@ -1,6 +1,7 @@
 import { useEffect, useState, type FormEvent } from 'react';
 import { api, ApiError } from '../../api/client';
 import { Modal } from '../ui/Modal';
+import { openDatePicker } from '../../lib/datePicker';
 import type { Project } from '../../types';
 
 interface NewInvoiceModalProps {
@@ -85,7 +86,7 @@ export function NewInvoiceModal({ onClose, onCreated, defaultProjectId }: NewInv
           </div>
           <div className="fg">
             <label className="fl">Due date</label>
-            <input className="fi" type="date" value={dueDate} onChange={(e) => setDueDate(e.target.value)} />
+            <input className="fi" type="date" value={dueDate} onClick={openDatePicker} onChange={(e) => setDueDate(e.target.value)} />
           </div>
         </div>
         <div className="fg">

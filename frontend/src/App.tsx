@@ -10,6 +10,7 @@ import Projects from './pages/Projects';
 import ProjectDetail from './pages/ProjectDetail';
 import Clients from './pages/Clients';
 import Estimates from './pages/Estimates';
+import EstimateWorksheet from './pages/EstimateWorksheet';
 import Invoices from './pages/Invoices';
 import ChangeOrders from './pages/ChangeOrders';
 import InHouse from './pages/InHouse';
@@ -38,6 +39,7 @@ export default function App() {
             <Route path="leads" element={<Leads />} />
             <Route path="clients" element={<Clients />} />
             <Route path="estimates" element={<Estimates />} />
+            <Route path="estimates/:id" element={<EstimateWorksheet />} />
             <Route path="invoices" element={<Invoices />} />
             <Route path="change-orders" element={<ChangeOrders />} />
             <Route path="inhouse" element={<InHouse />} />

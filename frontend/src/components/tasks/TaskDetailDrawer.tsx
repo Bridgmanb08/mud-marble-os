@@ -2,7 +2,8 @@ import { useEffect, useState, type FormEvent } from 'react';
 import { IconTrash, IconLock } from '@tabler/icons-react';
 import { api, ApiError } from '../../api/client';
 import { Modal } from '../ui/Modal';
-import type { Project, Task, TaskComment, TaskDependency, TaskSubtask } from '../../types';
+import { openDatePicker } from '../../lib/datePicker';
+import type { CostCode, Project, Task, TaskComment, TaskDependency, TaskSubtask, UserDirectoryEntry } from '../../types';
 
 interface TaskDetailDrawerProps {
   task: Task;
@@ -14,6 +15,8 @@ interface TaskDetailDrawerProps {
 
 export function TaskDetailDrawer({ task, allTasks, onClose, onSaved, onDeleted }: TaskDetailDrawerProps) {
   const [projects, setProjects] = useState<Project[]>([]);
+  const [directory, setDirectory] = useState<UserDirectoryEntry[]>([]);
+  const [costCodes, setCostCodes] = useState<CostCode[]>([]);
   const [title, setTitle] = useState(task.title);
   const [projectId, setProjectId] = useState(task.project_id || '');
   const [assignedTo, setAssignedTo] = useState(task.assigned_to || '');
@@ -38,6 +41,8 @@ export function TaskDetailDrawer({ task, allTasks, onClose, onSaved, onDeleted }
 
   useEffect(() => {
     api.get<Project[]>('/projects').then(setProjects).catch(() => {});
+    api.get<UserDirectoryEntry[]>('/users/directory').then(setDirectory).catch(() => {});
+    api.get<CostCode[]>('/transactions/cost-codes').then(setCostCodes).catch(() => {});
     loadSubtasks();
     loadDependencies();
     loadComments();
@@ -152,7 +157,12 @@ export function TaskDetailDrawer({ task, allTasks, onClose, onSaved, onDeleted }
           </div>
           <div className="fg">
             <label className="fl">Assigned to</label>
-            <input className="fi" value={assignedTo} onChange={(e) => setAssignedTo(e.target.value)} />
+            <input className="fi" list="assignee-options-drawer" value={assignedTo} onChange={(e) => setAssignedTo(e.target.value)} />
+            <datalist id="assignee-options-drawer">
+              {directory.map((u) => (
+                <option key={u.id} value={u.name} />
+              ))}
+            </datalist>
           </div>
         </div>
         <div className="fr3">
@@ -176,17 +186,24 @@ export function TaskDetailDrawer({ task, allTasks, onClose, onSaved, onDeleted }
           </div>
           <div className="fg">
             <label className="fl">Phase</label>
-            <input className="fi" value={phase} onChange={(e) => setPhase(e.target.value)} />
+            <select className="fi" value={phase} onChange={(e) => setPhase(e.target.value)}>
+              <option value="">— No phase —</option>
+              {costCodes.map((c) => (
+                <option key={c.id} value={`${c.code} - ${c.name}`}>
+                  {c.code} - {c.name}
+                </option>
+              ))}
+            </select>
           </div>
         </div>
         <div className="fr">
           <div className="fg">
             <label className="fl">Start</label>
-            <input className="fi" type="date" value={scheduledStart} onChange={(e) => setScheduledStart(e.target.value)} />
+            <input className="fi" type="date" value={scheduledStart} onClick={openDatePicker} onChange={(e) => setScheduledStart(e.target.value)} />
           </div>
           <div className="fg">
             <label className="fl">Due</label>
-            <input className="fi" type="date" value={scheduledEnd} onChange={(e) => setScheduledEnd(e.target.value)} />
+            <input className="fi" type="date" value={scheduledEnd} onClick={openDatePicker} onChange={(e) => setScheduledEnd(e.target.value)} />
           </div>
         </div>
         <div className="fg">

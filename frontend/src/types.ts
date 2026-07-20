@@ -142,8 +142,14 @@ export interface Estimate {
   project_id: string;
   version: number;
   status: string;
+  title: string | null;
   pm_fee_total: number | null;
   notes_internal: string | null;
+  approval_deadline: string | null;
+  introductory_text: string | null;
+  closing_text: string | null;
+  sent_at: string | null;
+  last_viewed_at: string | null;
   grand_total_owner_price: number | null;
   construction_total_owner_price: number | null;
   allowance_total: number | null;
@@ -155,19 +161,22 @@ export interface EstimateLineItem {
   id: string;
   estimate_id: string;
   cost_code_id: string | null;
+  group_name: string | null;
   bucket: string;
-  description: string;
-  day_labor_cost: number;
-  material_cost: number;
-  subcontractor_cost: number;
-  contingency: number;
+  title: string;
+  description: string | null;
+  quantity: number;
+  unit: string | null;
+  unit_cost: number;
+  cost_type: string;
   builder_cost: number;
-  markup_type: string | null;
+  markup_type: string;
   markup_value: number;
   owner_price: number;
   notes_internal: string | null;
   notes_external: string | null;
   sort_order: number;
+  cost_codes: { code: string; name: string } | null;
 }
 
 export interface Invoice {
@@ -413,6 +422,23 @@ export interface UserSummary {
   name: string;
   email: string;
   role: string;
+}
+
+export interface UserDirectoryEntry {
+  id: string;
+  name: string;
+}
+
+export interface AppNotification {
+  id: string;
+  type: string;
+  source_type: string;
+  source_id: string | null;
+  project_id: string | null;
+  message: string;
+  is_read: boolean;
+  created_at: string;
+  projects: ProjectBrief | null;
 }
 
 export type CustomWidgetSource =

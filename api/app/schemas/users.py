@@ -6,3 +6,8 @@ class UserSummary(BaseModel):
     name: str
     email: str
     role: str
+
+
+class UserDirectoryEntry(BaseModel):
+    id: str
+    name: str

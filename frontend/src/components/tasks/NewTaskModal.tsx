@@ -1,7 +1,8 @@
 import { useEffect, useState, type FormEvent } from 'react';
 import { api, ApiError } from '../../api/client';
 import { Modal } from '../ui/Modal';
-import type { Project } from '../../types';
+import { openDatePicker } from '../../lib/datePicker';
+import type { CostCode, Project, UserDirectoryEntry } from '../../types';
 
 interface NewTaskModalProps {
   onClose: () => void;
@@ -12,6 +13,8 @@ interface NewTaskModalProps {
 
 export function NewTaskModal({ onClose, onSaved, defaultStatus, defaultProjectId }: NewTaskModalProps) {
   const [projects, setProjects] = useState<Project[]>([]);
+  const [directory, setDirectory] = useState<UserDirectoryEntry[]>([]);
+  const [costCodes, setCostCodes] = useState<CostCode[]>([]);
   const [projectId, setProjectId] = useState(defaultProjectId || '');
   const [title, setTitle] = useState('');
   const [assignedTo, setAssignedTo] = useState('');
@@ -27,6 +30,8 @@ export function NewTaskModal({ onClose, onSaved, defaultStatus, defaultProjectId
 
   useEffect(() => {
     api.get<Project[]>('/projects').then(setProjects).catch(() => {});
+    api.get<UserDirectoryEntry[]>('/users/directory').then(setDirectory).catch(() => {});
+    api.get<CostCode[]>('/transactions/cost-codes').then(setCostCodes).catch(() => {});
   }, []);
 
   async function handleSubmit(e: FormEvent) {
@@ -81,7 +86,18 @@ export function NewTaskModal({ onClose, onSaved, defaultStatus, defaultProjectId
           </div>
           <div className="fg">
             <label className="fl">Assigned to</label>
-            <input className="fi" value={assignedTo} onChange={(e) => setAssignedTo(e.target.value)} placeholder="Shannon" />
+            <input
+              className="fi"
+              list="assignee-options"
+              value={assignedTo}
+              onChange={(e) => setAssignedTo(e.target.value)}
+              placeholder="Shannon"
+            />
+            <datalist id="assignee-options">
+              {directory.map((u) => (
+                <option key={u.id} value={u.name} />
+              ))}
+            </datalist>
           </div>
         </div>
         <div className="fr3">
@@ -105,17 +121,24 @@ export function NewTaskModal({ onClose, onSaved, defaultStatus, defaultProjectId
           </div>
           <div className="fg">
             <label className="fl">Phase</label>
-            <input className="fi" value={phase} onChange={(e) => setPhase(e.target.value)} placeholder="Framing" />
+            <select className="fi" value={phase} onChange={(e) => setPhase(e.target.value)}>
+              <option value="">— No phase —</option>
+              {costCodes.map((c) => (
+                <option key={c.id} value={`${c.code} - ${c.name}`}>
+                  {c.code} - {c.name}
+                </option>
+              ))}
+            </select>
           </div>
         </div>
         <div className="fr">
           <div className="fg">
             <label className="fl">Start</label>
-            <input className="fi" type="date" value={scheduledStart} onChange={(e) => setScheduledStart(e.target.value)} />
+            <input className="fi" type="date" value={scheduledStart} onClick={openDatePicker} onChange={(e) => setScheduledStart(e.target.value)} />
           </div>
           <div className="fg">
             <label className="fl">Due</label>
-            <input className="fi" type="date" value={scheduledEnd} onChange={(e) => setScheduledEnd(e.target.value)} />
+            <input className="fi" type="date" value={scheduledEnd} onClick={openDatePicker} onChange={(e) => setScheduledEnd(e.target.value)} />
           </div>
         </div>
         <div className="fg">
