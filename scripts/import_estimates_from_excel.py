@@ -128,18 +128,26 @@ def main() -> None:
             continue
 
         existing_estimates = client.get("/api/estimates", params={"project_id": project["id"]}).json()
+        existing_keys = set()
         if existing_estimates:
-            print(f"  Project already has {len(existing_estimates)} estimate(s) -- skipping import so nothing gets duplicated.")
-            continue
-
-        est_r = client.post(
-            "/api/estimates", json={"project_id": project["id"], "version": 1, "status": "draft", "pm_fee_total": 0}
-        )
-        if not est_r.is_success:
-            print(f"  FAILED to create estimate: {est_r.status_code} {est_r.text}", file=sys.stderr)
-            continue
-        estimate = est_r.json()
-        print(f"  Created estimate v1 (id={estimate['id']})")
+            estimate = existing_estimates[0]
+            print(f"  Using existing estimate v{estimate['version']} (id={estimate['id']})")
+            existing_items = client.get(f"/api/estimates/{estimate['id']}/items").json()
+            # keyed on (title, unit_cost) rather than title alone -- some source spreadsheets
+            # have two rows with the same title (e.g. separate "Framing" for exterior/interior)
+            # but different costs, and title-only matching would wrongly treat them as one
+            existing_keys = {(i["title"], i["unit_cost"]) for i in existing_items}
+            if existing_keys:
+                print(f"  {len(existing_keys)} line item(s) already on this estimate -- only adding what's missing.")
+        else:
+            est_r = client.post(
+                "/api/estimates", json={"project_id": project["id"], "version": 1, "status": "draft", "pm_fee_total": 0}
+            )
+            if not est_r.is_success:
+                print(f"  FAILED to create estimate: {est_r.status_code} {est_r.text}", file=sys.stderr)
+                continue
+            estimate = est_r.json()
+            print(f"  Created estimate v1 (id={estimate['id']})")
 
         wb = xlrd.open_workbook(job["file"])
         sheet = wb.sheet_by_index(0)
@@ -153,15 +161,18 @@ def main() -> None:
             v = sheet.cell_value(row, i)
             return v if v != "" else None
 
-        created = 0
+        created, already_present = 0, 0
         for r in range(1, sheet.nrows):
             title = cell(r, "Title")
             if not title:
                 continue
+            unit_cost = float(cell(r, "Unit Cost") or 0)
+            if (title, unit_cost) in existing_keys:
+                already_present += 1
+                continue
             category = cell(r, "Category") or ""
             raw_cost_code = cell(r, "Cost Code") or ""
             quantity = float(cell(r, "Quantity") or 1)
-            unit_cost = float(cell(r, "Unit Cost") or 0)
             markup_raw = float(cell(r, "Markup") or 0)
             markup_type_raw = cell(r, "Markup Type") or "%"
             description = cell(r, "Description")
@@ -204,7 +215,8 @@ def main() -> None:
                 continue
             created += 1
 
-        print(f"  Imported {created} line items.")
+        skip_note = f" ({already_present} already present, skipped)" if already_present else ""
+        print(f"  Imported {created} line items.{skip_note}")
 
     if unmatched:
         print("\n=== Line items whose source cost code didn't match your existing cost code list (noted on the item, not blocking) ===")
