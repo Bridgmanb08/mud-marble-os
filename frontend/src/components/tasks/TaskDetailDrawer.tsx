@@ -90,6 +90,7 @@ export function TaskDetailDrawer({ task, allTasks, onClose, onSaved, onDeleted }
         scheduled_end: scheduledEnd || null,
         notes: notes.trim() || null,
         is_milestone: isMilestone,
+        expected_version: task.version,
       });
       onSaved();
     } catch (err) {

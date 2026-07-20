@@ -1,5 +1,6 @@
 import { useState } from 'react';
-import { IconLogout, IconChevronDown } from '@tabler/icons-react';
+import { Link } from 'react-router-dom';
+import { IconLogout, IconChevronDown, IconSettings } from '@tabler/icons-react';
 import { useAuth } from '../../auth/AuthContext';
 import { NotificationBell } from './NotificationBell';
 
@@ -15,6 +16,11 @@ export function Topbar() {
         <span className="logo-sub">OS</span>
       </div>
       <div className="topbar-right" style={{ position: 'relative', display: 'flex', alignItems: 'center', gap: 10 }}>
+        {user?.is_admin && (
+          <Link to="/settings" className="btn btn-sm btn-ghost" title="Settings">
+            <IconSettings size={16} />
+          </Link>
+        )}
         <NotificationBell />
         <button className="btn btn-sm btn-ghost" onClick={() => setMenuOpen((v) => !v)}>
           {user?.name || user?.email}

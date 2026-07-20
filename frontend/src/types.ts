@@ -23,6 +23,7 @@ export interface Task {
   scheduled_end: string | null;
   notes: string | null;
   is_milestone: boolean;
+  version: number;
   created_at: string;
   projects: ProjectBrief | null;
   subcontractors: SubcontractorBrief | null;
@@ -30,6 +31,7 @@ export interface Task {
   subtask_complete: number;
   comment_count: number;
   blocked: boolean;
+  overdue: boolean;
 }
 
 export interface TaskSubtask {

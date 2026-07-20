@@ -250,7 +250,7 @@ export default function Tasks() {
       ) : view === 'kanban' ? (
         <KanbanBoard tasks={filtered} onTaskClick={openEdit} onAddTask={openNew} onChanged={load} filtersActive={filtersActive} />
       ) : view === 'table' ? (
-        <TableView tasks={filtered} onTaskClick={openEdit} groupBy={groupBy} onGroupByChange={setGroupBy} />
+        <TableView tasks={filtered} onTaskClick={openEdit} groupBy={groupBy} onGroupByChange={setGroupBy} onChanged={load} />
       ) : (
         <TimelineView tasks={filtered} onTaskClick={openEdit} />
       )}

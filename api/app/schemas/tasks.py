@@ -40,6 +40,7 @@ class TaskUpdate(BaseModel):
     is_milestone: Optional[bool] = None
     position: Optional[int] = None
     project_id: Optional[str] = None
+    expected_version: Optional[int] = None
 
     @model_validator(mode="after")
     def _validate_dates(self):
@@ -70,6 +71,7 @@ class TaskOut(BaseModel):
     scheduled_end: Optional[str] = None
     notes: Optional[str] = None
     is_milestone: bool = False
+    version: int = 1
     created_at: str
     projects: Optional[ProjectBrief] = None
     subcontractors: Optional[SubcontractorBrief] = None
@@ -77,6 +79,7 @@ class TaskOut(BaseModel):
     subtask_complete: int = 0
     comment_count: int = 0
     blocked: bool = False
+    overdue: bool = False
 
 
 class ReorderItem(BaseModel):
@@ -87,6 +90,16 @@ class ReorderItem(BaseModel):
 
 class ReorderRequest(BaseModel):
     items: list[ReorderItem]
+
+
+class BulkUpdateRequest(BaseModel):
+    ids: list[str]
+    status: Optional[str] = None
+    assigned_to: Optional[str] = None
+
+
+class BulkDeleteRequest(BaseModel):
+    ids: list[str]
 
 
 class SubtaskCreate(BaseModel):
