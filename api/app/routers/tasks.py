@@ -1,4 +1,5 @@
 from collections import defaultdict
+from datetime import datetime, timezone
 from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException
@@ -8,6 +9,8 @@ from ..schemas.tasks import (
     BoardViewCreate,
     BoardViewOut,
     BoardViewUpdate,
+    BulkDeleteRequest,
+    BulkUpdateRequest,
     CommentCreate,
     CommentOut,
     DependencyCreate,
@@ -51,8 +54,11 @@ async def _enrich(rows: list[dict]) -> list[TaskOut]:
         if blocker_status is not None and blocker_status != "complete":
             blocked_ids.add(d["task_id"])
 
+    today = datetime.now(timezone.utc).date().isoformat()
+
     out = []
     for r in rows:
+        overdue = bool(r.get("scheduled_end")) and r["scheduled_end"] < today and r.get("status") != "complete"
         out.append(
             TaskOut(
                 **r,
@@ -60,6 +66,7 @@ async def _enrich(rows: list[dict]) -> list[TaskOut]:
                 subtask_complete=subtask_done.get(r["id"], 0),
                 comment_count=comment_counts.get(r["id"], 0),
                 blocked=r["id"] in blocked_ids,
+                overdue=overdue,
             )
         )
     return out
@@ -108,6 +115,27 @@ async def reorder_tasks(body: ReorderRequest, _: CurrentUser = Depends(get_curre
     for item in body.items:
         await db_patch("schedule_items", item.id, {"status": item.status, "position": item.position})
     return {"ok": True}
+
+
+@router.patch("/bulk")
+async def bulk_update_tasks(body: BulkUpdateRequest, _: CurrentUser = Depends(get_current_user)):
+    updates: dict = {}
+    if body.status is not None:
+        updates["status"] = body.status
+    if body.assigned_to is not None:
+        updates["assigned_to"] = body.assigned_to
+    if not updates:
+        raise HTTPException(status_code=400, detail="No fields to update")
+    for task_id in body.ids:
+        await db_patch("schedule_items", task_id, updates)
+    return {"ok": True, "updated": len(body.ids)}
+
+
+@router.post("/bulk-delete")
+async def bulk_delete_tasks(body: BulkDeleteRequest, _: CurrentUser = Depends(get_current_user)):
+    for task_id in body.ids:
+        await db_delete("schedule_items", task_id)
+    return {"ok": True, "deleted": len(body.ids)}
 
 
 @router.get("/views", response_model=list[BoardViewOut])
@@ -224,7 +252,16 @@ async def create_comment(task_id: str, body: CommentCreate, current_user: Curren
 
 @router.patch("/{task_id}", response_model=TaskOut)
 async def update_task(task_id: str, body: TaskUpdate, _: CurrentUser = Depends(get_current_user)):
-    await db_patch("schedule_items", task_id, body.model_dump(exclude_none=True))
+    current = await db_get("schedule_items", f"?id=eq.{task_id}&select=version")
+    if not current:
+        raise HTTPException(status_code=404, detail="Task not found")
+    if body.expected_version is not None and body.expected_version != current[0]["version"]:
+        raise HTTPException(
+            status_code=409, detail="This task was updated by someone else. Reload to see the latest changes."
+        )
+    updates = body.model_dump(exclude_none=True, exclude={"expected_version"})
+    updates["version"] = current[0]["version"] + 1
+    await db_patch("schedule_items", task_id, updates)
     full = await db_get("schedule_items", f"?id=eq.{task_id}&select=*,projects(name),subcontractors(company_name,trade)")
     enriched = await _enrich(full)
     return enriched[0]

@@ -37,7 +37,7 @@ function TaskCard({ task, onClick, dragDisabled }: { task: Task; onClick: () => 
     id: task.id,
     disabled: dragDisabled,
   });
-  const overdue = task.scheduled_end && new Date(task.scheduled_end) < new Date() && task.status !== 'complete';
+  const overdue = task.overdue;
 
   return (
     <div
