@@ -9,7 +9,6 @@ interface LineItemModalProps {
   estimateId: string;
   item?: EstimateLineItem;
   defaultBucket?: string;
-  defaultGroupName?: string;
   onClose: () => void;
   onSaved: () => void;
   onDeleted?: () => void;
@@ -28,24 +27,40 @@ const COST_TYPES = [
   { value: 'subcontractor', label: 'Subcontractor' },
 ];
 
-export function LineItemModal({ estimateId, item, defaultBucket, defaultGroupName, onClose, onSaved, onDeleted }: LineItemModalProps) {
+function round2(n: number): number {
+  return Math.round(n * 100) / 100;
+}
+
+export function LineItemModal({ estimateId, item, defaultBucket, onClose, onSaved, onDeleted }: LineItemModalProps) {
   const [costCodes, setCostCodes] = useState<CostCode[]>([]);
   const [costCodeId, setCostCodeId] = useState(item?.cost_code_id || '');
-  const [groupName, setGroupName] = useState(item?.group_name || defaultGroupName || '');
+  const [costCodeQuery, setCostCodeQuery] = useState('');
   const [bucket, setBucket] = useState(item?.bucket || defaultBucket || 'construction');
   const [title, setTitle] = useState(item?.title || '');
-  const [description, setDescription] = useState(item?.description || '');
   const [quantity, setQuantity] = useState(String(item?.quantity ?? 1));
-  const [unit, setUnit] = useState(item?.unit || '');
   const [unitCost, setUnitCost] = useState(String(item?.unit_cost ?? 0));
   const [costType, setCostType] = useState(item?.cost_type || 'none');
   const [markupType, setMarkupType] = useState(item?.markup_type || 'percent');
   const [markupValue, setMarkupValue] = useState(String(item?.markup_value ?? 0));
-  const [estimatedHours, setEstimatedHours] = useState(item?.estimated_hours != null ? String(item.estimated_hours) : '');
+  const [estimatedDays, setEstimatedDays] = useState(item?.estimated_days != null ? String(item.estimated_days) : '');
   const [notesInternal, setNotesInternal] = useState(item?.notes_internal || '');
   const [notesExternal, setNotesExternal] = useState(item?.notes_external || '');
   const [error, setError] = useState('');
   const [saving, setSaving] = useState(false);
+
+  useEffect(() => {
+    if (item?.cost_code_id && costCodes.length) {
+      const found = costCodes.find((c) => c.id === item.cost_code_id);
+      if (found) setCostCodeQuery(`${found.code} - ${found.name}`);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [costCodes]);
+
+  function handleCostCodeInput(value: string) {
+    setCostCodeQuery(value);
+    const match = costCodes.find((c) => `${c.code} - ${c.name}` === value);
+    setCostCodeId(match ? match.id : '');
+  }
 
   const [showReference, setShowReference] = useState(!item);
   const [refQuery, setRefQuery] = useState('');
@@ -85,16 +100,14 @@ export function LineItemModal({ estimateId, item, defaultBucket, defaultGroupNam
 
   function useReference(ref: LineItemReference) {
     setTitle(ref.title);
-    setDescription(ref.description || '');
     setQuantity(String(ref.quantity));
-    setUnit(ref.unit || '');
     setUnitCost(String(ref.unit_cost));
     setCostType(ref.cost_type);
     setMarkupType(ref.markup_type);
     setMarkupValue(String(ref.markup_value));
-    setEstimatedHours(ref.estimated_hours != null ? String(ref.estimated_hours) : '');
+    setEstimatedDays(ref.estimated_days != null ? String(ref.estimated_days) : '');
     setNotesInternal(ref.notes_internal || '');
-    setNotesExternal(ref.notes_external || '');
+    setNotesExternal(ref.notes_external || (ref.description || ''));
   }
 
   const qty = parseFloat(quantity) || 0;
@@ -104,6 +117,18 @@ export function LineItemModal({ estimateId, item, defaultBucket, defaultGroupNam
   const ownerPrice = markupType === 'flat' ? builderCost + markup : builderCost * (1 + markup / 100);
   const profit = ownerPrice - builderCost;
   const margin = ownerPrice > 0 ? (profit / ownerPrice) * 100 : 0;
+
+  function handleMarkupTypeChange(newType: string) {
+    if (newType === markupType) return;
+    if (builderCost > 0) {
+      if (newType === 'flat') {
+        setMarkupValue(String(round2(builderCost * (markup / 100))));
+      } else {
+        setMarkupValue(String(round2((markup / builderCost) * 100)));
+      }
+    }
+    setMarkupType(newType);
+  }
 
   async function handleSubmit(e: FormEvent) {
     e.preventDefault();
@@ -115,17 +140,14 @@ export function LineItemModal({ estimateId, item, defaultBucket, defaultGroupNam
     setError('');
     const payload = {
       cost_code_id: costCodeId || null,
-      group_name: groupName.trim() || null,
       bucket,
       title: title.trim(),
-      description: description.trim() || null,
       quantity: qty,
-      unit: unit.trim() || null,
       unit_cost: cost,
       cost_type: costType,
       markup_type: markupType,
       markup_value: markup,
-      estimated_hours: estimatedHours.trim() ? parseFloat(estimatedHours) : null,
+      estimated_days: estimatedDays.trim() ? parseFloat(estimatedDays) : null,
       notes_internal: notesInternal.trim() || null,
       notes_external: notesExternal.trim() || null,
     };
@@ -200,9 +222,8 @@ export function LineItemModal({ estimateId, item, defaultBucket, defaultGroupNam
                         <div style={{ fontSize: 12, color: 'var(--t2)' }}>{r.project_name || 'Unknown project'}</div>
                         <div style={{ fontSize: 13, fontWeight: 500 }}>{r.title}</div>
                         <div style={{ fontSize: 12, color: 'var(--t2)', marginTop: 2 }}>
-                          {r.quantity}
-                          {r.unit ? ` ${r.unit}` : ''} @ {fmt(r.unit_cost)} · builder {fmt(r.builder_cost)} · client {fmt(r.owner_price)}
-                          {r.estimated_hours != null ? ` · ~${r.estimated_hours}h` : ''}
+                          {r.quantity} @ {fmt(r.unit_cost)} · builder {fmt(r.builder_cost)} · client {fmt(r.owner_price)}
+                          {r.estimated_days != null ? ` · ~${r.estimated_days} days` : ''}
                         </div>
                       </div>
                       <div style={{ display: 'flex', gap: 6, flexShrink: 0 }}>
@@ -249,16 +270,6 @@ export function LineItemModal({ estimateId, item, defaultBucket, defaultGroupNam
             <input className="fi" value={title} onChange={(e) => setTitle(e.target.value)} placeholder="Vanity" />
           </div>
           <div className="fg">
-            <label className="fl">Group</label>
-            <input className="fi" value={groupName} onChange={(e) => setGroupName(e.target.value)} placeholder="Allowance" />
-          </div>
-        </div>
-        <div className="fg">
-          <label className="fl">Description</label>
-          <textarea className="fi" value={description} onChange={(e) => setDescription(e.target.value)} />
-        </div>
-        <div className="fr3">
-          <div className="fg">
             <label className="fl">Bucket</label>
             <select className="fi" value={bucket} onChange={(e) => setBucket(e.target.value)}>
               {BUCKETS.map((b) => (
@@ -268,16 +279,22 @@ export function LineItemModal({ estimateId, item, defaultBucket, defaultGroupNam
               ))}
             </select>
           </div>
+        </div>
+        <div className="fr3">
           <div className="fg">
             <label className="fl">Cost code</label>
-            <select className="fi" value={costCodeId} onChange={(e) => setCostCodeId(e.target.value)}>
-              <option value="">— None —</option>
+            <input
+              className="fi"
+              list="line-item-cost-code-options"
+              value={costCodeQuery}
+              onChange={(e) => handleCostCodeInput(e.target.value)}
+              placeholder="Start typing, e.g. electrical…"
+            />
+            <datalist id="line-item-cost-code-options">
               {costCodes.map((c) => (
-                <option key={c.id} value={c.id}>
-                  {c.code} - {c.name}
-                </option>
+                <option key={c.id} value={`${c.code} - ${c.name}`} />
               ))}
-            </select>
+            </datalist>
           </div>
           <div className="fg">
             <label className="fl">Cost type</label>
@@ -289,25 +306,19 @@ export function LineItemModal({ estimateId, item, defaultBucket, defaultGroupNam
               ))}
             </select>
           </div>
-        </div>
-        <div className="fr3">
           <div className="fg">
             <label className="fl">Quantity</label>
             <input className="fi" type="number" value={quantity} onChange={(e) => setQuantity(e.target.value)} />
           </div>
-          <div className="fg">
-            <label className="fl">Unit</label>
-            <input className="fi" value={unit} onChange={(e) => setUnit(e.target.value)} placeholder="EA, SF, LS…" />
-          </div>
+        </div>
+        <div className="fr3">
           <div className="fg">
             <label className="fl">Unit cost ($)</label>
             <input className="fi" type="number" value={unitCost} onChange={(e) => setUnitCost(e.target.value)} />
           </div>
-        </div>
-        <div className="fr3">
           <div className="fg">
             <label className="fl">Markup type</label>
-            <select className="fi" value={markupType} onChange={(e) => setMarkupType(e.target.value)}>
+            <select className="fi" value={markupType} onChange={(e) => handleMarkupTypeChange(e.target.value)}>
               <option value="percent">Percent (%)</option>
               <option value="flat">Flat ($)</option>
             </select>
@@ -316,19 +327,26 @@ export function LineItemModal({ estimateId, item, defaultBucket, defaultGroupNam
             <label className="fl">Markup value</label>
             <input className="fi" type="number" value={markupValue} onChange={(e) => setMarkupValue(e.target.value)} />
           </div>
-          <div className="fg">
-            <label className="fl">Est. hours</label>
-            <input className="fi" type="number" value={estimatedHours} onChange={(e) => setEstimatedHours(e.target.value)} placeholder="Optional" />
-          </div>
+        </div>
+        <div className="fg">
+          <label className="fl">Est. workdays</label>
+          <input
+            className="fi"
+            type="number"
+            value={estimatedDays}
+            onChange={(e) => setEstimatedDays(e.target.value)}
+            placeholder="Optional"
+            style={{ maxWidth: 180 }}
+          />
         </div>
         <div className="fr">
           <div className="fg">
-            <label className="fl">Internal notes</label>
-            <textarea className="fi" value={notesInternal} onChange={(e) => setNotesInternal(e.target.value)} />
+            <label className="fl">Description (client-facing)</label>
+            <textarea className="fi" value={notesExternal} onChange={(e) => setNotesExternal(e.target.value)} />
           </div>
           <div className="fg">
-            <label className="fl">Client-facing notes</label>
-            <textarea className="fi" value={notesExternal} onChange={(e) => setNotesExternal(e.target.value)} />
+            <label className="fl">Internal notes</label>
+            <textarea className="fi" value={notesInternal} onChange={(e) => setNotesInternal(e.target.value)} />
           </div>
         </div>
 
