@@ -88,6 +88,8 @@ export default function EstimateWorksheet() {
   const builderCostTotal = items.reduce((s, i) => s + (i.builder_cost || 0), 0);
   const clientPriceTotal = estimate.grand_total_owner_price || 0;
   const profitTotal = clientPriceTotal - builderCostTotal;
+  const hoursTotal = items.reduce((s, i) => s + (i.estimated_hours || 0), 0);
+  const hasHours = items.some((i) => i.estimated_hours != null);
 
   async function saveMeta() {
     if (!id) return;
@@ -265,6 +267,12 @@ export default function EstimateWorksheet() {
           </div>
           {estimate.sent_at && <div className="m-sub">Sent {fmtD(estimate.sent_at)}</div>}
         </div>
+        {hasHours && (
+          <div className="metric">
+            <div className="m-label">Estimated hours</div>
+            <div className="m-val" style={{ fontSize: 17 }}>{hoursTotal.toLocaleString()}h</div>
+          </div>
+        )}
       </div>
 
       <div className="sh">
@@ -296,6 +304,7 @@ export default function EstimateWorksheet() {
                   <th style={{ textAlign: 'right' }}>Unit price</th>
                   <th style={{ textAlign: 'right' }}>Builder cost</th>
                   <th style={{ textAlign: 'right' }}>Client price</th>
+                  {hasHours && <th style={{ textAlign: 'right' }}>Hours</th>}
                 </tr>
               </thead>
               <tbody>
@@ -316,6 +325,7 @@ export default function EstimateWorksheet() {
                     <td style={{ textAlign: 'right' }}>{fmt(item.unit_cost)}</td>
                     <td style={{ textAlign: 'right' }}>{fmt(item.builder_cost)}</td>
                     <td style={{ textAlign: 'right', fontWeight: 500 }}>{fmt(item.owner_price)}</td>
+                    {hasHours && <td style={{ textAlign: 'right' }}>{item.estimated_hours != null ? `${item.estimated_hours}h` : '—'}</td>}
                   </tr>
                 ))}
               </tbody>

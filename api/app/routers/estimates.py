@@ -19,6 +19,7 @@ from ..schemas.estimates import (
     EstimateUpdate,
     LineItemCreate,
     LineItemOut,
+    LineItemReference,
     LineItemUpdate,
 )
 from ..supabase_client import db_delete, db_get, db_patch, db_post
@@ -58,6 +59,52 @@ async def list_estimates(project_id: Optional[str] = None, _: CurrentUser = Depe
     if project_id:
         query += f"&project_id=eq.{project_id}"
     return await db_get("estimates", query)
+
+
+@router.get("/line-items/search", response_model=list[LineItemReference])
+async def search_line_items(
+    cost_code_id: Optional[str] = None,
+    q: Optional[str] = None,
+    exclude_estimate_id: Optional[str] = None,
+    _: CurrentUser = Depends(get_current_user),
+):
+    if not cost_code_id and not q:
+        return []
+    query = "?order=created_at.desc&limit=25&select=*,estimates(project_id,projects(name))"
+    if cost_code_id:
+        query += f"&cost_code_id=eq.{cost_code_id}"
+    if q:
+        escaped = q.replace(",", "").replace("(", "").replace(")", "")
+        query += f"&or=(title.ilike.*{escaped}*,description.ilike.*{escaped}*)"
+    if exclude_estimate_id:
+        query += f"&estimate_id=neq.{exclude_estimate_id}"
+    rows = await db_get("estimate_line_items", query)
+    results = []
+    for r in rows:
+        est = r.get("estimates") or {}
+        proj = est.get("projects") or {}
+        results.append(
+            LineItemReference(
+                id=r["id"],
+                estimate_id=r["estimate_id"],
+                project_name=(proj.get("name") or "").split("|")[0].strip() or None,
+                title=r["title"],
+                description=r.get("description"),
+                quantity=r["quantity"],
+                unit=r.get("unit"),
+                unit_cost=r["unit_cost"],
+                cost_type=r["cost_type"],
+                builder_cost=r["builder_cost"],
+                markup_type=r["markup_type"],
+                markup_value=r["markup_value"],
+                owner_price=r["owner_price"],
+                estimated_hours=r.get("estimated_hours"),
+                notes_internal=r.get("notes_internal"),
+                notes_external=r.get("notes_external"),
+                created_at=r["created_at"],
+            )
+        )
+    return results
 
 
 @router.get("/{estimate_id}", response_model=EstimateOut)
