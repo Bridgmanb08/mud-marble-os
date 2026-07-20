@@ -72,7 +72,10 @@ ALEX_MONTHLY_TARGET = 7600.0
 def _parse_dt(value):
     if not value:
         return None
-    return datetime.fromisoformat(value.replace("Z", "+00:00"))
+    dt = datetime.fromisoformat(value.replace("Z", "+00:00"))
+    if dt.tzinfo is None:
+        dt = dt.replace(tzinfo=timezone.utc)
+    return dt
 
 
 @router.get("", response_model=DashboardSummary)

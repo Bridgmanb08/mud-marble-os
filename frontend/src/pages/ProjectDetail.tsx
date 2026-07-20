@@ -4,8 +4,12 @@ import { IconArrowLeft, IconPlus } from '@tabler/icons-react';
 import { api } from '../api/client';
 import { useToast } from '../components/ui/Toast';
 import { fmt, fmtD } from '../lib/format';
-import type { Project, ProjectNote } from '../types';
+import type { ChangeOrder, Estimate, EstimateLineItem, Invoice, Project, ProjectNote, Task } from '../types';
 import { NewNoteModal } from '../components/projects/NewNoteModal';
+import { NewChangeOrderModal } from '../components/change-orders/NewChangeOrderModal';
+import { NewInvoiceModal } from '../components/invoices/NewInvoiceModal';
+import { NewTaskModal } from '../components/tasks/NewTaskModal';
+import { TaskDetailDrawer } from '../components/tasks/TaskDetailDrawer';
 
 const TABS = ['Overview', 'Notes', 'Estimate', 'Change Orders', 'Invoices', 'Schedule'];
 
@@ -16,23 +20,64 @@ const NOTE_COLORS: Record<string, string> = {
   daily_log: 'var(--green)',
 };
 
+const CO_TYPE_BADGE: Record<string, string> = { oversight: 'bg-amber', client_addition: 'bg-blue', unforeseen: 'bg-red' };
+const CO_STATUS_BADGE: Record<string, string> = { pending: 'bg-gray', sent: 'bg-amber', approved: 'bg-green', rejected: 'bg-red' };
+const INVOICE_STATUS_BADGE: Record<string, string> = { draft: 'bg-gray', sent: 'bg-amber', paid: 'bg-green', overdue: 'bg-red', void: 'bg-gray' };
+const BUCKET_LABEL: Record<string, string> = { pm_fee: 'PM Fee', construction: 'Construction', allowance: 'Allowance' };
+
 export default function ProjectDetail() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const toast = useToast();
   const [project, setProject] = useState<Project | null>(null);
   const [notes, setNotes] = useState<ProjectNote[]>([]);
+  const [estimates, setEstimates] = useState<Estimate[]>([]);
+  const [lineItems, setLineItems] = useState<EstimateLineItem[]>([]);
+  const [changeOrders, setChangeOrders] = useState<ChangeOrder[]>([]);
+  const [invoices, setInvoices] = useState<Invoice[]>([]);
+  const [tasks, setTasks] = useState<Task[]>([]);
   const [tab, setTab] = useState('Overview');
   const [showNewNote, setShowNewNote] = useState(false);
+  const [showNewCO, setShowNewCO] = useState(false);
+  const [showNewInvoice, setShowNewInvoice] = useState(false);
+  const [showNewTask, setShowNewTask] = useState(false);
+  const [detailTask, setDetailTask] = useState<Task | undefined>(undefined);
+  const [startingEstimate, setStartingEstimate] = useState(false);
 
   async function loadNotes() {
     if (!id) return;
     try {
-      const data = await api.get<ProjectNote[]>(`/projects/${id}/notes`);
-      setNotes(data);
+      setNotes(await api.get<ProjectNote[]>(`/projects/${id}/notes`));
     } catch (e) {
       toast(e instanceof Error ? e.message : 'Failed to load notes', true);
     }
+  }
+
+  async function loadEstimates() {
+    if (!id) return;
+    const ests = await api.get<Estimate[]>(`/estimates?project_id=${id}`).catch(() => []);
+    setEstimates(ests);
+    const latest = ests[0];
+    if (latest) {
+      setLineItems(await api.get<EstimateLineItem[]>(`/estimates/${latest.id}/items`).catch(() => []));
+    } else {
+      setLineItems([]);
+    }
+  }
+
+  async function loadChangeOrders() {
+    if (!id) return;
+    setChangeOrders(await api.get<ChangeOrder[]>(`/change-orders?project_id=${id}`).catch(() => []));
+  }
+
+  async function loadInvoices() {
+    if (!id) return;
+    setInvoices(await api.get<Invoice[]>(`/invoices?project_id=${id}`).catch(() => []));
+  }
+
+  async function loadTasks() {
+    if (!id) return;
+    setTasks(await api.get<Task[]>(`/tasks?project_id=${id}`).catch(() => []));
   }
 
   useEffect(() => {
@@ -42,6 +87,10 @@ export default function ProjectDetail() {
       .then(setProject)
       .catch(() => toast('Failed to load project', true));
     loadNotes();
+    loadEstimates();
+    loadChangeOrders();
+    loadInvoices();
+    loadTasks();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [id]);
 
@@ -51,6 +100,32 @@ export default function ProjectDetail() {
         <div className="empty-t">Loading…</div>
       </div>
     );
+  }
+
+  async function startEstimate() {
+    if (!id) return;
+    setStartingEstimate(true);
+    try {
+      await api.post('/estimates', { project_id: id, version: 1, status: 'draft', pm_fee_total: 0 });
+      toast('Estimate started');
+      await loadEstimates();
+    } catch (e) {
+      toast(e instanceof Error ? e.message : 'Failed to start estimate', true);
+    } finally {
+      setStartingEstimate(false);
+    }
+  }
+
+  const latestEstimate = estimates[0];
+  const linesByBucket: Record<string, EstimateLineItem[]> = {};
+  for (const li of lineItems) {
+    if (!linesByBucket[li.bucket]) linesByBucket[li.bucket] = [];
+    linesByBucket[li.bucket].push(li);
+  }
+
+  function openTask(taskId: string) {
+    const t = tasks.find((t) => t.id === taskId);
+    if (t) setDetailTask(t);
   }
 
   return (
@@ -70,20 +145,11 @@ export default function ProjectDetail() {
       </div>
 
       <div className="tabs" style={{ margin: '0 -24px 0', borderRadius: 0 }}>
-        {TABS.map((t) => {
-          const enabled = t === 'Overview' || t === 'Notes';
-          return (
-            <button
-              key={t}
-              type="button"
-              className={`tab${tab === t ? ' on' : ''}${enabled ? '' : ' disabled'}`}
-              onClick={() => enabled && setTab(t)}
-              disabled={!enabled}
-            >
-              {t}
-            </button>
-          );
-        })}
+        {TABS.map((t) => (
+          <button key={t} type="button" className={`tab${tab === t ? ' on' : ''}`} onClick={() => setTab(t)}>
+            {t}
+          </button>
+        ))}
       </div>
       <div className="tb" style={{ borderRadius: '0 0 12px 12px' }}>
         {tab === 'Overview' && (
@@ -145,6 +211,189 @@ export default function ProjectDetail() {
             )}
           </>
         )}
+
+        {tab === 'Estimate' && (
+          <>
+            {!latestEstimate ? (
+              <div className="empty">
+                <div className="empty-t">No estimate yet</div>
+                <div className="empty-s" style={{ marginBottom: 14 }}>Start an estimate to break down costs by PM fee, construction, and allowances.</div>
+                <button className="btn btn-p btn-sm" onClick={startEstimate} disabled={startingEstimate}>
+                  <IconPlus size={14} /> {startingEstimate ? 'Starting…' : 'Start estimate'}
+                </button>
+              </div>
+            ) : (
+              <>
+                <div className="sh">
+                  <div className="st">
+                    Version {latestEstimate.version} · <span className="badge bg-gray">{latestEstimate.status.replace(/_/g, ' ')}</span>
+                  </div>
+                </div>
+                <div className="metrics" style={{ marginBottom: 20 }}>
+                  <div className="metric">
+                    <div className="m-label">PM fee</div>
+                    <div className="m-val" style={{ fontSize: 17 }}>{fmt(latestEstimate.pm_fee_total)}</div>
+                  </div>
+                  <div className="metric">
+                    <div className="m-label">Construction</div>
+                    <div className="m-val" style={{ fontSize: 17 }}>{fmt(latestEstimate.construction_total_owner_price)}</div>
+                  </div>
+                  <div className="metric">
+                    <div className="m-label">Allowances</div>
+                    <div className="m-val" style={{ fontSize: 17 }}>{fmt(latestEstimate.allowance_total)}</div>
+                  </div>
+                  <div className="metric">
+                    <div className="m-label">Grand total</div>
+                    <div className="m-val" style={{ fontSize: 17, fontWeight: 700 }}>{fmt(latestEstimate.grand_total_owner_price)}</div>
+                  </div>
+                </div>
+                {Object.keys(linesByBucket).length === 0 ? (
+                  <div className="empty-s">No line items yet.</div>
+                ) : (
+                  Object.entries(linesByBucket).map(([bucket, items]) => (
+                    <div key={bucket} style={{ marginBottom: 18 }}>
+                      <div className="ibt">{BUCKET_LABEL[bucket] || bucket}</div>
+                      <table className="tbl">
+                        <thead>
+                          <tr>
+                            <th>Description</th>
+                            <th style={{ textAlign: 'right' }}>Builder cost</th>
+                            <th style={{ textAlign: 'right' }}>Owner price</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {items.map((li) => (
+                            <tr key={li.id}>
+                              <td>{li.description}</td>
+                              <td style={{ textAlign: 'right' }}>{fmt(li.builder_cost)}</td>
+                              <td style={{ textAlign: 'right', fontWeight: 500 }}>{fmt(li.owner_price)}</td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  ))
+                )}
+              </>
+            )}
+          </>
+        )}
+
+        {tab === 'Change Orders' && (
+          <>
+            <div className="sh">
+              <div className="st">{changeOrders.length} change orders</div>
+              <button className="btn btn-p btn-sm" onClick={() => setShowNewCO(true)}>
+                <IconPlus size={14} /> New change order
+              </button>
+            </div>
+            {changeOrders.length === 0 ? (
+              <div className="empty-s">No change orders yet.</div>
+            ) : (
+              <table className="tbl">
+                <thead>
+                  <tr>
+                    <th>CO #</th>
+                    <th>Title</th>
+                    <th>Type</th>
+                    <th style={{ textAlign: 'right' }}>Owner price</th>
+                    <th>Status</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {changeOrders.map((co) => (
+                    <tr key={co.id}>
+                      <td>{co.co_number ?? '—'}</td>
+                      <td style={{ fontWeight: 500 }}>{co.title}</td>
+                      <td><span className={`badge ${CO_TYPE_BADGE[co.co_type] || 'bg-gray'}`}>{co.co_type.replace('_', ' ')}</span></td>
+                      <td style={{ textAlign: 'right' }}>{fmt(co.owner_price)}</td>
+                      <td>
+                        <span className={`badge ${CO_STATUS_BADGE[co.status] || 'bg-gray'}`}>{co.status}</span>
+                        {co.sop_breach && <span className="badge bg-red" style={{ marginLeft: 6 }}>SOP breach</span>}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            )}
+          </>
+        )}
+
+        {tab === 'Invoices' && (
+          <>
+            <div className="sh">
+              <div className="st">{invoices.length} invoices</div>
+              <button className="btn btn-p btn-sm" onClick={() => setShowNewInvoice(true)}>
+                <IconPlus size={14} /> Create invoice
+              </button>
+            </div>
+            {invoices.length === 0 ? (
+              <div className="empty-s">No invoices yet.</div>
+            ) : (
+              <table className="tbl">
+                <thead>
+                  <tr>
+                    <th>Invoice #</th>
+                    <th>Type</th>
+                    <th style={{ textAlign: 'right' }}>Amount due</th>
+                    <th style={{ textAlign: 'right' }}>Paid</th>
+                    <th>Due</th>
+                    <th>Status</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {invoices.map((inv) => (
+                    <tr key={inv.id}>
+                      <td style={{ fontWeight: 500 }}>{inv.invoice_number || 'Draft'}</td>
+                      <td>{inv.invoice_type}</td>
+                      <td style={{ textAlign: 'right' }}>{fmt(inv.amount_due)}</td>
+                      <td style={{ textAlign: 'right' }}>{fmt(inv.amount_paid)}</td>
+                      <td>{fmtD(inv.due_date)}</td>
+                      <td><span className={`badge ${INVOICE_STATUS_BADGE[inv.status] || 'bg-gray'}`}>{inv.status}</span></td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            )}
+          </>
+        )}
+
+        {tab === 'Schedule' && (
+          <>
+            <div className="sh">
+              <div className="st">{tasks.length} tasks</div>
+              <button className="btn btn-p btn-sm" onClick={() => setShowNewTask(true)}>
+                <IconPlus size={14} /> New task
+              </button>
+            </div>
+            {tasks.length === 0 ? (
+              <div className="empty-s">No tasks scheduled yet.</div>
+            ) : (
+              <table className="tbl">
+                <thead>
+                  <tr>
+                    <th>Title</th>
+                    <th>Assignee</th>
+                    <th>Status</th>
+                    <th>Priority</th>
+                    <th>Due</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {tasks.map((t) => (
+                    <tr key={t.id} onClick={() => openTask(t.id)} style={{ cursor: 'pointer' }}>
+                      <td style={{ fontWeight: 500 }}>{t.title}</td>
+                      <td>{t.assigned_to || '—'}</td>
+                      <td><span className="badge bg-gray">{t.status.replace('_', ' ')}</span></td>
+                      <td>{t.priority}</td>
+                      <td>{fmtD(t.scheduled_end)}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            )}
+          </>
+        )}
       </div>
 
       {showNewNote && id && (
@@ -155,6 +404,60 @@ export default function ProjectDetail() {
             setShowNewNote(false);
             toast('Note saved');
             loadNotes();
+          }}
+        />
+      )}
+
+      {showNewCO && id && (
+        <NewChangeOrderModal
+          defaultProjectId={id}
+          onClose={() => setShowNewCO(false)}
+          onCreated={() => {
+            setShowNewCO(false);
+            toast('Change order created');
+            loadChangeOrders();
+          }}
+        />
+      )}
+
+      {showNewInvoice && id && (
+        <NewInvoiceModal
+          defaultProjectId={id}
+          onClose={() => setShowNewInvoice(false)}
+          onCreated={() => {
+            setShowNewInvoice(false);
+            toast('Invoice created');
+            loadInvoices();
+          }}
+        />
+      )}
+
+      {showNewTask && id && (
+        <NewTaskModal
+          defaultProjectId={id}
+          onClose={() => setShowNewTask(false)}
+          onSaved={() => {
+            setShowNewTask(false);
+            toast('Task created');
+            loadTasks();
+          }}
+        />
+      )}
+
+      {detailTask && (
+        <TaskDetailDrawer
+          task={detailTask}
+          allTasks={tasks}
+          onClose={() => setDetailTask(undefined)}
+          onSaved={() => {
+            setDetailTask(undefined);
+            toast('Task updated');
+            loadTasks();
+          }}
+          onDeleted={() => {
+            setDetailTask(undefined);
+            toast('Task deleted');
+            loadTasks();
           }}
         />
       )}

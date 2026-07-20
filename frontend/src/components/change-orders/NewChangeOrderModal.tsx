@@ -6,11 +6,12 @@ import type { Project } from '../../types';
 interface NewChangeOrderModalProps {
   onClose: () => void;
   onCreated: () => void;
+  defaultProjectId?: string;
 }
 
-export function NewChangeOrderModal({ onClose, onCreated }: NewChangeOrderModalProps) {
+export function NewChangeOrderModal({ onClose, onCreated, defaultProjectId }: NewChangeOrderModalProps) {
   const [projects, setProjects] = useState<Project[]>([]);
-  const [projectId, setProjectId] = useState('');
+  const [projectId, setProjectId] = useState(defaultProjectId || '');
   const [title, setTitle] = useState('');
   const [coType, setCoType] = useState('client_addition');
   const [ownerPrice, setOwnerPrice] = useState('');
