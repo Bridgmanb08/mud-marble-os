@@ -471,12 +471,41 @@ export function KanbanBoard({
       }
     }
 
+    // findColumn(active.id) now reflects the *destination* column, since
+    // handleDragOver already moved it there live during the drag. Compare
+    // against the pre-drag snapshot to see whether this drag actually
+    // changed the task's status (moved columns) or just reordered in place.
+    const originalCol = rollback
+      ? Object.keys(rollback).find((col) => rollback[col].includes(active.id as string))
+      : undefined;
+    const statusChanged = originalCol !== undefined && originalCol !== activeCol;
+
+    if (filtersActive && !statusChanged) {
+      // Reordering position within a column requires knowing every sibling's
+      // order, but a filter can be hiding some of them -- recomputing
+      // positions from this partial view would silently scramble the hidden
+      // ones. Skip saving the reorder and snap back to the last known order.
+      if (rollback) setColumns(rollback);
+      return;
+    }
+
     // Send each task's last-known version so the backend can reject the
     // whole batch (409) if something else changed the board first, rather
     // than silently overwriting a concurrent edit.
-    const items = Object.entries(finalColumns).flatMap(([status, ids]) =>
-      ids.map((id, index) => ({ id, status, position: index, expected_version: tasksById.get(id)?.version }))
-    );
+    const items = filtersActive
+      ? // Cross-column moves are safe even while filtered -- they only touch
+        // the dragged task, not any hidden sibling's position.
+        [
+          {
+            id: active.id as string,
+            status: activeCol,
+            position: Date.now(),
+            expected_version: tasksById.get(active.id as string)?.version,
+          },
+        ]
+      : Object.entries(finalColumns).flatMap(([status, ids]) =>
+          ids.map((id, index) => ({ id, status, position: index, expected_version: tasksById.get(id)?.version }))
+        );
 
     try {
       await api.patch('/tasks/reorder', { items });
@@ -494,8 +523,8 @@ export function KanbanBoard({
     <>
       {filtersActive && (
         <div className="alert alert-a" style={{ marginBottom: 12 }}>
-          Clear filters to drag-and-drop reorder tasks — reordering while a filter hides other tasks in the same
-          column could scramble their order.
+          A filter is active — dragging a card to a different column still updates its status, but reordering
+          within the same column is disabled until you clear filters (it could scramble the hidden tasks' order).
         </div>
       )}
       <DndContext
@@ -515,7 +544,7 @@ export function KanbanBoard({
               tasksById={tasksById}
               onTaskClick={onTaskClick}
               onAddTask={() => onAddTask(col.id)}
-              dragDisabled={Boolean(filtersActive)}
+              dragDisabled={false}
               onChanged={onChanged}
               projects={projects}
               directory={directory}
