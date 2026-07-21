@@ -1,13 +1,34 @@
+import { useState } from 'react';
 import { fmtD } from '../../../lib/format';
+import { TaskQuickViewModal } from '../TaskQuickViewModal';
 import type { DashboardSummary } from '../../../types';
 
+type Milestone = DashboardSummary['contractor_milestones'][number];
+
 export function ContractorMilestonesWidget({ data }: { data: DashboardSummary }) {
-  const items = data.contractor_milestones;
+  const [dismissed, setDismissed] = useState<Set<string>>(new Set());
+  const [selected, setSelected] = useState<Milestone | null>(null);
+  const items = data.contractor_milestones.filter((t) => !dismissed.has(t.id));
   if (!items.length) return <div style={{ fontSize: 13, color: 'var(--t2)' }}>No milestones scheduled.</div>;
   return (
     <>
       {items.map((t) => (
-        <div key={t.id} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '7px 0', borderBottom: '1px solid var(--border)' }}>
+        <button
+          key={t.id}
+          type="button"
+          className="btn-reset"
+          onClick={() => setSelected(t)}
+          style={{
+            display: 'flex',
+            width: '100%',
+            textAlign: 'left',
+            alignItems: 'center',
+            gap: 10,
+            padding: '7px 0',
+            borderBottom: '1px solid var(--border)',
+            cursor: 'pointer',
+          }}
+        >
           <span className={`dot ${t.overdue ? 'dot-r' : 'dot-g'}`} />
           <div style={{ flex: 1, minWidth: 0 }}>
             <div style={{ fontSize: 12, fontWeight: 500 }}>{t.title}</div>
@@ -23,8 +44,15 @@ export function ContractorMilestonesWidget({ data }: { data: DashboardSummary })
                 ? `${t.days_until_due}d left`
                 : fmtD(t.scheduled_end)}
           </span>
-        </div>
+        </button>
       ))}
+      {selected && (
+        <TaskQuickViewModal
+          task={selected}
+          onClose={() => setSelected(null)}
+          onChanged={() => setDismissed((prev) => new Set(prev).add(selected.id))}
+        />
+      )}
     </>
   );
 }

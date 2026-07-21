@@ -18,6 +18,7 @@ from .routers import (
     quick_reminders,
     reports,
     sub_intelligence,
+    subcontractor_files,
     subcontractors,
     tasks,
     transactions,
@@ -55,6 +56,7 @@ app.include_router(change_orders.router, prefix="/api")
 app.include_router(transactions.router, prefix="/api")
 app.include_router(tasks.router, prefix="/api")
 app.include_router(subcontractors.router, prefix="/api")
+app.include_router(subcontractor_files.router, prefix="/api")
 app.include_router(sub_intelligence.router, prefix="/api")
 app.include_router(notifications.router, prefix="/api")
 app.include_router(reports.router, prefix="/api")

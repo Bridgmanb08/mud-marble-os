@@ -4,7 +4,8 @@ import { api, ApiError } from '../api/client';
 import { useToast } from '../components/ui/Toast';
 import { useAuth } from '../auth/AuthContext';
 import { Modal } from '../components/ui/Modal';
-import type { CostCode } from '../types';
+import { NewSubcontractorModal } from '../components/subcontractors/NewSubcontractorModal';
+import type { CostCode, Subcontractor } from '../types';
 
 function CostCodeModal({ onClose, onSaved }: { onClose: () => void; onSaved: () => void }) {
   const [code, setCode] = useState('');
@@ -104,8 +105,7 @@ function EditCostCodeModal({ costCode, onClose, onSaved }: { costCode: CostCode;
   );
 }
 
-export default function Settings() {
-  const { user } = useAuth();
+function CostCodesTab() {
   const toast = useToast();
   const [costCodes, setCostCodes] = useState<CostCode[] | null>(null);
   const [showNew, setShowNew] = useState(false);
@@ -121,9 +121,9 @@ export default function Settings() {
   }
 
   useEffect(() => {
-    if (user?.is_admin) load();
+    load();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [user?.is_admin]);
+  }, []);
 
   async function toggleActive(cc: CostCode) {
     try {
@@ -135,24 +135,8 @@ export default function Settings() {
     }
   }
 
-  if (!user?.is_admin) {
-    return (
-      <div className="empty">
-        <div className="empty-t">Admins only</div>
-        <div className="empty-s">Ask an admin on your team for access to Settings.</div>
-      </div>
-    );
-  }
-
   return (
     <>
-      <div className="ph">
-        <div>
-          <h1>Settings</h1>
-          <p>Admin configuration for shared reference data</p>
-        </div>
-      </div>
-
       <div className="sh">
         <div className="st">Cost codes {costCodes ? `(${costCodes.length})` : ''}</div>
         <button className="btn btn-p btn-sm" onClick={() => setShowNew(true)}>
@@ -217,6 +201,129 @@ export default function Settings() {
           }}
         />
       )}
+    </>
+  );
+}
+
+function SubcontractorsTab() {
+  const toast = useToast();
+  const [subs, setSubs] = useState<Subcontractor[] | null>(null);
+  const [showNew, setShowNew] = useState(false);
+  const [editing, setEditing] = useState<Subcontractor | undefined>(undefined);
+
+  async function load() {
+    try {
+      setSubs(await api.get<Subcontractor[]>('/subcontractors'));
+    } catch (e) {
+      toast(e instanceof Error ? e.message : 'Failed to load subcontractors', true);
+      setSubs([]);
+    }
+  }
+
+  useEffect(() => {
+    load();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  return (
+    <>
+      <div className="sh">
+        <div className="st">Subcontractors {subs ? `(${subs.length})` : ''}</div>
+        <button className="btn btn-p btn-sm" onClick={() => setShowNew(true)}>
+          <IconPlus size={14} /> Add sub
+        </button>
+      </div>
+
+      {subs === null ? (
+        <div className="empty">
+          <div className="empty-t">Loading…</div>
+        </div>
+      ) : subs.length === 0 ? (
+        <div className="empty-s">No subcontractors yet. Add your trade partners to build the roster.</div>
+      ) : (
+        <table className="tbl">
+          <thead>
+            <tr>
+              <th>Company</th>
+              <th>Trade</th>
+              <th>Contact</th>
+              <th>Status</th>
+            </tr>
+          </thead>
+          <tbody>
+            {subs.map((s) => (
+              <tr key={s.id} onClick={() => setEditing(s)} style={{ cursor: 'pointer' }}>
+                <td style={{ fontWeight: 500 }}>{s.company_name}</td>
+                <td>{s.trade || '—'}</td>
+                <td>{s.contact_name || '—'}</td>
+                <td style={{ display: 'flex', gap: 6 }}>
+                  {s.preferred && <span className="badge bg-green">Preferred</span>}
+                  {s.w9_on_file ? <span className="badge bg-green">W9 ✓</span> : <span className="badge bg-amber">W9 needed</span>}
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      )}
+
+      {showNew && (
+        <NewSubcontractorModal
+          onClose={() => setShowNew(false)}
+          onSaved={() => {
+            setShowNew(false);
+            toast('Sub added');
+            load();
+          }}
+        />
+      )}
+
+      {editing && (
+        <NewSubcontractorModal
+          sub={editing}
+          onClose={() => setEditing(undefined)}
+          onSaved={() => {
+            setEditing(undefined);
+            toast('Sub updated');
+            load();
+          }}
+        />
+      )}
+    </>
+  );
+}
+
+export default function Settings() {
+  const { user } = useAuth();
+  const [tab, setTab] = useState<'cost-codes' | 'subcontractors'>('cost-codes');
+
+  if (!user?.is_admin) {
+    return (
+      <div className="empty">
+        <div className="empty-t">Admins only</div>
+        <div className="empty-s">Ask an admin on your team for access to Settings.</div>
+      </div>
+    );
+  }
+
+  return (
+    <>
+      <div className="ph">
+        <div>
+          <h1>Settings</h1>
+          <p>Admin configuration for shared reference data</p>
+        </div>
+      </div>
+
+      <div className="tabs" style={{ marginBottom: 16 }}>
+        <button className={`tab${tab === 'cost-codes' ? ' on' : ''}`} onClick={() => setTab('cost-codes')}>
+          Cost codes
+        </button>
+        <button className={`tab${tab === 'subcontractors' ? ' on' : ''}`} onClick={() => setTab('subcontractors')}>
+          Subcontractors
+        </button>
+      </div>
+
+      {tab === 'cost-codes' ? <CostCodesTab /> : <SubcontractorsTab />}
     </>
   );
 }
