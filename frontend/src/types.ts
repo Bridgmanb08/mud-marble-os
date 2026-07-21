@@ -264,6 +264,7 @@ export interface Transaction {
   amount: number;
   payment_source: string | null;
   cost_code_id: string | null;
+  subcontractor_id: string | null;
   description: string | null;
   is_allowance: boolean;
   is_change_order: boolean;
@@ -272,6 +273,7 @@ export interface Transaction {
   created_at: string;
   projects: ProjectBrief | null;
   cost_codes: { code: string; name: string } | null;
+  subcontractors: { company_name: string; trade: string | null } | null;
 }
 
 export interface CostCode {
@@ -303,8 +305,34 @@ export interface Project {
   contract_value: number | null;
   health_status: string | null;
   is_archived: boolean;
+  checking_balance: number | null;
+  credit_card_balance: number | null;
+  pending_invoices_manual: number | null;
   created_at: string;
   clients: ClientBrief | null;
+}
+
+export interface FinancialSummary {
+  owner_price: number;
+  builder_cost: number;
+  profit: number;
+  contracted_to_subs: number;
+  paid_to_subs: number;
+  left_to_pay: number;
+  checking_balance: number | null;
+  credit_card_balance: number | null;
+  pending_invoices_manual: number | null;
+}
+
+export interface ProjectSubItem {
+  id: string;
+  project_id: string;
+  subcontractor_id: string;
+  description: string | null;
+  amount: number;
+  sort_order: number;
+  created_at: string;
+  subcontractors: { company_name: string; trade: string | null } | null;
 }
 
 export interface ProjectFile {
