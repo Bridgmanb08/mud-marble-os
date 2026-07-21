@@ -10,6 +10,53 @@ import type { CostCode, FinancialSummary, Project, ProjectSubItem, Subcontractor
 
 const TABS = ['Overview', 'Transactions', 'Subcontractors'];
 
+function CostCodeCell({
+  transaction,
+  costCodes,
+  onChange,
+}: {
+  transaction: Transaction;
+  costCodes: CostCode[];
+  onChange: (costCodeId: string | null) => void;
+}) {
+  const current = costCodes.find((c) => c.id === transaction.cost_code_id);
+  const [query, setQuery] = useState(current ? `${current.code} - ${current.name}` : '');
+
+  useEffect(() => {
+    const found = costCodes.find((c) => c.id === transaction.cost_code_id);
+    setQuery(found ? `${found.code} - ${found.name}` : '');
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [transaction.cost_code_id, costCodes]);
+
+  function handleInput(value: string) {
+    setQuery(value);
+    if (value.trim() === '') {
+      onChange(null);
+      return;
+    }
+    const match = costCodes.find((c) => `${c.code} - ${c.name}` === value);
+    if (match) onChange(match.id);
+  }
+
+  return (
+    <>
+      <input
+        className="fi"
+        list={`cost-code-options-${transaction.id}`}
+        style={{ fontSize: 12, padding: '3px 6px', minWidth: 170 }}
+        value={query}
+        onChange={(e) => handleInput(e.target.value)}
+        placeholder="Uncategorized"
+      />
+      <datalist id={`cost-code-options-${transaction.id}`}>
+        {costCodes.map((c) => (
+          <option key={c.id} value={`${c.code} - ${c.name}`} />
+        ))}
+      </datalist>
+    </>
+  );
+}
+
 export default function InHouseWorkshop() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
@@ -264,19 +311,11 @@ export default function InHouseWorkshop() {
                       {t.description || '—'}
                     </td>
                     <td onClick={(e) => e.stopPropagation()}>
-                      <select
-                        className="fi"
-                        style={{ fontSize: 12, padding: '3px 6px' }}
-                        value={t.cost_code_id || ''}
-                        onChange={(e) => patchTransaction(t.id, { cost_code_id: e.target.value || null })}
-                      >
-                        <option value="">— Uncategorized —</option>
-                        {costCodes.map((c) => (
-                          <option key={c.id} value={c.id}>
-                            {c.code} — {c.name}
-                          </option>
-                        ))}
-                      </select>
+                      <CostCodeCell
+                        transaction={t}
+                        costCodes={costCodes}
+                        onChange={(cid) => patchTransaction(t.id, { cost_code_id: cid })}
+                      />
                     </td>
                     <td onClick={(e) => e.stopPropagation()}>
                       <select
