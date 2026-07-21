@@ -1,4 +1,6 @@
 @import './styles/task-manager-extras.css';
+@import './styles/week-calendar.css';
+@import './styles/job-colors.css';
 
 :root{
   --bg:#F7F6F3;--surface:#FFF;--border:#E5E3DC;--border-md:#D1CFC7;

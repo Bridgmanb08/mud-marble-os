@@ -306,6 +306,7 @@ export interface Project {
   contract_value: number | null;
   health_status: string | null;
   is_archived: boolean;
+  color: string | null;
   checking_balance: number | null;
   credit_card_balance: number | null;
   pending_invoices_manual: number | null;

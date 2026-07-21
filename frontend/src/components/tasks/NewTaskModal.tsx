@@ -1,6 +1,8 @@
 import { useEffect, useState, type FormEvent } from 'react';
+import { IconPlus } from '@tabler/icons-react';
 import { api, ApiError } from '../../api/client';
 import { Modal } from '../ui/Modal';
+import { NewSubcontractorModal } from '../subcontractors/NewSubcontractorModal';
 import { MultiAssigneeInput } from './MultiAssigneeInput';
 import { openDatePicker } from '../../lib/datePicker';
 import type { CostCode, Project, Subcontractor, UserDirectoryEntry } from '../../types';
@@ -29,6 +31,7 @@ export function NewTaskModal({ onClose, onSaved, defaultStatus, defaultProjectId
   const [notes, setNotes] = useState('');
   const [isMilestone, setIsMilestone] = useState(false);
   const [isPunchList, setIsPunchList] = useState(false);
+  const [showNewSub, setShowNewSub] = useState(false);
   const [error, setError] = useState('');
   const [saving, setSaving] = useState(false);
 
@@ -102,15 +105,20 @@ export function NewTaskModal({ onClose, onSaved, defaultStatus, defaultProjectId
         </div>
         <div className="fg">
           <label className="fl">Subcontractor</label>
-          <select className="fi" value={subcontractorId} onChange={(e) => setSubcontractorId(e.target.value)}>
-            <option value="">— None —</option>
-            {subcontractors.map((s) => (
-              <option key={s.id} value={s.id}>
-                {s.company_name}
-                {s.trade ? ` (${s.trade})` : ''}
-              </option>
-            ))}
-          </select>
+          <div style={{ display: 'flex', gap: 6 }}>
+            <select className="fi" style={{ flex: 1 }} value={subcontractorId} onChange={(e) => setSubcontractorId(e.target.value)}>
+              <option value="">— None —</option>
+              {subcontractors.map((s) => (
+                <option key={s.id} value={s.id}>
+                  {s.company_name}
+                  {s.trade ? ` (${s.trade})` : ''}
+                </option>
+              ))}
+            </select>
+            <button type="button" className="btn btn-ghost btn-sm" onClick={() => setShowNewSub(true)} title="Add new subcontractor">
+              <IconPlus size={14} />
+            </button>
+          </div>
         </div>
         <div className="fr3">
           <div className="fg">
@@ -172,6 +180,17 @@ export function NewTaskModal({ onClose, onSaved, defaultStatus, defaultProjectId
           </button>
         </div>
       </form>
+
+      {showNewSub && (
+        <NewSubcontractorModal
+          onClose={() => setShowNewSub(false)}
+          onSaved={(sub) => {
+            setShowNewSub(false);
+            setSubcontractors((prev) => [...prev, sub].sort((a, b) => a.company_name.localeCompare(b.company_name)));
+            setSubcontractorId(sub.id);
+          }}
+        />
+      )}
     </Modal>
   );
 }

@@ -1,0 +1,41 @@
+/* Week-scrolling drag-and-drop calendar (per-project Schedule tab).
+   Additive-only, imported once from index.css. */
+
+.wcal{border:1px solid var(--border);border-radius:var(--rl);background:var(--surface);overflow:hidden;}
+.wcal-hd{display:grid;grid-template-columns:repeat(7,1fr);border-bottom:1px solid var(--border);background:var(--surface);}
+.wcal-hd-cell{padding:8px 4px;font-size:11px;font-weight:600;color:var(--t2);text-align:center;text-transform:uppercase;letter-spacing:.4px;}
+
+.wcal-scroll{height:560px;overflow-y:auto;}
+
+.wcal-week{position:relative;border-bottom:1px solid var(--border);padding-top:2px;}
+.wcal-week-label{position:absolute;top:2px;left:6px;font-size:9.5px;color:var(--t3);font-weight:600;text-transform:uppercase;letter-spacing:.3px;pointer-events:none;z-index:2;}
+
+.wcal-grid{position:relative;display:grid;grid-template-columns:repeat(7,1fr);}
+.wcal-day{border-right:1px solid var(--border);padding:18px 4px 4px;cursor:pointer;min-height:60px;}
+.wcal-day:last-child{border-right:none;}
+.wcal-day.today .wcal-daynum{color:var(--accent);font-weight:700;}
+.wcal-day.today{background:var(--bg);}
+.wcal-day.drag-range{background:var(--bbg);}
+.wcal-daynum{font-size:11px;color:var(--t2);}
+.wcal-more{font-size:9.5px;color:var(--t2);margin-top:2px;}
+
+.wcal-bar{
+  position:absolute;left:3px;right:3px;border-radius:4px;
+  display:flex;align-items:center;gap:4px;padding:0 6px;
+  font-size:11px;color:#fff;cursor:grab;overflow:hidden;white-space:nowrap;
+  user-select:none;touch-action:none;
+}
+.wcal-bar:active{cursor:grabbing;}
+.wcal-bar.done{opacity:.55;text-decoration:line-through;}
+.wcal-bar.ghosting{opacity:.65;box-shadow:0 2px 8px rgba(0,0,0,.25);z-index:5;}
+.wcal-bar-title{overflow:hidden;text-overflow:ellipsis;}
+.wcal-punch{background:rgba(255,255,255,.3);border-radius:8px;padding:0 5px;font-size:9px;flex-shrink:0;}
+
+.wcal-handle{position:absolute;top:0;bottom:0;width:6px;cursor:ew-resize;touch-action:none;}
+.wcal-handle-l{left:0;}
+.wcal-handle-r{right:0;}
+
+@media(max-width:768px){
+  .wcal-scroll{height:70vh;}
+  .wcal-hd-cell{font-size:10px;padding:6px 2px;}
+}
