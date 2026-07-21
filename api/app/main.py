@@ -14,6 +14,7 @@ from .routers import (
     invoices,
     leads,
     notifications,
+    project_subcontractor_items,
     projects,
     quick_reminders,
     reports,
@@ -47,6 +48,7 @@ app.include_router(dashboard.router, prefix="/api")
 app.include_router(ai.router, prefix="/api")
 app.include_router(users.router, prefix="/api")
 app.include_router(projects.router, prefix="/api")
+app.include_router(project_subcontractor_items.router, prefix="/api")
 app.include_router(clients.router, prefix="/api")
 app.include_router(cost_codes.router, prefix="/api")
 app.include_router(estimates.router, prefix="/api")
