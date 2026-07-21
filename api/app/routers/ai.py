@@ -46,6 +46,13 @@ Transcript:
 {transcript}"""
 
 
+# Sonnet's context window is ~200k tokens -- a real meeting transcript, even a
+# long one, is nowhere close to that. This ceiling exists only to guard against
+# a truly pathological paste, not to trim normal input (the previous 6000-char
+# limit was silently discarding the majority of most real transcripts).
+MAX_TRANSCRIPT_CHARS = 150_000
+
+
 @router.post("/parse-transcript", response_model=ParseTranscriptResponse)
 async def parse_transcript(body: ParseTranscriptRequest, _: CurrentUser = Depends(get_current_user)):
     if not settings.anthropic_api_key:
@@ -54,15 +61,27 @@ async def parse_transcript(body: ParseTranscriptRequest, _: CurrentUser = Depend
     client = AsyncAnthropic(api_key=settings.anthropic_api_key)
     message = await client.messages.create(
         model="claude-sonnet-4-6",
-        max_tokens=1000,
-        messages=[{"role": "user", "content": EXTRACTION_PROMPT.format(transcript=body.transcript[:6000])}],
+        max_tokens=8192,
+        messages=[
+            {"role": "user", "content": EXTRACTION_PROMPT.format(transcript=body.transcript[:MAX_TRANSCRIPT_CHARS])}
+        ],
     )
+
+    if message.stop_reason == "max_tokens":
+        raise HTTPException(
+            status_code=502,
+            detail="Claude ran out of room extracting tasks from this transcript -- try a shorter excerpt "
+            "(e.g. just the summary, or split the transcript into two passes).",
+        )
+
     raw = message.content[0].text if message.content else "{}"
     raw = raw.replace("```json", "").replace("```", "").strip()
     try:
         parsed = json.loads(raw)
-    except json.JSONDecodeError:
-        parsed = {"tasks": [], "project_updates": []}
+    except json.JSONDecodeError as e:
+        raise HTTPException(
+            status_code=502, detail=f"Claude's response couldn't be parsed as JSON -- try again. ({e})"
+        ) from e
 
     return ParseTranscriptResponse(
         tasks=[ExtractedTask(**t) for t in parsed.get("tasks", [])],
