@@ -7,12 +7,14 @@ class CostCodeCreate(BaseModel):
     code: str
     name: str
     is_active: bool = True
+    default_description: Optional[str] = None
 
 
 class CostCodeUpdate(BaseModel):
     code: Optional[str] = None
     name: Optional[str] = None
     is_active: Optional[bool] = None
+    default_description: Optional[str] = None
 
 
 class CostCodeOut(BaseModel):
@@ -20,3 +22,4 @@ class CostCodeOut(BaseModel):
     code: str
     name: str
     is_active: bool
+    default_description: Optional[str] = None

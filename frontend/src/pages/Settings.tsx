@@ -10,6 +10,7 @@ import type { CostCode, Subcontractor } from '../types';
 function CostCodeModal({ onClose, onSaved }: { onClose: () => void; onSaved: () => void }) {
   const [code, setCode] = useState('');
   const [name, setName] = useState('');
+  const [defaultDescription, setDefaultDescription] = useState('');
   const [error, setError] = useState('');
   const [saving, setSaving] = useState(false);
 
@@ -22,7 +23,11 @@ function CostCodeModal({ onClose, onSaved }: { onClose: () => void; onSaved: () 
     setSaving(true);
     setError('');
     try {
-      await api.post('/cost-codes', { code: code.trim(), name: name.trim() });
+      await api.post('/cost-codes', {
+        code: code.trim(),
+        name: name.trim(),
+        default_description: defaultDescription.trim() || null,
+      });
       onSaved();
     } catch (err) {
       setError(err instanceof ApiError ? err.message : 'Failed to create cost code');
@@ -43,6 +48,15 @@ function CostCodeModal({ onClose, onSaved }: { onClose: () => void; onSaved: () 
           <label className="fl">Name</label>
           <input className="fi" value={name} onChange={(e) => setName(e.target.value)} placeholder="Electrical" />
         </div>
+        <div className="fg">
+          <label className="fl">Default customer-facing description</label>
+          <textarea
+            className="fi"
+            value={defaultDescription}
+            onChange={(e) => setDefaultDescription(e.target.value)}
+            placeholder="Standard scope language used whenever this cost code is added to an estimate…"
+          />
+        </div>
         <div className="ma">
           <button type="button" className="btn" onClick={onClose}>
             Cancel
@@ -59,6 +73,7 @@ function CostCodeModal({ onClose, onSaved }: { onClose: () => void; onSaved: () 
 function EditCostCodeModal({ costCode, onClose, onSaved }: { costCode: CostCode; onClose: () => void; onSaved: () => void }) {
   const [code, setCode] = useState(costCode.code);
   const [name, setName] = useState(costCode.name);
+  const [defaultDescription, setDefaultDescription] = useState(costCode.default_description || '');
   const [error, setError] = useState('');
   const [saving, setSaving] = useState(false);
 
@@ -71,7 +86,11 @@ function EditCostCodeModal({ costCode, onClose, onSaved }: { costCode: CostCode;
     setSaving(true);
     setError('');
     try {
-      await api.patch(`/cost-codes/${costCode.id}`, { code: code.trim(), name: name.trim() });
+      await api.patch(`/cost-codes/${costCode.id}`, {
+        code: code.trim(),
+        name: name.trim(),
+        default_description: defaultDescription.trim() || null,
+      });
       onSaved();
     } catch (err) {
       setError(err instanceof ApiError ? err.message : 'Failed to save cost code');
@@ -91,6 +110,15 @@ function EditCostCodeModal({ costCode, onClose, onSaved }: { costCode: CostCode;
         <div className="fg">
           <label className="fl">Name</label>
           <input className="fi" value={name} onChange={(e) => setName(e.target.value)} />
+        </div>
+        <div className="fg">
+          <label className="fl">Default customer-facing description</label>
+          <textarea
+            className="fi"
+            value={defaultDescription}
+            onChange={(e) => setDefaultDescription(e.target.value)}
+            placeholder="Standard scope language used whenever this cost code is added to an estimate…"
+          />
         </div>
         <div className="ma">
           <button type="button" className="btn" onClick={onClose}>
@@ -156,6 +184,7 @@ function CostCodesTab() {
             <tr>
               <th>Code</th>
               <th>Name</th>
+              <th>Description</th>
               <th>Status</th>
               <th></th>
             </tr>
@@ -165,6 +194,13 @@ function CostCodesTab() {
               <tr key={cc.id} onClick={() => setEditing(cc)} style={{ cursor: 'pointer' }}>
                 <td style={{ fontWeight: 500 }}>{cc.code}</td>
                 <td>{cc.name}</td>
+                <td>
+                  {cc.default_description ? (
+                    <span className="badge bg-green">Set</span>
+                  ) : (
+                    <span className="badge bg-amber">Not set</span>
+                  )}
+                </td>
                 <td>
                   <span className={`badge ${cc.is_active ? 'bg-green' : 'bg-gray'}`}>{cc.is_active ? 'Active' : 'Inactive'}</span>
                 </td>

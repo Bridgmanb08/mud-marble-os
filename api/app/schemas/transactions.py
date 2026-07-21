@@ -74,3 +74,4 @@ class CostCodeOut(BaseModel):
     code: str
     name: str
     is_active: bool
+    default_description: Optional[str] = None
