@@ -23,6 +23,7 @@ export interface Task {
   scheduled_end: string | null;
   notes: string | null;
   is_milestone: boolean;
+  is_punch_list: boolean;
   version: number;
   created_at: string;
   projects: ProjectBrief | null;
@@ -68,6 +69,17 @@ export interface BoardView {
   sort_by: string | null;
   position: number;
   created_at: string;
+}
+
+export interface QuickReminder {
+  id: string;
+  created_by: string;
+  assigned_to: string | null;
+  project_id: string | null;
+  message: string;
+  is_done: boolean;
+  created_at: string;
+  dismissed_at: string | null;
 }
 
 export interface Subcontractor {

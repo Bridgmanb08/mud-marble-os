@@ -5,6 +5,7 @@ from typing import Optional
 from fastapi import APIRouter, Depends, HTTPException
 
 from ..deps import CurrentUser, get_current_user
+from ..mentions import create_mention_notifications
 from ..schemas.tasks import (
     BoardViewCreate,
     BoardViewOut,
@@ -112,8 +113,37 @@ async def create_task(body: TaskCreate, _: CurrentUser = Depends(get_current_use
 
 @router.patch("/reorder")
 async def reorder_tasks(body: ReorderRequest, _: CurrentUser = Depends(get_current_user)):
+    """Bulk status/position update for drag-and-drop, with optimistic concurrency.
+
+    Each item may carry the `version` the client last saw for that task. If any
+    task moved on since (someone else edited/reordered it), we reject the whole
+    batch with 409 rather than silently clobbering their change — the frontend
+    reloads to show the current board instead.
+    """
+    ids = [item.id for item in body.items]
+    if not ids:
+        return {"ok": True}
+
+    id_filter = ",".join(ids)
+    current_rows = await db_get("schedule_items", f"?id=in.({id_filter})&select=id,version")
+    current_versions = {r["id"]: r["version"] for r in current_rows}
+
+    conflicts = [
+        item.id
+        for item in body.items
+        if item.expected_version is not None and current_versions.get(item.id) != item.expected_version
+    ]
+    if conflicts:
+        raise HTTPException(
+            status_code=409,
+            detail="The board changed elsewhere before your drag finished — reloading to show the latest order.",
+        )
+
     for item in body.items:
-        await db_patch("schedule_items", item.id, {"status": item.status, "position": item.position})
+        updates: dict = {"status": item.status, "position": item.position}
+        if item.id in current_versions:
+            updates["version"] = current_versions[item.id] + 1
+        await db_patch("schedule_items", item.id, updates)
     return {"ok": True}
 
 
@@ -247,18 +277,46 @@ async def create_comment(task_id: str, body: CommentCreate, current_user: Curren
     rows = await db_post(
         "task_comments", {"task_id": task_id, "author": current_user.name or current_user.email, "content": body.content}
     )
-    return rows[0]
+    comment = rows[0]
+
+    task_rows = await db_get("schedule_items", f"?id=eq.{task_id}&select=title,project_id")
+    task_title = task_rows[0]["title"] if task_rows else "a task"
+    project_id = task_rows[0].get("project_id") if task_rows else None
+    await create_mention_notifications(
+        content=body.content,
+        project_id=project_id,
+        source_type="task_comment",
+        source_id=comment["id"],
+        message=f'{current_user.name or current_user.email} mentioned you on task "{task_title}"',
+        exclude_user_id=current_user.id,
+    )
+    return comment
 
 
 @router.patch("/{task_id}", response_model=TaskOut)
 async def update_task(task_id: str, body: TaskUpdate, _: CurrentUser = Depends(get_current_user)):
-    current = await db_get("schedule_items", f"?id=eq.{task_id}&select=version")
+    current = await db_get("schedule_items", f"?id=eq.{task_id}&select=version,status")
     if not current:
         raise HTTPException(status_code=404, detail="Task not found")
     if body.expected_version is not None and body.expected_version != current[0]["version"]:
         raise HTTPException(
             status_code=409, detail="This task was updated by someone else. Reload to see the latest changes."
         )
+
+    target_status = body.status if body.status is not None else current[0]["status"]
+    if target_status == "complete" and current[0]["status"] != "complete":
+        deps = await db_get("task_dependencies", f"?task_id=eq.{task_id}&select=depends_on_id")
+        if deps:
+            blocker_ids = ",".join(d["depends_on_id"] for d in deps)
+            blockers = await db_get("schedule_items", f"?id=in.({blocker_ids})&select=id,status,title")
+            incomplete = [b for b in blockers if b["status"] != "complete"]
+            if incomplete:
+                names = ", ".join(b["title"] for b in incomplete[:3])
+                raise HTTPException(
+                    status_code=400,
+                    detail=f"Can't mark this task complete — it's blocked by an incomplete dependency: {names}",
+                )
+
     updates = body.model_dump(exclude_none=True, exclude={"expected_version"})
     updates["version"] = current[0]["version"] + 1
     await db_patch("schedule_items", task_id, updates)

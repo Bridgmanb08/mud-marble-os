@@ -3,6 +3,7 @@ import { IconTrash, IconLock } from '@tabler/icons-react';
 import { api, ApiError } from '../../api/client';
 import { Modal } from '../ui/Modal';
 import { useToast } from '../ui/Toast';
+import { MentionTextarea } from '../ui/MentionTextarea';
 import { TaskFilesSection } from './TaskFilesSection';
 import { openDatePicker } from '../../lib/datePicker';
 import type { CostCode, Project, Subcontractor, Task, TaskComment, TaskDependency, TaskSubtask, UserDirectoryEntry } from '../../types';
@@ -32,6 +33,7 @@ export function TaskDetailDrawer({ task, allTasks, onClose, onSaved, onDeleted }
   const [scheduledEnd, setScheduledEnd] = useState(task.scheduled_end?.slice(0, 10) || '');
   const [notes, setNotes] = useState(task.notes || '');
   const [isMilestone, setIsMilestone] = useState(task.is_milestone);
+  const [isPunchList, setIsPunchList] = useState(task.is_punch_list);
   const [error, setError] = useState('');
   const [saving, setSaving] = useState(false);
 
@@ -65,6 +67,8 @@ export function TaskDetailDrawer({ task, allTasks, onClose, onSaved, onDeleted }
     setComments(await api.get<TaskComment[]>(`/tasks/${task.id}/comments`).catch(() => []));
   }
 
+  const blockedByIncomplete = dependencies.some((d) => tasksById.get(d.depends_on_id)?.status !== 'complete');
+
   async function handleSubmit(e: FormEvent) {
     e.preventDefault();
     if (!title.trim()) {
@@ -73,6 +77,10 @@ export function TaskDetailDrawer({ task, allTasks, onClose, onSaved, onDeleted }
     }
     if (scheduledStart && scheduledEnd && scheduledEnd < scheduledStart) {
       setError('Due date cannot be before the start date.');
+      return;
+    }
+    if (status === 'complete' && blockedByIncomplete) {
+      setError("Can't mark this task complete — it's blocked by an incomplete dependency. Resolve that first.");
       return;
     }
     setSaving(true);
@@ -90,6 +98,7 @@ export function TaskDetailDrawer({ task, allTasks, onClose, onSaved, onDeleted }
         scheduled_end: scheduledEnd || null,
         notes: notes.trim() || null,
         is_milestone: isMilestone,
+        is_punch_list: isPunchList,
         expected_version: task.version,
       });
       onSaved();
@@ -181,7 +190,6 @@ export function TaskDetailDrawer({ task, allTasks, onClose, onSaved, onDeleted }
       const bSame = b.project_id === task.project_id ? 0 : 1;
       return aSame - bSame;
     });
-  const blockedByIncomplete = dependencies.some((d) => tasksById.get(d.depends_on_id)?.status !== 'complete');
 
   return (
     <Modal title="Task detail" onClose={onClose} xl>
@@ -232,8 +240,15 @@ export function TaskDetailDrawer({ task, allTasks, onClose, onSaved, onDeleted }
               <option value="upcoming">To Do</option>
               <option value="in_progress">In Progress</option>
               <option value="delayed">Delayed / Blocked</option>
-              <option value="complete">Done</option>
+              <option value="complete" disabled={blockedByIncomplete && status !== 'complete'}>
+                Done{blockedByIncomplete ? ' (blocked)' : ''}
+              </option>
             </select>
+            {blockedByIncomplete && status !== 'complete' && (
+              <div style={{ fontSize: 11, color: 'var(--red)', marginTop: 4, display: 'flex', alignItems: 'center', gap: 4 }}>
+                <IconLock size={11} /> Blocked by an incomplete dependency
+              </div>
+            )}
           </div>
           <div className="fg">
             <label className="fl">Priority</label>
@@ -272,6 +287,9 @@ export function TaskDetailDrawer({ task, allTasks, onClose, onSaved, onDeleted }
         </div>
         <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 13, cursor: 'pointer', marginBottom: 6 }}>
           <input type="checkbox" checked={isMilestone} onChange={(e) => setIsMilestone(e.target.checked)} /> Milestone
+        </label>
+        <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 13, cursor: 'pointer', marginBottom: 6 }}>
+          <input type="checkbox" checked={isPunchList} onChange={(e) => setIsPunchList(e.target.checked)} /> Punch list item
         </label>
 
         <div className="fg" style={{ marginTop: 18 }}>
@@ -350,27 +368,23 @@ export function TaskDetailDrawer({ task, allTasks, onClose, onSaved, onDeleted }
 
         <div className="fg" style={{ marginTop: 18 }}>
           <label className="fl">Comments</label>
-          <div style={{ display: 'flex', gap: 8, marginBottom: 10 }}>
-            <input
-              className="fi"
-              placeholder="Add a comment…"
+          <div style={{ marginBottom: 10 }}>
+            <MentionTextarea
               value={newComment}
-              onChange={(e) => setNewComment(e.target.value)}
-              onKeyDown={(e) => {
-                if (e.key === 'Enter') {
-                  e.preventDefault();
-                  postComment();
-                }
-              }}
+              onChange={setNewComment}
+              placeholder="Add a comment… type @ to mention someone"
+              style={{ minHeight: 60 }}
             />
-            <button type="button" className="btn btn-sm" onClick={postComment}>
-              Post
-            </button>
+            <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: 6 }}>
+              <button type="button" className="btn btn-sm" onClick={postComment} disabled={!newComment.trim()}>
+                Post
+              </button>
+            </div>
           </div>
           {comments.map((c) => (
             <div key={c.id} style={{ padding: '8px 0', borderBottom: '1px solid var(--border)' }}>
               <div style={{ fontSize: 12, fontWeight: 500 }}>{c.author}</div>
-              <div style={{ fontSize: 13, marginTop: 2 }}>{c.content}</div>
+              <div style={{ fontSize: 13, marginTop: 2, whiteSpace: 'pre-wrap' }}>{c.content}</div>
               <div style={{ fontSize: 11, color: 'var(--t2)', marginTop: 2 }}>{new Date(c.created_at).toLocaleString()}</div>
             </div>
           ))}
