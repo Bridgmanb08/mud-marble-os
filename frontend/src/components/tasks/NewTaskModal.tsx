@@ -27,6 +27,7 @@ export function NewTaskModal({ onClose, onSaved, defaultStatus, defaultProjectId
   const [scheduledEnd, setScheduledEnd] = useState('');
   const [notes, setNotes] = useState('');
   const [isMilestone, setIsMilestone] = useState(false);
+  const [isPunchList, setIsPunchList] = useState(false);
   const [error, setError] = useState('');
   const [saving, setSaving] = useState(false);
 
@@ -61,6 +62,7 @@ export function NewTaskModal({ onClose, onSaved, defaultStatus, defaultProjectId
       scheduled_end: scheduledEnd || null,
       notes: notes.trim() || null,
       is_milestone: isMilestone,
+      is_punch_list: isPunchList,
     };
     try {
       await api.post('/tasks', payload);
@@ -165,8 +167,11 @@ export function NewTaskModal({ onClose, onSaved, defaultStatus, defaultProjectId
           <label className="fl">Notes</label>
           <textarea className="fi" value={notes} onChange={(e) => setNotes(e.target.value)} />
         </div>
-        <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 13, cursor: 'pointer', marginBottom: 14 }}>
+        <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 13, cursor: 'pointer', marginBottom: 8 }}>
           <input type="checkbox" checked={isMilestone} onChange={(e) => setIsMilestone(e.target.checked)} /> Milestone
+        </label>
+        <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 13, cursor: 'pointer', marginBottom: 14 }}>
+          <input type="checkbox" checked={isPunchList} onChange={(e) => setIsPunchList(e.target.checked)} /> Punch list item
         </label>
         <div className="ma">
           <button type="button" className="btn" onClick={onClose}>

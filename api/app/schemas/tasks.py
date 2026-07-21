@@ -20,6 +20,7 @@ class TaskCreate(BaseModel):
     scheduled_end: Optional[str] = None
     notes: Optional[str] = None
     is_milestone: bool = False
+    is_punch_list: bool = False
 
     @model_validator(mode="after")
     def _validate_dates(self):
@@ -38,6 +39,7 @@ class TaskUpdate(BaseModel):
     scheduled_end: Optional[str] = None
     notes: Optional[str] = None
     is_milestone: Optional[bool] = None
+    is_punch_list: Optional[bool] = None
     position: Optional[int] = None
     project_id: Optional[str] = None
     expected_version: Optional[int] = None
@@ -71,6 +73,7 @@ class TaskOut(BaseModel):
     scheduled_end: Optional[str] = None
     notes: Optional[str] = None
     is_milestone: bool = False
+    is_punch_list: bool = False
     version: int = 1
     created_at: str
     projects: Optional[ProjectBrief] = None
@@ -86,6 +89,7 @@ class ReorderItem(BaseModel):
     id: str
     status: str
     position: int
+    expected_version: Optional[int] = None
 
 
 class ReorderRequest(BaseModel):

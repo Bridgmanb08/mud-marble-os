@@ -1,0 +1,84 @@
+/* Task manager overhaul — additive styles only.
+   Imported once from the top of index.css so nothing in the original
+   stylesheet has to be touched. Reuses existing CSS variables (--bg,
+   --surface, --border, --t2, etc.) defined in index.css's :root. */
+
+/* --- Tasks page layout: job filter sidebar + main column --- */
+.tasks-layout{display:flex;gap:20px;align-items:flex-start;}
+.tasks-main{flex:1;min-width:0;}
+
+.job-sidebar{
+  width:200px;flex-shrink:0;background:var(--surface);border:1px solid var(--border);
+  border-radius:var(--rl);padding:10px;position:sticky;top:calc(var(--tb) + 24px);
+  max-height:calc(100vh - var(--tb) - 48px);overflow-y:auto;
+}
+.job-sidebar-search{display:flex;align-items:center;gap:6px;margin-bottom:8px;color:var(--t2);}
+.job-sidebar-search .fi{padding:6px 8px;font-size:12.5px;}
+.job-sidebar-item{
+  display:flex;align-items:center;gap:8px;width:100%;text-align:left;padding:7px 8px;
+  font-size:12.5px;border-radius:var(--r);border:none;background:none;color:var(--t2);
+  cursor:pointer;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-family:var(--font);
+}
+.job-sidebar-item:hover{background:var(--bg);color:var(--text);}
+.job-sidebar-item.active{background:var(--bbg);color:var(--btx);font-weight:500;}
+.job-sidebar-list{display:flex;flex-direction:column;gap:1px;margin-top:4px;}
+.job-sidebar-empty{font-size:11.5px;color:var(--t3);padding:8px 4px;}
+
+/* --- Task tabs (My tasks / All tasks / Punch list) --- */
+.task-tabs{padding:0;border-bottom:1px solid var(--border);margin-bottom:14px;background:none;}
+
+/* --- Inline collapsible subtask checklist on Kanban cards --- */
+.task-subtask-toggle{padding:0;}
+.task-subtasks{
+  margin-top:8px;padding-top:8px;border-top:1px solid var(--border);
+  display:flex;flex-direction:column;gap:5px;
+}
+.task-subtask-row{display:flex;align-items:center;gap:6px;font-size:11.5px;cursor:pointer;}
+.task-subtask-row .done{text-decoration:line-through;color:var(--t3);}
+.task-subtask-add{display:flex;gap:6px;margin-top:2px;}
+.task-subtask-add .fi{padding:4px 8px;font-size:11.5px;}
+
+/* --- Global quick-reminder widget (mounted in AppLayout, all pages) --- */
+.qr-stack{
+  position:fixed;bottom:92px;right:24px;z-index:250;
+  display:flex;flex-direction:column-reverse;gap:8px;
+  width:260px;max-height:50vh;overflow-y:auto;align-items:flex-end;
+}
+.qr-item{
+  background:var(--surface);border:1px solid var(--border);border-radius:var(--r);
+  padding:8px 10px;display:flex;align-items:flex-start;gap:8px;
+  box-shadow:0 2px 10px rgba(0,0,0,.1);font-size:12.5px;width:100%;cursor:pointer;
+}
+.qr-item input{margin-top:2px;flex-shrink:0;}
+.qr-fab{
+  width:40px;height:40px;border-radius:50%;background:var(--surface);
+  border:1px solid var(--border-md);display:flex;align-items:center;justify-content:center;
+  cursor:pointer;box-shadow:0 2px 10px rgba(0,0,0,.12);position:relative;color:var(--t2);
+}
+.qr-fab:hover{color:var(--text);}
+.qr-fab-plus{position:absolute;bottom:2px;right:2px;background:var(--accent);color:#fff;border-radius:50%;padding:1px;}
+.qr-add{
+  background:var(--surface);border:1px solid var(--border);border-radius:var(--rl);
+  padding:10px;width:260px;box-shadow:0 4px 16px rgba(0,0,0,.14);
+  display:flex;flex-direction:column;gap:8px;
+}
+.qr-add-teamwide{display:flex;align-items:center;gap:6px;font-size:11.5px;color:var(--t2);cursor:pointer;}
+.qr-add-actions{display:flex;justify-content:flex-end;gap:6px;}
+
+/* --- Mobile (job site use) --- */
+@media(max-width:768px){
+  .tasks-layout{flex-direction:column;}
+  .job-sidebar{width:100%;position:static;max-height:none;}
+  .job-sidebar-list{display:flex;flex-direction:row;overflow-x:auto;gap:6px;padding-bottom:2px;}
+  .job-sidebar-item{white-space:nowrap;flex-shrink:0;width:auto;}
+  .qr-stack{right:12px;bottom:78px;width:calc(100vw - 24px);}
+  .qr-add{width:100%;}
+  .task-tabs{overflow-x:auto;}
+}
+
+@media(max-width:480px){
+  /* Higher-specificity selector so this wins over index.css's own
+     .board{grid-template-columns:1fr 1fr} rule at the same breakpoint
+     range, without editing that file directly. */
+  .tasks-main .board{grid-template-columns:1fr;}
+}

@@ -2,6 +2,7 @@ import { Outlet } from 'react-router-dom';
 import { Topbar } from './Topbar';
 import { Sidebar } from './Sidebar';
 import { AskAIWidget } from '../ai/AskAIWidget';
+import { QuickReminderWidget } from '../reminders/QuickReminderWidget';
 
 export function AppLayout() {
   return (
@@ -12,6 +13,7 @@ export function AppLayout() {
         <Outlet />
       </div>
       <AskAIWidget />
+      <QuickReminderWidget />
     </>
   );
 }
