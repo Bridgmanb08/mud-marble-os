@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState, type ChangeEvent } from 'react';
 import {
   DndContext,
   closestCorners,
@@ -14,11 +14,11 @@ import {
 } from '@dnd-kit/core';
 import { SortableContext, verticalListSortingStrategy, useSortable, arrayMove, sortableKeyboardCoordinates } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
-import { IconMessageCircle, IconChecklist, IconLock, IconChevronDown, IconChevronRight, IconPlus } from '@tabler/icons-react';
+import { IconMessageCircle, IconChecklist, IconLock, IconChevronDown, IconChevronRight, IconPlus, IconFlag, IconX } from '@tabler/icons-react';
 import { api, ApiError } from '../../api/client';
 import { useToast } from '../ui/Toast';
 import { fmtD } from '../../lib/format';
-import type { Task, TaskSubtask } from '../../types';
+import type { Task, TaskSubtask, Project, UserDirectoryEntry } from '../../types';
 
 const COLUMNS = [
   { id: 'upcoming', label: 'To Do' },
@@ -121,18 +121,56 @@ function TaskCard({
   onClick,
   dragDisabled,
   onChanged,
+  projects,
+  directory,
 }: {
   task: Task;
   onClick: () => void;
   dragDisabled: boolean;
   onChanged: () => void;
+  projects: Project[];
+  directory: UserDirectoryEntry[];
 }) {
+  const toast = useToast();
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
     id: task.id,
     disabled: dragDisabled,
   });
   const [expanded, setExpanded] = useState(false);
+  const [clarifyPicking, setClarifyPicking] = useState(false);
   const overdue = task.overdue;
+  const assignees = task.assignees && task.assignees.length > 0 ? task.assignees : task.assigned_to ? [task.assigned_to] : [];
+
+  async function handleProjectChange(e: ChangeEvent<HTMLSelectElement>) {
+    const projectId = e.target.value;
+    try {
+      await api.patch(`/tasks/${task.id}`, { project_id: projectId || null, expected_version: task.version });
+      onChanged();
+    } catch (err) {
+      toast(err instanceof ApiError ? err.message : 'Failed to set project', true);
+    }
+  }
+
+  async function toggleComplete(e: ChangeEvent<HTMLInputElement>) {
+    const next = e.target.checked;
+    try {
+      await api.patch(`/tasks/${task.id}`, { status: next ? 'complete' : 'upcoming', expected_version: task.version });
+      onChanged();
+    } catch (err) {
+      toast(err instanceof ApiError ? err.message : 'Failed to update task', true);
+    }
+  }
+
+  async function setClarify(name: string | null) {
+    try {
+      await api.patch(`/tasks/${task.id}/clarify`, { clarify_from: name });
+      onChanged();
+    } catch (err) {
+      toast(err instanceof ApiError ? err.message : 'Failed to update flag', true);
+    } finally {
+      setClarifyPicking(false);
+    }
+  }
 
   return (
     <div
@@ -148,21 +186,115 @@ function TaskCard({
         borderLeft: `3px solid ${PRIORITY_COLOR[task.priority] || 'var(--border-md)'}`,
       }}
     >
-      <div className="task-title">
-        {task.is_punch_list && (
-          <span className="badge bg-purple" style={{ marginRight: 6, fontSize: 9, padding: '1px 6px', verticalAlign: 2 }}>
-            Punch
-          </span>
-        )}
-        {task.title}
+      <div className="task-title" style={{ display: 'flex', alignItems: 'flex-start', gap: 6 }}>
+        <input
+          type="checkbox"
+          checked={task.status === 'complete'}
+          onChange={toggleComplete}
+          onClick={(e) => e.stopPropagation()}
+          onPointerDown={(e) => e.stopPropagation()}
+          style={{ marginTop: 3, flexShrink: 0, cursor: 'pointer' }}
+          title="Mark complete"
+        />
+        <span>
+          {task.is_punch_list && (
+            <span className="badge bg-purple" style={{ marginRight: 6, fontSize: 9, padding: '1px 6px', verticalAlign: 2 }}>
+              Punch
+            </span>
+          )}
+          {task.title}
+        </span>
       </div>
-      <div className="task-meta">{task.projects?.name?.replace(/\|.*/, '').trim() || 'No project'}</div>
-      {task.assigned_to && (
-        <div className="task-meta" style={{ marginTop: 3 }}>
-          <span style={{ background: 'var(--bbg)', color: 'var(--btx)', padding: '1px 6px', borderRadius: 10, fontSize: 10 }}>
-            {task.assigned_to}
+      {task.project_id ? (
+        <div className="task-meta">{task.projects?.name?.replace(/\|.*/, '').trim() || 'No project'}</div>
+      ) : (
+        <select
+          className="fi"
+          value=""
+          onClick={(e) => e.stopPropagation()}
+          onPointerDown={(e) => e.stopPropagation()}
+          onChange={handleProjectChange}
+          style={{ fontSize: 11, padding: '2px 4px', marginTop: 2, maxWidth: '100%' }}
+        >
+          <option value="">No project — assign…</option>
+          {projects.map((p) => (
+            <option key={p.id} value={p.id}>
+              {p.name.replace(/\|.*/, '').trim()}
+            </option>
+          ))}
+        </select>
+      )}
+      {assignees.length > 0 && (
+        <div className="task-meta" style={{ marginTop: 3, display: 'flex', gap: 4, flexWrap: 'wrap' }}>
+          {assignees.map((name) => (
+            <span key={name} style={{ background: 'var(--bbg)', color: 'var(--btx)', padding: '1px 6px', borderRadius: 10, fontSize: 10 }}>
+              {name}
+            </span>
+          ))}
+        </div>
+      )}
+      {task.clarify_from ? (
+        <div
+          className="task-meta"
+          style={{ marginTop: 3 }}
+          onClick={(e) => e.stopPropagation()}
+          onPointerDown={(e) => e.stopPropagation()}
+        >
+          <span
+            style={{
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: 4,
+              background: 'var(--amber-bg, #fef3c7)',
+              color: 'var(--amber, #b45309)',
+              padding: '1px 4px 1px 6px',
+              borderRadius: 10,
+              fontSize: 10,
+            }}
+          >
+            <IconFlag size={10} /> Needs clarity: {task.clarify_from}
+            <button
+              type="button"
+              className="btn-reset"
+              onClick={() => setClarify(null)}
+              style={{ display: 'flex', cursor: 'pointer', opacity: 0.7 }}
+              title="Clear flag"
+            >
+              <IconX size={11} />
+            </button>
           </span>
         </div>
+      ) : clarifyPicking ? (
+        <select
+          className="fi"
+          autoFocus
+          value=""
+          onClick={(e) => e.stopPropagation()}
+          onPointerDown={(e) => e.stopPropagation()}
+          onBlur={() => setClarifyPicking(false)}
+          onChange={(e) => setClarify(e.target.value)}
+          style={{ fontSize: 11, padding: '2px 4px', marginTop: 3, maxWidth: '100%' }}
+        >
+          <option value="">Flag who needs to weigh in…</option>
+          {directory.map((u) => (
+            <option key={u.id} value={u.name}>
+              {u.name}
+            </option>
+          ))}
+        </select>
+      ) : (
+        <button
+          type="button"
+          className="btn-reset"
+          onClick={(e) => {
+            e.stopPropagation();
+            setClarifyPicking(true);
+          }}
+          onPointerDown={(e) => e.stopPropagation()}
+          style={{ fontSize: 10, color: 'var(--t2)', display: 'flex', alignItems: 'center', gap: 3, cursor: 'pointer', marginTop: 3 }}
+        >
+          <IconFlag size={11} /> Needs clarity?
+        </button>
       )}
       {task.scheduled_end && (
         <div className="task-meta" style={{ marginTop: 3, color: overdue ? 'var(--red)' : undefined, fontWeight: overdue ? 500 : undefined }}>
@@ -209,6 +341,8 @@ function Column({
   onAddTask,
   dragDisabled,
   onChanged,
+  projects,
+  directory,
 }: {
   id: string;
   label: string;
@@ -218,6 +352,8 @@ function Column({
   onAddTask: () => void;
   dragDisabled: boolean;
   onChanged: () => void;
+  projects: Project[];
+  directory: UserDirectoryEntry[];
 }) {
   const { setNodeRef } = useDroppable({ id });
   return (
@@ -230,7 +366,17 @@ function Column({
         {taskIds.map((id) => {
           const t = tasksById.get(id);
           if (!t) return null;
-          return <TaskCard key={id} task={t} onClick={() => onTaskClick(id)} dragDisabled={dragDisabled} onChanged={onChanged} />;
+          return (
+            <TaskCard
+              key={id}
+              task={t}
+              onClick={() => onTaskClick(id)}
+              dragDisabled={dragDisabled}
+              onChanged={onChanged}
+              projects={projects}
+              directory={directory}
+            />
+          );
         })}
       </SortableContext>
       <button className="btn btn-ghost btn-sm" style={{ width: '100%', marginTop: 6, color: 'var(--t2)', justifyContent: 'center' }} onClick={onAddTask}>
@@ -255,6 +401,8 @@ export function KanbanBoard({
 }) {
   const toast = useToast();
   const [columns, setColumns] = useState<Record<string, string[]>>({});
+  const [projects, setProjects] = useState<Project[]>([]);
+  const [directory, setDirectory] = useState<UserDirectoryEntry[]>([]);
   const tasksById = new Map(tasks.map((t) => [t.id, t]));
   const snapshotRef = useRef<Record<string, string[]> | null>(null);
 
@@ -266,6 +414,11 @@ export function KanbanBoard({
     }
     setColumns(grouped);
   }, [tasks]);
+
+  useEffect(() => {
+    api.get<Project[]>('/projects').then(setProjects).catch(() => {});
+    api.get<UserDirectoryEntry[]>('/users/directory').then(setDirectory).catch(() => {});
+  }, []);
 
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 5 } }),
@@ -364,6 +517,8 @@ export function KanbanBoard({
               onAddTask={() => onAddTask(col.id)}
               dragDisabled={Boolean(filtersActive)}
               onChanged={onChanged}
+              projects={projects}
+              directory={directory}
             />
           ))}
         </div>
