@@ -532,6 +532,7 @@ export interface UserSummary {
   name: string;
   email: string;
   role: string;
+  is_admin: boolean;
 }
 
 export interface UserDirectoryEntry {

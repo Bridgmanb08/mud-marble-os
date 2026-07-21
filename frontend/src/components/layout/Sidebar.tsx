@@ -13,7 +13,9 @@ import {
   IconTools,
   IconChartBar,
   IconReportAnalytics,
+  IconShieldLock,
 } from '@tabler/icons-react';
+import { useAuth } from '../../auth/AuthContext';
 
 interface NavItem {
   to: string;
@@ -57,9 +59,20 @@ const navSections: { label: string; items: NavItem[] }[] = [
 ];
 
 export function Sidebar() {
+  const { user } = useAuth();
+  const sections = user?.is_admin
+    ? [
+        ...navSections,
+        {
+          label: 'Admin',
+          items: [{ to: '/users', label: 'Users', icon: IconShieldLock }],
+        },
+      ]
+    : navSections;
+
   return (
     <div className="sidebar">
-      {navSections.map((section) => (
+      {sections.map((section) => (
         <div key={section.label}>
           <div className="nav-section">{section.label}</div>
           {section.items.map((item) => (

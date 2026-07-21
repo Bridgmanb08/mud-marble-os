@@ -21,6 +21,8 @@ import Subcontractors from './pages/Subcontractors';
 import SubIntelligence from './pages/SubIntelligence';
 import Settings from './pages/Settings';
 import Reports from './pages/Reports';
+import Users from './pages/Users';
+import { AdminRoute } from './components/layout/AdminRoute';
 
 export default function App() {
   return (
@@ -53,6 +55,14 @@ export default function App() {
             <Route path="sub-intelligence" element={<SubIntelligence />} />
             <Route path="settings" element={<Settings />} />
             <Route path="reports" element={<Reports />} />
+            <Route
+              path="users"
+              element={
+                <AdminRoute>
+                  <Users />
+                </AdminRoute>
+              }
+            />
           </Route>
         </Routes>
       </ToastProvider>
