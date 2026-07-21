@@ -575,3 +575,18 @@ export interface ParseTranscriptResponse {
   tasks: ExtractedTask[];
   project_updates: ExtractedProjectUpdate[];
 }
+
+export interface ChatMessage {
+  role: 'user' | 'assistant';
+  content: string;
+}
+
+export interface ToolCallLog {
+  name: string;
+  input: Record<string, unknown>;
+}
+
+export interface AskResponse {
+  reply: string;
+  tool_calls: ToolCallLog[];
+}
