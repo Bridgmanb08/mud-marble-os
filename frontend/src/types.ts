@@ -281,6 +281,7 @@ export interface CostCode {
   code: string;
   name: string;
   is_active: boolean;
+  default_description: string | null;
 }
 
 export interface ClientBrief {
