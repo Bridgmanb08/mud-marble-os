@@ -1,4 +1,8 @@
+import { useState } from 'react';
 import { fmt, fmtD } from '../../../lib/format';
+import { DashboardTaskDrawer } from '../DashboardTaskDrawer';
+import { api, ApiError } from '../../../api/client';
+import { useToast } from '../../ui/Toast';
 import type { DashboardSummary } from '../../../types';
 
 const HEALTH_DOT: Record<string, string> = { green: 'dot-g', yellow: 'dot-a', red: 'dot-r' };
@@ -50,21 +54,49 @@ export function ActiveProjectHealthWidget({ data }: { data: DashboardSummary }) 
 }
 
 export function UpcomingTasksWidget({ data }: { data: DashboardSummary }) {
-  if (!data.upcoming_tasks.length) return <div style={{ fontSize: 13, color: 'var(--t2)' }}>No upcoming tasks.</div>;
+  const toast = useToast();
+  const [dismissed, setDismissed] = useState<Set<string>>(new Set());
+  const [openTaskId, setOpenTaskId] = useState<string | null>(null);
+  const items = data.upcoming_tasks.filter((t) => !dismissed.has(t.id));
+
+  async function markComplete(id: string) {
+    try {
+      await api.patch(`/tasks/${id}`, { status: 'complete' });
+      setDismissed((prev) => new Set(prev).add(id));
+    } catch (err) {
+      toast(err instanceof ApiError ? err.message : 'Failed to update task', true);
+    }
+  }
+
+  if (!items.length) return <div style={{ fontSize: 13, color: 'var(--t2)' }}>No upcoming tasks.</div>;
   return (
     <>
-      {data.upcoming_tasks.map((t) => (
-        <div key={t.id} style={{ display: 'flex', gap: 10, padding: '7px 0', borderBottom: '1px solid var(--border)' }}>
-          <div style={{ flex: 1, minWidth: 0 }}>
-            <div style={{ fontSize: 12, fontWeight: 500 }}>{t.title}</div>
-            <div style={{ fontSize: 11, color: 'var(--t2)' }}>
-              {t.project_name || ''}
-              {t.assigned_to ? ` · ${t.assigned_to}` : ''}
+      {items.map((t) => (
+        <div key={t.id} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '7px 0', borderBottom: '1px solid var(--border)' }}>
+          <input
+            type="checkbox"
+            title="Mark complete"
+            onChange={() => markComplete(t.id)}
+            style={{ cursor: 'pointer', flexShrink: 0 }}
+          />
+          <button
+            type="button"
+            className="btn-reset"
+            onClick={() => setOpenTaskId(t.id)}
+            style={{ display: 'flex', flex: 1, minWidth: 0, textAlign: 'left', gap: 10, cursor: 'pointer' }}
+          >
+            <div style={{ flex: 1, minWidth: 0 }}>
+              <div style={{ fontSize: 12, fontWeight: 500 }}>{t.title}</div>
+              <div style={{ fontSize: 11, color: 'var(--t2)' }}>
+                {t.project_name || ''}
+                {t.assigned_to ? ` · ${t.assigned_to}` : ''}
+              </div>
             </div>
-          </div>
-          <div style={{ fontSize: 11, color: 'var(--t3)' }}>{fmtD(t.scheduled_end)}</div>
+            <div style={{ fontSize: 11, color: 'var(--t3)' }}>{fmtD(t.scheduled_end)}</div>
+          </button>
         </div>
       ))}
+      {openTaskId && <DashboardTaskDrawer taskId={openTaskId} onClose={() => setOpenTaskId(null)} />}
     </>
   );
 }

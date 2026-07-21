@@ -1,58 +1,61 @@
 import { useState } from 'react';
 import { fmtD } from '../../../lib/format';
-import { TaskQuickViewModal } from '../TaskQuickViewModal';
+import { DashboardTaskDrawer } from '../DashboardTaskDrawer';
+import { api, ApiError } from '../../../api/client';
+import { useToast } from '../../ui/Toast';
 import type { DashboardSummary } from '../../../types';
 
-type Milestone = DashboardSummary['contractor_milestones'][number];
-
-export function ContractorMilestonesWidget({ data }: { data: DashboardSummary }) {
+export function TaskManagementWidget({ data }: { data: DashboardSummary }) {
+  const toast = useToast();
   const [dismissed, setDismissed] = useState<Set<string>>(new Set());
-  const [selected, setSelected] = useState<Milestone | null>(null);
+  const [openTaskId, setOpenTaskId] = useState<string | null>(null);
   const items = data.contractor_milestones.filter((t) => !dismissed.has(t.id));
+
+  async function markComplete(id: string) {
+    try {
+      await api.patch(`/tasks/${id}`, { status: 'complete' });
+      setDismissed((prev) => new Set(prev).add(id));
+    } catch (err) {
+      toast(err instanceof ApiError ? err.message : 'Failed to update task', true);
+    }
+  }
+
   if (!items.length) return <div style={{ fontSize: 13, color: 'var(--t2)' }}>No milestones scheduled.</div>;
   return (
     <>
       {items.map((t) => (
-        <button
-          key={t.id}
-          type="button"
-          className="btn-reset"
-          onClick={() => setSelected(t)}
-          style={{
-            display: 'flex',
-            width: '100%',
-            textAlign: 'left',
-            alignItems: 'center',
-            gap: 10,
-            padding: '7px 0',
-            borderBottom: '1px solid var(--border)',
-            cursor: 'pointer',
-          }}
-        >
-          <span className={`dot ${t.overdue ? 'dot-r' : 'dot-g'}`} />
-          <div style={{ flex: 1, minWidth: 0 }}>
-            <div style={{ fontSize: 12, fontWeight: 500 }}>{t.title}</div>
-            <div style={{ fontSize: 11, color: 'var(--t2)' }}>
-              {t.project_name || ''}
-              {t.assigned_to ? ` · ${t.assigned_to}` : ''}
+        <div key={t.id} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '7px 0', borderBottom: '1px solid var(--border)' }}>
+          <input
+            type="checkbox"
+            title="Mark complete"
+            onChange={() => markComplete(t.id)}
+            style={{ cursor: 'pointer', flexShrink: 0 }}
+          />
+          <button
+            type="button"
+            className="btn-reset"
+            onClick={() => setOpenTaskId(t.id)}
+            style={{ display: 'flex', flex: 1, minWidth: 0, textAlign: 'left', alignItems: 'center', gap: 10, cursor: 'pointer' }}
+          >
+            <span className={`dot ${t.overdue ? 'dot-r' : 'dot-g'}`} />
+            <div style={{ flex: 1, minWidth: 0 }}>
+              <div style={{ fontSize: 12, fontWeight: 500 }}>{t.title}</div>
+              <div style={{ fontSize: 11, color: 'var(--t2)' }}>
+                {t.project_name || ''}
+                {t.assigned_to ? ` · ${t.assigned_to}` : ''}
+              </div>
             </div>
-          </div>
-          <span className={`badge ${t.overdue ? 'bg-red' : 'bg-gray'}`}>
-            {t.overdue
-              ? `${Math.abs(t.days_until_due ?? 0)}d overdue`
-              : t.days_until_due !== null
-                ? `${t.days_until_due}d left`
-                : fmtD(t.scheduled_end)}
-          </span>
-        </button>
+            <span className={`badge ${t.overdue ? 'bg-red' : 'bg-gray'}`}>
+              {t.overdue
+                ? `${Math.abs(t.days_until_due ?? 0)}d overdue`
+                : t.days_until_due !== null
+                  ? `${t.days_until_due}d left`
+                  : fmtD(t.scheduled_end)}
+            </span>
+          </button>
+        </div>
       ))}
-      {selected && (
-        <TaskQuickViewModal
-          task={selected}
-          onClose={() => setSelected(null)}
-          onChanged={() => setDismissed((prev) => new Set(prev).add(selected.id))}
-        />
-      )}
+      {openTaskId && <DashboardTaskDrawer taskId={openTaskId} onClose={() => setOpenTaskId(null)} />}
     </>
   );
 }
