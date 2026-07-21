@@ -103,16 +103,20 @@ def import_estimate_sheet(client: httpx.Client, project: dict, ws, codes_by_code
     created, already_present = 0, 0
     for row in ws.iter_rows(min_row=2):
         title = cell(row, "Title")
-        if not title:
+        if not title or not isinstance(title, str):
             continue
-        unit_cost = float(cell(row, "Unit Cost") or 0)
+        try:
+            unit_cost = float(cell(row, "Unit Cost") or 0)
+            quantity = float(cell(row, "Quantity") or 1)
+            markup_raw = float(cell(row, "Markup") or 0)
+        except (TypeError, ValueError):
+            print(f"    SKIPPED unexpected row for '{title}' (non-numeric cost/quantity/markup)", file=sys.stderr)
+            continue
         if (title, unit_cost) in existing_keys:
             already_present += 1
             continue
         category = cell(row, "Category") or ""
         raw_cost_code = cell(row, "Cost Code") or ""
-        quantity = float(cell(row, "Quantity") or 1)
-        markup_raw = float(cell(row, "Markup") or 0)
         markup_type_raw = cell(row, "Markup Type") or "%"
         description = cell(row, "Description")
         internal_notes = cell(row, "Internal Notes")
@@ -162,18 +166,15 @@ def import_quickbooks_sheet(client: httpx.Client, project: dict, ws, codes_by_co
             section = values[1]
             continue
         date_val, name_val, memo_val, amount_val, code_val = (values[1:6] + [None] * 5)[:5]
-        if date_val is None or amount_val is None or date_val == "Date":
-            continue  # "Date" literal marks the repeated column-header row within a section
-        if isinstance(date_val, str) and date_val.strip().lower().startswith("total"):
-            continue  # a "Total for ..." subtotal row, not a real transaction
-        try:
-            tx_date = date_val.date().isoformat() if hasattr(date_val, "date") else str(date_val)[:10]
-        except AttributeError:
+        # Real transaction rows always have an actual date cell in this column.
+        # Repeated column-header rows ("Date"), subtotal rows ("Total for ...",
+        # "Net Income", etc.), and anything else that isn't a genuine dated
+        # transaction all have plain text here instead -- skip them uniformly
+        # rather than trying to enumerate every label that might show up.
+        if not hasattr(date_val, "date") or not isinstance(amount_val, (int, float)):
             continue
-        try:
-            amount = float(amount_val)
-        except (TypeError, ValueError):
-            continue
+        tx_date = date_val.date().isoformat()
+        amount = float(amount_val)
         is_income = section == "Income"
         signed_amount = abs(amount) if is_income else -abs(amount)
         description = memo_val or None
@@ -257,13 +258,17 @@ def import_contractors_sheet(client: httpx.Client, project: dict, ws, subs_by_na
             while i < len(rows) and rows[i][1].value != "Total Contract":
                 r = rows[i]
                 r_vals = [c.value for c in r]
+                if r_vals[1] in ("Contract/Agreement", "Line Item"):
+                    # a header row repeated mid-block, not a real entry
+                    i += 1
+                    continue
                 desc, amount = r_vals[1] if len(r_vals) > 1 else None, r_vals[2] if len(r_vals) > 2 else None
                 pay_date, pay_amount, pay_category = (
                     r_vals[4] if len(r_vals) > 4 else None,
                     r_vals[5] if len(r_vals) > 5 else None,
                     r_vals[6] if len(r_vals) > 6 else None,
                 )
-                if amount is not None:
+                if isinstance(amount, (int, float)):
                     item_r = client.post(
                         f"/api/projects/{project['id']}/subcontractor-items",
                         json={"subcontractor_id": sub["id"], "description": desc, "amount": float(amount)},
@@ -272,11 +277,8 @@ def import_contractors_sheet(client: httpx.Client, project: dict, ws, subs_by_na
                         items_created += 1
                     else:
                         print(f"    FAILED contract item '{desc}': {item_r.status_code} {item_r.text}", file=sys.stderr)
-                if pay_date is not None and pay_amount is not None:
-                    try:
-                        tx_date = pay_date.date().isoformat() if hasattr(pay_date, "date") else str(pay_date)[:10]
-                    except AttributeError:
-                        tx_date = None
+                if hasattr(pay_date, "date") and isinstance(pay_amount, (int, float)):
+                    tx_date = pay_date.date().isoformat()
                     if tx_date:
                         signed = -abs(float(pay_amount))
                         key = (tx_date, round(signed, 2), f"Payment to {name}"[:60])
@@ -348,28 +350,36 @@ def main() -> None:
             continue
         print(f"  Matched project: {project['name']} (id={project['id']})")
 
-        wb = openpyxl.load_workbook(path, data_only=True)
+        try:
+            wb = openpyxl.load_workbook(path, data_only=True)
 
-        if "Estimate" in wb.sheetnames:
-            created, present = import_estimate_sheet(client, project, wb["Estimate"], codes_by_code, unmatched_codes)
-            note = f" ({present} already present, skipped)" if present else ""
-            print(f"  Estimate: imported {created} line items.{note}")
+            if "Estimate" in wb.sheetnames:
+                created, present = import_estimate_sheet(client, project, wb["Estimate"], codes_by_code, unmatched_codes)
+                note = f" ({present} already present, skipped)" if present else ""
+                print(f"  Estimate: imported {created} line items.{note}")
 
-        existing_tx = client.get("/api/transactions", params={"project_id": project["id"]}).json()
-        existing_tx_keys = {
-            (t["transaction_date"][:10], round(t["amount"], 2), (t.get("description") or "")[:60]) for t in existing_tx
-        }
+            existing_tx = client.get("/api/transactions", params={"project_id": project["id"]}).json()
+            existing_tx_keys = {
+                (t["transaction_date"][:10], round(t["amount"], 2), (t.get("description") or "")[:60])
+                for t in existing_tx
+            }
 
-        if "Quickbooks" in wb.sheetnames:
-            created, skipped = import_quickbooks_sheet(client, project, wb["Quickbooks"], codes_by_code, existing_tx_keys)
-            note = f" ({skipped} already present, skipped)" if skipped else ""
-            print(f"  Quickbooks: imported {created} transactions.{note}")
+            if "Quickbooks" in wb.sheetnames:
+                created, skipped = import_quickbooks_sheet(
+                    client, project, wb["Quickbooks"], codes_by_code, existing_tx_keys
+                )
+                note = f" ({skipped} already present, skipped)" if skipped else ""
+                print(f"  Quickbooks: imported {created} transactions.{note}")
 
-        if "Contractors" in wb.sheetnames:
-            items, payments, subs_touched = import_contractors_sheet(
-                client, project, wb["Contractors"], subs_by_name, existing_tx_keys
-            )
-            print(f"  Contractors: {subs_touched} subcontractor(s), {items} contract items, {payments} payments.")
+            if "Contractors" in wb.sheetnames:
+                items, payments, subs_touched = import_contractors_sheet(
+                    client, project, wb["Contractors"], subs_by_name, existing_tx_keys
+                )
+                print(f"  Contractors: {subs_touched} subcontractor(s), {items} contract items, {payments} payments.")
+        except Exception as exc:  # noqa: BLE001 -- a surprise in one file must not block the rest
+            print(f"  FAILED partway through this file: {exc!r}", file=sys.stderr)
+            print("  Whatever imported before the error is already saved; re-run once fixed to pick up the rest.")
+            continue
 
     if unmatched_codes:
         print("\n=== Line items whose source cost code didn't match your existing cost code list (noted on the item, not blocking) ===")
