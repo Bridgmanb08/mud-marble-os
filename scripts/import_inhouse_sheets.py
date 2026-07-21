@@ -60,13 +60,25 @@ def job_name_from_filename(path: Path) -> str:
     return name.strip()
 
 
+STREET_SUFFIXES = {"st", "street", "ave", "avenue", "ln", "lane", "rd", "road", "dr", "drive", "blvd"}
+
+
+def _strip_street_suffix(name: str) -> str:
+    words = name.split()
+    if len(words) > 1 and words[-1] in STREET_SUFFIXES:
+        return " ".join(words[:-1])
+    return name
+
+
 def match_project(job_name: str, projects: list[dict]):
     needle = job_name.lower()
+    needle_no_suffix = _strip_street_suffix(needle)
     for p in projects:
         prefix = p["name"].split("|")[0].strip().lower()
-        if prefix == needle:
+        prefix_no_suffix = _strip_street_suffix(prefix)
+        if prefix in (needle, needle_no_suffix) or prefix_no_suffix in (needle, needle_no_suffix):
             return p, None
-    matches = [p for p in projects if needle in p["name"].lower()]
+    matches = [p for p in projects if needle in p["name"].lower() or needle_no_suffix in p["name"].lower()]
     if len(matches) == 1:
         return matches[0], None
     if len(matches) > 1:
