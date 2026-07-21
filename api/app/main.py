@@ -15,6 +15,7 @@ from .routers import (
     leads,
     notifications,
     projects,
+    reports,
     sub_intelligence,
     subcontractors,
     tasks,
@@ -55,3 +56,4 @@ app.include_router(tasks.router, prefix="/api")
 app.include_router(subcontractors.router, prefix="/api")
 app.include_router(sub_intelligence.router, prefix="/api")
 app.include_router(notifications.router, prefix="/api")
+app.include_router(reports.router, prefix="/api")

@@ -1,4 +1,4 @@
-from typing import Optional
+from typing import Literal, Optional
 
 from pydantic import BaseModel
 
@@ -30,3 +30,23 @@ class ImportTasksRequest(BaseModel):
 
 class ImportTasksResponse(BaseModel):
     imported: int
+
+
+class ChatMessage(BaseModel):
+    role: Literal["user", "assistant"]
+    content: str
+
+
+class AskRequest(BaseModel):
+    message: str
+    history: list[ChatMessage] = []
+
+
+class ToolCallLog(BaseModel):
+    name: str
+    input: dict
+
+
+class AskResponse(BaseModel):
+    reply: str
+    tool_calls: list[ToolCallLog] = []
