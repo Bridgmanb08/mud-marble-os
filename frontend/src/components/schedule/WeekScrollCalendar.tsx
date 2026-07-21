@@ -1,7 +1,7 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { api, ApiError } from '../../api/client';
 import { useToast } from '../ui/Toast';
-import type { Task } from '../../types';
+import type { Project, Task } from '../../types';
 
 const STATUS_COLOR: Record<string, string> = {
   upcoming: 'var(--border-md)',
@@ -107,11 +107,20 @@ function fmtRange(weekStart: Date): string {
 export function WeekScrollCalendar({
   tasks,
   projectId,
+  projects,
+  colorForTask,
   onOpenTask,
   onChanged,
 }: {
   tasks: Task[];
   projectId?: string;
+  /** Pass the full project list to render a project picker in the quick-add
+   * popover -- only needed when `projectId` isn't fixed (a multi-project/master
+   * calendar), since a new task always needs to know which job it belongs to. */
+  projects?: Project[];
+  /** Overrides the default status-based bar color, e.g. to color by job on a
+   * multi-project calendar where distinguishing jobs matters more than status. */
+  colorForTask?: (task: Task) => string;
   onOpenTask: (id: string) => void;
   onChanged: () => void;
 }) {
@@ -125,7 +134,7 @@ export function WeekScrollCalendar({
     return [...weeksFrom(thisWeek, 4, -1), thisWeek, ...weeksFrom(addDays(thisWeek, 7), WEEKS_PER_PAGE - 1, 1)];
   });
   const [drag, setDrag] = useState<DragState | null>(null);
-  const [quickAdd, setQuickAdd] = useState<{ startKey: string; endKey: string; title: string } | null>(null);
+  const [quickAdd, setQuickAdd] = useState<{ startKey: string; endKey: string; title: string; projectId: string } | null>(null);
 
   useLayoutEffect(() => {
     if (pendingPrependHeight.current !== null && scrollRef.current) {
@@ -202,12 +211,13 @@ export function WeekScrollCalendar({
       window.removeEventListener('pointerup', onUp);
 
       if (finished.mode === 'create') {
+        const defaultProjectId = projectId || (projects?.length === 1 ? projects[0].id : '');
         if (!dragMoved.current) {
-          setQuickAdd({ startKey: finished.anchorKey, endKey: finished.anchorKey, title: '' });
+          setQuickAdd({ startKey: finished.anchorKey, endKey: finished.anchorKey, title: '', projectId: defaultProjectId });
         } else {
           const lo = finished.anchorKey <= finished.currentKey ? finished.anchorKey : finished.currentKey;
           const hi = finished.anchorKey <= finished.currentKey ? finished.currentKey : finished.anchorKey;
-          setQuickAdd({ startKey: lo, endKey: hi, title: '' });
+          setQuickAdd({ startKey: lo, endKey: hi, title: '', projectId: defaultProjectId });
         }
         return;
       }
@@ -266,7 +276,7 @@ export function WeekScrollCalendar({
     }
     try {
       await api.post('/tasks', {
-        project_id: projectId || null,
+        project_id: projectId || quickAdd.projectId || null,
         title,
         scheduled_start: quickAdd.startKey,
         scheduled_end: quickAdd.endKey,
@@ -372,7 +382,7 @@ export function WeekScrollCalendar({
                         gridColumn: `${showPreview ? previewColStart : colStart} / ${showPreview ? previewColEnd : colEnd}`,
                         top: ROW_TOP_PAD + lane * (BAR_HEIGHT + BAR_GAP),
                         height: BAR_HEIGHT,
-                        background: STATUS_COLOR[s.task.status] || 'var(--border-md)',
+                        background: colorForTask ? colorForTask(s.task) : STATUS_COLOR[s.task.status] || 'var(--border-md)',
                       }}
                       title={s.task.title}
                       onPointerDown={(e) => {
@@ -437,6 +447,21 @@ export function WeekScrollCalendar({
                 }
               }}
             />
+            {!projectId && projects && (
+              <select
+                className="fi"
+                style={{ marginTop: 8 }}
+                value={quickAdd.projectId}
+                onChange={(e) => setQuickAdd({ ...quickAdd, projectId: e.target.value })}
+              >
+                <option value="">— No job —</option>
+                {projects.map((p) => (
+                  <option key={p.id} value={p.id}>
+                    {p.name.replace(/\|.*/, '').trim()}
+                  </option>
+                ))}
+              </select>
+            )}
             <div className="ma">
               <button type="button" className="btn" onClick={() => setQuickAdd(null)}>
                 Cancel

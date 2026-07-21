@@ -301,6 +301,7 @@ export interface Project {
   contract_value: number | null;
   health_status: string | null;
   is_archived: boolean;
+  color: string | null;
   created_at: string;
   clients: ClientBrief | null;
 }

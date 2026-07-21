@@ -1,0 +1,35 @@
+/* Per-job color dot + picker, and the master calendar's multi-select job
+   filter rows. Additive-only, imported once from index.css. */
+
+.job-filter-row{
+  display:flex;align-items:center;gap:8px;width:100%;padding:6px 8px;
+  border-radius:var(--r);cursor:pointer;font-size:12.5px;color:var(--t2);
+}
+.job-filter-row:hover{background:var(--bg);}
+.job-filter-row.active{color:var(--text);font-weight:500;}
+.job-filter-row input[type="checkbox"]{flex-shrink:0;}
+.job-filter-name{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;flex:1;}
+
+.job-color-dot{
+  width:12px;height:12px;border-radius:50%;flex-shrink:0;cursor:pointer;
+  border:1px solid rgba(0,0,0,.12);padding:0;
+}
+
+.job-color-pop-backdrop{position:fixed;inset:0;z-index:299;}
+.job-color-pop{
+  position:absolute;top:18px;left:0;z-index:300;padding:8px;
+  display:flex;flex-wrap:wrap;gap:6px;width:120px;
+  box-shadow:0 4px 16px rgba(0,0,0,.16);
+}
+.job-color-swatch{
+  width:20px;height:20px;border-radius:50%;cursor:pointer;
+  border:1px solid rgba(0,0,0,.12);padding:0;
+}
+.job-color-swatch.selected{outline:2px solid var(--accent);outline-offset:1px;}
+.job-color-custom{
+  width:20px;height:20px;border-radius:50%;overflow:hidden;cursor:pointer;
+  border:1px dashed var(--border-md);display:flex;align-items:center;justify-content:center;
+}
+.job-color-custom input[type="color"]{
+  width:32px;height:32px;border:none;padding:0;margin:0;cursor:pointer;background:none;
+}

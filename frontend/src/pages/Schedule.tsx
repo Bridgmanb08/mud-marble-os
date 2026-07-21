@@ -1,34 +1,22 @@
 import { useEffect, useMemo, useState } from 'react';
-import { IconChevronLeft, IconChevronRight, IconCalendar, IconList, IconUsersGroup } from '@tabler/icons-react';
+import { IconCalendar, IconList, IconUsersGroup } from '@tabler/icons-react';
 import { api } from '../api/client';
 import { useToast } from '../components/ui/Toast';
 import { fmtD } from '../lib/format';
-import type { Project, Task } from '../types';
+import { colorForProject } from '../lib/jobColors';
+import type { Project, Subcontractor, Task } from '../types';
 import { TaskDetailDrawer } from '../components/tasks/TaskDetailDrawer';
 import { SubcontractorScheduleGrid } from '../components/schedule/SubcontractorScheduleGrid';
-
-const STATUS_COLOR: Record<string, string> = {
-  upcoming: 'var(--border-md)',
-  in_progress: 'var(--amber)',
-  delayed: 'var(--red)',
-  blocked: 'var(--red)',
-  complete: 'var(--green)',
-};
-
-function dateKey(d: Date): string {
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
-}
+import { WeekScrollCalendar } from '../components/schedule/WeekScrollCalendar';
+import { MasterJobFilter } from '../components/schedule/MasterJobFilter';
 
 export default function Schedule() {
   const [tasks, setTasks] = useState<Task[] | null>(null);
   const [projects, setProjects] = useState<Project[]>([]);
-  const [projectId, setProjectId] = useState('');
+  const [subcontractors, setSubcontractors] = useState<Subcontractor[]>([]);
+  const [selectedProjectIds, setSelectedProjectIds] = useState<Set<string> | null>(null);
+  const [subFilter, setSubFilter] = useState('');
   const [view, setView] = useState<'calendar' | 'list' | 'subs'>('calendar');
-  const [cursor, setCursor] = useState(() => {
-    const d = new Date();
-    d.setDate(1);
-    return d;
-  });
   const [detailTask, setDetailTask] = useState<Task | undefined>(undefined);
   const toast = useToast();
 
@@ -43,26 +31,44 @@ export default function Schedule() {
 
   useEffect(() => {
     load();
-    api.get<Project[]>('/projects').then(setProjects).catch(() => {});
+    api
+      .get<Project[]>('/projects')
+      .then((rows) => {
+        setProjects(rows);
+        setSelectedProjectIds((prev) => prev ?? new Set(rows.map((p) => p.id)));
+      })
+      .catch(() => {});
+    api.get<Subcontractor[]>('/subcontractors').then(setSubcontractors).catch(() => {});
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  const filteredTasks = useMemo(() => {
-    if (!projectId) return tasks || [];
-    return (tasks || []).filter((t) => t.project_id === projectId);
-  }, [tasks, projectId]);
+  // New jobs (created after the page loaded) default to visible rather than
+  // silently hidden by a filter set that predates them.
+  useEffect(() => {
+    setSelectedProjectIds((prev) => {
+      if (!prev) return prev;
+      const missing = projects.filter((p) => !prev.has(p.id));
+      if (missing.length === 0) return prev;
+      const next = new Set(prev);
+      for (const p of missing) next.add(p.id);
+      return next;
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [projects]);
 
-  const tasksByDay = useMemo(() => {
-    const map = new Map<string, Task[]>();
-    for (const t of filteredTasks) {
-      const d = t.scheduled_end || t.scheduled_start;
-      if (!d) continue;
-      const key = dateKey(new Date(d));
-      if (!map.has(key)) map.set(key, []);
-      map.get(key)!.push(t);
-    }
-    return map;
-  }, [filteredTasks]);
+  function handleProjectColorChanged(projectId: string, color: string) {
+    setProjects((prev) => prev.map((p) => (p.id === projectId ? { ...p, color } : p)));
+  }
+
+  const filteredTasks = useMemo(() => {
+    if (!tasks) return [];
+    return tasks.filter((t) => {
+      // Tasks with no project aren't tied to any job, so the job filter doesn't apply to them.
+      if (selectedProjectIds && t.project_id && !selectedProjectIds.has(t.project_id)) return false;
+      if (subFilter && t.subcontractor_id !== subFilter) return false;
+      return true;
+    });
+  }, [tasks, selectedProjectIds, subFilter]);
 
   const datedSorted = useMemo(() => {
     return filteredTasks
@@ -70,50 +76,30 @@ export default function Schedule() {
       .sort((a, b) => new Date(a.scheduled_end || a.scheduled_start!).getTime() - new Date(b.scheduled_end || b.scheduled_start!).getTime());
   }, [filteredTasks]);
 
-  const monthLabel = cursor.toLocaleDateString('en-US', { month: 'long', year: 'numeric' });
-
-  const weeks = useMemo(() => {
-    const firstOfMonth = new Date(cursor.getFullYear(), cursor.getMonth(), 1);
-    const start = new Date(firstOfMonth);
-    start.setDate(start.getDate() - start.getDay());
-    const days: Date[] = [];
-    for (let i = 0; i < 42; i++) {
-      const d = new Date(start);
-      d.setDate(start.getDate() + i);
-      days.push(d);
-    }
-    const out: Date[][] = [];
-    for (let i = 0; i < days.length; i += 7) out.push(days.slice(i, i + 7));
-    return out;
-  }, [cursor]);
-
   function openTask(id: string) {
     const t = tasks?.find((t) => t.id === id);
     if (t) setDetailTask(t);
   }
 
-  const today = dateKey(new Date());
+  const projectsById = useMemo(() => new Map(projects.map((p) => [p.id, p])), [projects]);
 
   return (
     <>
       <div className="ph">
         <div>
-          <h1>
-            {view === 'subs' ? 'Subcontractor Schedule' : projectId ? projects.find((p) => p.id === projectId)?.name.replace(/\|.*/, '').trim() : 'Global Schedule'}
-          </h1>
-          <p>{view === 'subs' ? "See where each subcontractor is booked, week by week, across every job" : 'Task and milestone calendar across all active projects'}</p>
+          <h1>Master Schedule</h1>
+          <p>Task and milestone calendar across every active job</p>
         </div>
         <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-          {view !== 'subs' && (
-            <select className="fi" style={{ width: 'auto' }} value={projectId} onChange={(e) => setProjectId(e.target.value)}>
-              <option value="">Schedule by: All projects</option>
-              {projects.map((p) => (
-                <option key={p.id} value={p.id}>
-                  {p.name.replace(/\|.*/, '').trim()}
-                </option>
-              ))}
-            </select>
-          )}
+          <select className="fi" style={{ width: 'auto' }} value={subFilter} onChange={(e) => setSubFilter(e.target.value)}>
+            <option value="">All subcontractors</option>
+            {subcontractors.map((s) => (
+              <option key={s.id} value={s.id}>
+                {s.company_name}
+                {s.trade ? ` (${s.trade})` : ''}
+              </option>
+            ))}
+          </select>
           <div style={{ display: 'flex', background: 'var(--bg)', border: '1px solid var(--border)', borderRadius: 8, padding: 3, gap: 2 }}>
             <button
               className="btn btn-sm btn-ghost"
@@ -140,117 +126,76 @@ export default function Schedule() {
         </div>
       </div>
 
-      {tasks === null ? (
-        <div className="empty">
-          <div className="empty-t">Loading…</div>
-        </div>
-      ) : view === 'calendar' ? (
-        <div className="card" style={{ padding: 0 }}>
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '12px 16px', borderBottom: '1px solid var(--border)' }}>
-            <button className="btn btn-sm btn-ghost" onClick={() => setCursor(new Date(cursor.getFullYear(), cursor.getMonth() - 1, 1))}>
-              <IconChevronLeft size={14} />
-            </button>
-            <div style={{ fontWeight: 600, fontSize: 14 }}>{monthLabel}</div>
-            <button className="btn btn-sm btn-ghost" onClick={() => setCursor(new Date(cursor.getFullYear(), cursor.getMonth() + 1, 1))}>
-              <IconChevronRight size={14} />
-            </button>
-          </div>
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)', borderBottom: '1px solid var(--border)' }}>
-            {['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'].map((d) => (
-              <div key={d} style={{ padding: '6px 8px', fontSize: 11, fontWeight: 600, color: 'var(--t2)', textAlign: 'center' }}>
-                {d}
-              </div>
-            ))}
-          </div>
-          {weeks.map((week, wi) => (
-            <div key={wi} style={{ display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)', borderBottom: wi < weeks.length - 1 ? '1px solid var(--border)' : undefined }}>
-              {week.map((day) => {
-                const key = dateKey(day);
-                const inMonth = day.getMonth() === cursor.getMonth();
-                const dayTasks = tasksByDay.get(key) || [];
-                return (
-                  <div
-                    key={key}
-                    style={{
-                      minHeight: 90,
-                      padding: 6,
-                      borderRight: '1px solid var(--border)',
-                      opacity: inMonth ? 1 : 0.35,
-                      background: key === today ? 'var(--bg)' : undefined,
-                    }}
-                  >
-                    <div style={{ fontSize: 11, color: key === today ? 'var(--accent)' : 'var(--t2)', fontWeight: key === today ? 700 : 500, marginBottom: 4 }}>
-                      {day.getDate()}
-                    </div>
-                    {dayTasks.slice(0, 3).map((t) => (
-                      <button
-                        key={t.id}
-                        type="button"
-                        className="btn-reset"
-                        onClick={() => openTask(t.id)}
-                        style={{
-                          display: 'block',
-                          width: '100%',
-                          textAlign: 'left',
-                          fontSize: 11,
-                          padding: '2px 5px',
-                          marginBottom: 2,
-                          borderRadius: 3,
-                          background: 'var(--bg)',
-                          borderLeft: `2px solid ${STATUS_COLOR[t.status] || 'var(--border-md)'}`,
-                          cursor: 'pointer',
-                          whiteSpace: 'nowrap',
-                          overflow: 'hidden',
-                          textOverflow: 'ellipsis',
-                        }}
-                        title={t.title}
-                      >
-                        {t.title}
-                      </button>
-                    ))}
-                    {dayTasks.length > 3 && <div style={{ fontSize: 10, color: 'var(--t2)' }}>+{dayTasks.length - 3} more</div>}
-                  </div>
-                );
-              })}
-            </div>
-          ))}
-        </div>
-      ) : view === 'list' ? (
-        <div className="card">
-          {datedSorted.length === 0 ? (
+      <div className="tasks-layout">
+        <MasterJobFilter
+          projects={projects}
+          selected={selectedProjectIds || new Set()}
+          onChange={setSelectedProjectIds}
+          onProjectColorChanged={handleProjectColorChanged}
+        />
+
+        <div className="tasks-main">
+          {tasks === null ? (
             <div className="empty">
-              <div className="empty-t">No scheduled tasks</div>
+              <div className="empty-t">Loading…</div>
+            </div>
+          ) : view === 'calendar' ? (
+            <WeekScrollCalendar
+              tasks={filteredTasks}
+              projects={projects}
+              colorForTask={(t) => colorForProject(t.project_id ? projectsById.get(t.project_id) : undefined)}
+              onOpenTask={openTask}
+              onChanged={load}
+            />
+          ) : view === 'list' ? (
+            <div className="card">
+              {datedSorted.length === 0 ? (
+                <div className="empty">
+                  <div className="empty-t">No scheduled tasks</div>
+                </div>
+              ) : (
+                <table className="tbl">
+                  <thead>
+                    <tr>
+                      <th>Date</th>
+                      <th>Title</th>
+                      <th>Project</th>
+                      <th>Assignee</th>
+                      <th>Status</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {datedSorted.map((t) => (
+                      <tr key={t.id} onClick={() => openTask(t.id)} style={{ cursor: 'pointer' }}>
+                        <td>{fmtD(t.scheduled_end || t.scheduled_start)}</td>
+                        <td style={{ fontWeight: 500 }}>{t.title}</td>
+                        <td style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                          <span
+                            style={{
+                              width: 8,
+                              height: 8,
+                              borderRadius: '50%',
+                              background: colorForProject(t.project_id ? projectsById.get(t.project_id) : undefined),
+                              flexShrink: 0,
+                            }}
+                          />
+                          {t.projects?.name?.replace(/\|.*/, '').trim() || '—'}
+                        </td>
+                        <td>{t.assigned_to || '—'}</td>
+                        <td>
+                          <span className="badge bg-gray">{t.status.replace('_', ' ')}</span>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              )}
             </div>
           ) : (
-            <table className="tbl">
-              <thead>
-                <tr>
-                  <th>Date</th>
-                  <th>Title</th>
-                  <th>Project</th>
-                  <th>Assignee</th>
-                  <th>Status</th>
-                </tr>
-              </thead>
-              <tbody>
-                {datedSorted.map((t) => (
-                  <tr key={t.id} onClick={() => openTask(t.id)}>
-                    <td>{fmtD(t.scheduled_end || t.scheduled_start)}</td>
-                    <td style={{ fontWeight: 500 }}>{t.title}</td>
-                    <td>{t.projects?.name?.replace(/\|.*/, '').trim() || '—'}</td>
-                    <td>{t.assigned_to || '—'}</td>
-                    <td>
-                      <span className="badge bg-gray">{t.status.replace('_', ' ')}</span>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+            <SubcontractorScheduleGrid tasks={filteredTasks} onOpenTask={openTask} />
           )}
         </div>
-      ) : (
-        <SubcontractorScheduleGrid tasks={tasks || []} onOpenTask={openTask} />
-      )}
+      </div>
 
       {detailTask && (
         <TaskDetailDrawer

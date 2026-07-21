@@ -4,7 +4,7 @@ import { IconArrowLeft, IconPlus, IconCalendar, IconList } from '@tabler/icons-r
 import { api } from '../api/client';
 import { useToast } from '../components/ui/Toast';
 import { fmt, fmtD } from '../lib/format';
-import type { ChangeOrder, Estimate, Invoice, Project, ProjectNote, Task } from '../types';
+import type { ChangeOrder, Estimate, Invoice, Project, ProjectNote, Subcontractor, Task } from '../types';
 import { NewNoteModal } from '../components/projects/NewNoteModal';
 import { NewChangeOrderModal } from '../components/change-orders/NewChangeOrderModal';
 import { NewInvoiceModal } from '../components/invoices/NewInvoiceModal';
@@ -45,6 +45,8 @@ export default function ProjectDetail() {
   const [detailTask, setDetailTask] = useState<Task | undefined>(undefined);
   const [startingEstimate, setStartingEstimate] = useState(false);
   const [scheduleView, setScheduleView] = useState<'calendar' | 'list'>('calendar');
+  const [subcontractors, setSubcontractors] = useState<Subcontractor[]>([]);
+  const [subFilter, setSubFilter] = useState('');
 
   async function loadNotes() {
     if (!id) return;
@@ -86,8 +88,11 @@ export default function ProjectDetail() {
     loadChangeOrders();
     loadInvoices();
     loadTasks();
+    api.get<Subcontractor[]>('/subcontractors').then(setSubcontractors).catch(() => {});
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [id]);
+
+  const filteredTasks = subFilter ? tasks.filter((t) => t.subcontractor_id === subFilter) : tasks;
 
   if (!project) {
     return (
@@ -326,8 +331,17 @@ export default function ProjectDetail() {
         {tab === 'Schedule' && (
           <>
             <div className="sh">
-              <div className="st">{tasks.length} tasks</div>
+              <div className="st">{filteredTasks.length} tasks</div>
               <div style={{ display: 'flex', gap: 8 }}>
+                <select className="fi" style={{ width: 'auto' }} value={subFilter} onChange={(e) => setSubFilter(e.target.value)}>
+                  <option value="">All subcontractors</option>
+                  {subcontractors.map((s) => (
+                    <option key={s.id} value={s.id}>
+                      {s.company_name}
+                      {s.trade ? ` (${s.trade})` : ''}
+                    </option>
+                  ))}
+                </select>
                 <div style={{ display: 'flex', background: 'var(--bg)', border: '1px solid var(--border)', borderRadius: 8, padding: 3, gap: 2 }}>
                   <button
                     className="btn btn-sm btn-ghost"
@@ -355,9 +369,9 @@ export default function ProjectDetail() {
                 <p className="empty-s" style={{ marginTop: -6, marginBottom: 10 }}>
                   Drag to create a task across days, drag a task to move it, or drag its edges to resize. Click a task for details.
                 </p>
-                <WeekScrollCalendar tasks={tasks} projectId={id} onOpenTask={openTask} onChanged={loadTasks} />
+                <WeekScrollCalendar tasks={filteredTasks} projectId={id} onOpenTask={openTask} onChanged={loadTasks} />
               </>
-            ) : tasks.length === 0 ? (
+            ) : filteredTasks.length === 0 ? (
               <div className="empty-s">No tasks scheduled yet.</div>
             ) : (
               <table className="tbl">
@@ -371,7 +385,7 @@ export default function ProjectDetail() {
                   </tr>
                 </thead>
                 <tbody>
-                  {tasks.map((t) => (
+                  {filteredTasks.map((t) => (
                     <tr key={t.id} onClick={() => openTask(t.id)} style={{ cursor: 'pointer' }}>
                       <td style={{ fontWeight: 500 }}>{t.title}</td>
                       <td>{t.assigned_to || '—'}</td>

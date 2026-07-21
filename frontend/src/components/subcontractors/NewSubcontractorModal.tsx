@@ -6,7 +6,7 @@ import type { Subcontractor } from '../../types';
 
 interface NewSubcontractorModalProps {
   onClose: () => void;
-  onSaved: () => void;
+  onSaved: (sub: Subcontractor) => void;
   sub?: Subcontractor;
 }
 
@@ -47,12 +47,10 @@ export function NewSubcontractorModal({ onClose, onSaved, sub }: NewSubcontracto
       notes: notes.trim() || null,
     };
     try {
-      if (sub) {
-        await api.patch(`/subcontractors/${sub.id}`, payload);
-      } else {
-        await api.post('/subcontractors', payload);
-      }
-      onSaved();
+      const saved = sub
+        ? await api.patch<Subcontractor>(`/subcontractors/${sub.id}`, payload)
+        : await api.post<Subcontractor>('/subcontractors', payload);
+      onSaved(saved);
     } catch (err) {
       setError(err instanceof ApiError ? err.message : 'Failed to save subcontractor');
     } finally {

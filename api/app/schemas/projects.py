@@ -16,6 +16,7 @@ class ProjectCreate(BaseModel):
     state: Optional[str] = "IN"
     client_id: Optional[str] = None
     contract_value: Optional[float] = None
+    color: Optional[str] = None
 
 
 class ProjectUpdate(BaseModel):
@@ -33,6 +34,7 @@ class ProjectUpdate(BaseModel):
     contract_value: Optional[float] = None
     health_status: Optional[str] = None
     is_archived: Optional[bool] = None
+    color: Optional[str] = None
 
 
 class ClientBrief(BaseModel):
@@ -57,6 +59,7 @@ class ProjectOut(BaseModel):
     contract_value: Optional[float] = None
     health_status: Optional[str] = None
     is_archived: bool = False
+    color: Optional[str] = None
     created_at: str
     clients: Optional[ClientBrief] = None
 
