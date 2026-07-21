@@ -1,5 +1,5 @@
 import { api } from '../api/client';
-import type { ProjectFile, UploadUrlResponse } from '../types';
+import type { ProjectFile, SubcontractorFile, UploadUrlResponse } from '../types';
 
 const SUPABASE_ANON_KEY = import.meta.env.VITE_SUPABASE_ANON_KEY as string | undefined;
 
@@ -36,6 +36,22 @@ export async function uploadProjectFile(projectId: string, file: File, taskIds: 
     size_bytes: file.size,
     storage_path,
     task_ids: taskIds,
+  });
+}
+
+export async function uploadSubcontractorFile(subId: string, file: File): Promise<SubcontractorFile> {
+  const fileType = inferFileType(file.type);
+  const { upload_url, storage_path } = await api.post<UploadUrlResponse>(
+    `/subcontractors/${subId}/files/upload-url`,
+    { file_name: file.name, file_type: fileType, mime_type: file.type || null }
+  );
+  await putToSignedUrl(upload_url, file);
+  return api.post<SubcontractorFile>(`/subcontractors/${subId}/files`, {
+    file_name: file.name,
+    file_type: fileType,
+    mime_type: file.type || null,
+    size_bytes: file.size,
+    storage_path,
   });
 }
 

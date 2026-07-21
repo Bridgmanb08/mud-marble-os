@@ -320,6 +320,18 @@ export interface ProjectFile {
   task_ids: string[];
 }
 
+export interface SubcontractorFile {
+  id: string;
+  subcontractor_id: string;
+  uploaded_by: string | null;
+  file_name: string;
+  file_type: 'photo' | 'video' | 'plan' | 'other' | string;
+  mime_type: string | null;
+  size_bytes: number | null;
+  storage_path: string;
+  created_at: string;
+}
+
 export interface UploadUrlResponse {
   upload_url: string;
   storage_path: string;

@@ -15,9 +15,10 @@ interface TaskDetailDrawerProps {
   onClose: () => void;
   onSaved: () => void;
   onDeleted: () => void;
+  onChanged?: () => void;
 }
 
-export function TaskDetailDrawer({ task, allTasks, onClose, onSaved, onDeleted }: TaskDetailDrawerProps) {
+export function TaskDetailDrawer({ task, allTasks, onClose, onSaved, onDeleted, onChanged }: TaskDetailDrawerProps) {
   const toast = useToast();
   const [projects, setProjects] = useState<Project[]>([]);
   const [directory, setDirectory] = useState<UserDirectoryEntry[]>([]);
@@ -28,6 +29,10 @@ export function TaskDetailDrawer({ task, allTasks, onClose, onSaved, onDeleted }
   const [assignees, setAssignees] = useState<string[]>(task.assignees || []);
   const [clarifyFrom, setClarifyFrom] = useState(task.clarify_from || '');
   const [subcontractorId, setSubcontractorId] = useState(task.subcontractor_id || '');
+  // Tracks the task's real version across auto-saved fields (like the
+  // subcontractor select below) so the main Save button and /clarify PATCH
+  // don't send a now-stale expected_version and get rejected with a 409.
+  const [currentVersion, setCurrentVersion] = useState(task.version);
   const [phase, setPhase] = useState(task.phase || '');
   const [status, setStatus] = useState(task.status);
   const [priority, setPriority] = useState(task.priority);
@@ -71,6 +76,22 @@ export function TaskDetailDrawer({ task, allTasks, onClose, onSaved, onDeleted }
 
   const blockedByIncomplete = dependencies.some((d) => tasksById.get(d.depends_on_id)?.status !== 'complete');
 
+  async function handleSubcontractorChange(value: string) {
+    const previous = subcontractorId;
+    setSubcontractorId(value);
+    try {
+      const updated = await api.patch<Task>(`/tasks/${task.id}`, {
+        subcontractor_id: value || null,
+        expected_version: currentVersion,
+      });
+      setCurrentVersion(updated.version);
+      onChanged?.();
+    } catch (err) {
+      setSubcontractorId(previous);
+      toast(errMsg(err), true);
+    }
+  }
+
   async function handleSubmit(e: FormEvent) {
     e.preventDefault();
     if (!title.trim()) {
@@ -101,7 +122,7 @@ export function TaskDetailDrawer({ task, allTasks, onClose, onSaved, onDeleted }
         notes: notes.trim() || null,
         is_milestone: isMilestone,
         is_punch_list: isPunchList,
-        expected_version: task.version,
+        expected_version: currentVersion,
       });
       // Dedicated endpoint -- the generic PATCH above drops explicit nulls
       // (exclude_none), so clearing the flag has to go through /clarify.
@@ -226,7 +247,7 @@ export function TaskDetailDrawer({ task, allTasks, onClose, onSaved, onDeleted }
         <div className="fr">
           <div className="fg">
             <label className="fl">Subcontractor</label>
-            <select className="fi" value={subcontractorId} onChange={(e) => setSubcontractorId(e.target.value)}>
+            <select className="fi" value={subcontractorId} onChange={(e) => handleSubcontractorChange(e.target.value)}>
               <option value="">— None —</option>
               {subcontractors.map((s) => (
                 <option key={s.id} value={s.id}>
