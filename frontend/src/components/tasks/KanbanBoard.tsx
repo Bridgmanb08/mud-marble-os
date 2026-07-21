@@ -457,28 +457,30 @@ export function KanbanBoard({
     snapshotRef.current = null;
 
     if (!over) return;
-    const activeCol = findColumn(active.id as string);
+    // `over.id` is dnd-kit's own live collision result for this exact drop --
+    // always trust it as the true destination column. `findColumn(active.id)`
+    // depends on `columns` state already having absorbed the last
+    // `handleDragOver` update; if that setColumns hasn't been flushed/rendered
+    // yet by the time this fires (the dragover and the drop can land in the
+    // same tick), activeCol/`columns` can still show the *pre-move* position,
+    // which used to make the dragged task's status silently fail to update.
     const overCol = COLUMNS.some((c) => c.id === over.id) ? (over.id as string) : findColumn(over.id as string);
-    if (!activeCol || !overCol) return;
+    const originalCol = rollback
+      ? Object.keys(rollback).find((col) => rollback[col].includes(active.id as string))
+      : findColumn(active.id as string);
+    if (!overCol || !originalCol) return;
+
+    const statusChanged = originalCol !== overCol;
 
     let finalColumns = columns;
-    if (activeCol === overCol) {
-      const oldIndex = columns[activeCol].indexOf(active.id as string);
-      const newIndex = columns[activeCol].indexOf(over.id as string);
+    if (!statusChanged) {
+      const oldIndex = columns[originalCol].indexOf(active.id as string);
+      const newIndex = columns[originalCol].indexOf(over.id as string);
       if (oldIndex !== newIndex && newIndex !== -1) {
-        finalColumns = { ...columns, [activeCol]: arrayMove(columns[activeCol], oldIndex, newIndex) };
+        finalColumns = { ...columns, [originalCol]: arrayMove(columns[originalCol], oldIndex, newIndex) };
         setColumns(finalColumns);
       }
     }
-
-    // findColumn(active.id) now reflects the *destination* column, since
-    // handleDragOver already moved it there live during the drag. Compare
-    // against the pre-drag snapshot to see whether this drag actually
-    // changed the task's status (moved columns) or just reordered in place.
-    const originalCol = rollback
-      ? Object.keys(rollback).find((col) => rollback[col].includes(active.id as string))
-      : undefined;
-    const statusChanged = originalCol !== undefined && originalCol !== activeCol;
 
     if (filtersActive && !statusChanged) {
       // Reordering position within a column requires knowing every sibling's
@@ -492,20 +494,42 @@ export function KanbanBoard({
     // Send each task's last-known version so the backend can reject the
     // whole batch (409) if something else changed the board first, rather
     // than silently overwriting a concurrent edit.
-    const items = filtersActive
-      ? // Cross-column moves are safe even while filtered -- they only touch
-        // the dragged task, not any hidden sibling's position.
-        [
-          {
-            id: active.id as string,
-            status: activeCol,
-            position: Date.now(),
-            expected_version: tasksById.get(active.id as string)?.version,
-          },
-        ]
-      : Object.entries(finalColumns).flatMap(([status, ids]) =>
-          ids.map((id, index) => ({ id, status, position: index, expected_version: tasksById.get(id)?.version }))
-        );
+    let items: { id: string; status: string; position: number; expected_version: number | undefined }[];
+    if (filtersActive) {
+      // Cross-column moves are safe even while filtered -- they only touch
+      // the dragged task, not any hidden sibling's position.
+      items = [
+        {
+          id: active.id as string,
+          status: overCol,
+          position: Date.now(),
+          expected_version: tasksById.get(active.id as string)?.version,
+        },
+      ];
+    } else if (statusChanged) {
+      // Only the source and destination columns actually changed -- scope the
+      // update to those two (and force the dragged task's own status to the
+      // real drop target) instead of resending the whole board, so a stale
+      // version on some unrelated, untouched task can't poison this move with
+      // a false 409 conflict.
+      const touched = new Set([originalCol, overCol]);
+      items = Array.from(touched).flatMap((status) =>
+        finalColumns[status].map((id, index) => ({
+          id,
+          status: id === active.id ? overCol : status,
+          position: index,
+          expected_version: tasksById.get(id)?.version,
+        }))
+      );
+    } else {
+      // Same-column reorder: only that column's ordering changed.
+      items = finalColumns[originalCol].map((id, index) => ({
+        id,
+        status: originalCol,
+        position: index,
+        expected_version: tasksById.get(id)?.version,
+      }));
+    }
 
     try {
       await api.patch('/tasks/reorder', { items });
