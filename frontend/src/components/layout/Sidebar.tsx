@@ -12,6 +12,7 @@ import {
   IconCalendar,
   IconTools,
   IconChartBar,
+  IconReportAnalytics,
 } from '@tabler/icons-react';
 
 interface NavItem {
@@ -41,6 +42,7 @@ const navSections: { label: string; items: NavItem[] }[] = [
       { to: '/invoices', label: 'Invoices', icon: IconReceipt },
       { to: '/change-orders', label: 'Change Orders', icon: IconGitBranch },
       { to: '/inhouse', label: 'In-House Sheet', icon: IconTable },
+      { to: '/reports', label: 'Reports', icon: IconReportAnalytics },
     ],
   },
   {

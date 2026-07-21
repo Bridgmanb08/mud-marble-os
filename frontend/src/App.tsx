@@ -19,6 +19,7 @@ import Schedule from './pages/Schedule';
 import Subcontractors from './pages/Subcontractors';
 import SubIntelligence from './pages/SubIntelligence';
 import Settings from './pages/Settings';
+import Reports from './pages/Reports';
 
 export default function App() {
   return (
@@ -49,6 +50,7 @@ export default function App() {
             <Route path="subcontractors" element={<Subcontractors />} />
             <Route path="sub-intelligence" element={<SubIntelligence />} />
             <Route path="settings" element={<Settings />} />
+            <Route path="reports" element={<Reports />} />
           </Route>
         </Routes>
       </ToastProvider>

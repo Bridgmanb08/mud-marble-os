@@ -523,6 +523,42 @@ export interface CustomWidget {
   spec: CustomWidgetSpec;
 }
 
+export type ReportSource = 'transactions' | 'invoices' | 'change_orders' | 'projects';
+
+export interface ReportFilter {
+  field: string;
+  op: 'eq' | 'neq' | 'gt' | 'gte' | 'lt' | 'lte' | 'contains';
+  value: string | number | boolean;
+}
+
+export interface ReportSpec {
+  source: ReportSource;
+  filters: ReportFilter[];
+  group_by: string;
+  aggregation: 'sum' | 'avg' | 'count';
+  aggregation_field?: string | null;
+  chart_type: 'bar' | 'line' | 'pie' | 'table';
+}
+
+export interface SavedReport {
+  id: string;
+  user_id: string;
+  name: string;
+  spec: ReportSpec;
+  created_at: string;
+}
+
+export interface ReportRunRow {
+  group: string;
+  value: number;
+  count: number;
+}
+
+export interface ReportRunResult {
+  rows: ReportRunRow[];
+  total_rows: number;
+}
+
 export interface ExtractedTask {
   title: string;
   assigned_to: string | null;
