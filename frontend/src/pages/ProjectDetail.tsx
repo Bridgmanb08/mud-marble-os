@@ -454,6 +454,7 @@ export default function ProjectDetail() {
           task={detailTask}
           allTasks={tasks}
           onClose={() => setDetailTask(undefined)}
+          onChanged={loadTasks}
           onSaved={() => {
             setDetailTask(undefined);
             toast('Task updated');

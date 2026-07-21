@@ -32,13 +32,19 @@ EXTRACTION_PROMPT = """You are an assistant for Mud & Marble, a luxury residenti
 company in Indianapolis. Read this meeting transcript and extract ALL action items, tasks, and \
 project updates mentioned.
 
+Here are the company's real active projects. When a task or update clearly relates to one of them, \
+copy its EXACT name from this list into the "project" field -- do not paraphrase or invent a name. \
+If a task is internal/operational and doesn't clearly belong to any listed job, use null.
+Active projects:
+{project_names}
+
 Return ONLY a JSON object with this structure (no markdown, no explanation):
 {{
   "tasks": [
-    {{"title": "task description", "assigned_to": "brent|shannon|alex|faith", "project": "project name or null", "priority": "high|normal"}}
+    {{"title": "task description", "assigned_to": "brent|shannon|alex|faith", "project": "exact project name from the list above, or null", "priority": "high|normal"}}
   ],
   "project_updates": [
-    {{"project": "project name", "update": "what was discussed"}}
+    {{"project": "exact project name from the list above", "update": "what was discussed"}}
   ]
 }}
 
@@ -46,23 +52,57 @@ Transcript:
 {transcript}"""
 
 
+# Sonnet's context window is ~200k tokens -- a real meeting transcript, even a
+# long one, is nowhere close to that. This ceiling exists only to guard against
+# a truly pathological paste, not to trim normal input (the previous 6000-char
+# limit was silently discarding the majority of most real transcripts).
+MAX_TRANSCRIPT_CHARS = 150_000
+
+
+async def _active_project_names() -> list[str]:
+    rows = await db_get(
+        "projects", "?is_archived=eq.false&status=in.(active,estimating,proposed)&select=name&order=name.asc"
+    )
+    return [r["name"].split("|")[0].strip() for r in rows]
+
+
 @router.post("/parse-transcript", response_model=ParseTranscriptResponse)
 async def parse_transcript(body: ParseTranscriptRequest, _: CurrentUser = Depends(get_current_user)):
     if not settings.anthropic_api_key:
         raise HTTPException(status_code=503, detail="ANTHROPIC_API_KEY is not configured")
 
+    names = await _active_project_names()
+    project_names = "\n".join(f"- {n}" for n in names) if names else "(no active projects yet)"
+
     client = AsyncAnthropic(api_key=settings.anthropic_api_key)
     message = await client.messages.create(
         model="claude-sonnet-4-6",
-        max_tokens=1000,
-        messages=[{"role": "user", "content": EXTRACTION_PROMPT.format(transcript=body.transcript[:6000])}],
+        max_tokens=8192,
+        messages=[
+            {
+                "role": "user",
+                "content": EXTRACTION_PROMPT.format(
+                    project_names=project_names, transcript=body.transcript[:MAX_TRANSCRIPT_CHARS]
+                ),
+            }
+        ],
     )
+
+    if message.stop_reason == "max_tokens":
+        raise HTTPException(
+            status_code=502,
+            detail="Claude ran out of room extracting tasks from this transcript -- try a shorter excerpt "
+            "(e.g. just the summary, or split the transcript into two passes).",
+        )
+
     raw = message.content[0].text if message.content else "{}"
     raw = raw.replace("```json", "").replace("```", "").strip()
     try:
         parsed = json.loads(raw)
-    except json.JSONDecodeError:
-        parsed = {"tasks": [], "project_updates": []}
+    except json.JSONDecodeError as e:
+        raise HTTPException(
+            status_code=502, detail=f"Claude's response couldn't be parsed as JSON -- try again. ({e})"
+        ) from e
 
     return ParseTranscriptResponse(
         tasks=[ExtractedTask(**t) for t in parsed.get("tasks", [])],
@@ -80,8 +120,15 @@ async def import_tasks(body: ImportTasksRequest, _: CurrentUser = Depends(get_cu
     for task in body.tasks:
         matched = None
         if task.project:
-            needle = task.project.lower()[:6]
-            matched = next((p for p in projects if needle in p["name"].lower()), None)
+            target = task.project.lower().strip()
+            # Exact match first -- the extraction prompt gives Claude the real
+            # project names to copy from, so this should be the common case.
+            matched = next((p for p in projects if p["name"].split("|")[0].strip().lower() == target), None)
+            if not matched:
+                # Fallback for anything that didn't come through the extraction
+                # step with the real project list (e.g. tasks edited by hand).
+                needle = target[:6]
+                matched = next((p for p in projects if needle in p["name"].lower()), None)
 
         await db_post(
             "schedule_items",

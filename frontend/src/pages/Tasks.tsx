@@ -321,6 +321,7 @@ export default function Tasks() {
           task={detailTask}
           allTasks={tasks || []}
           onClose={() => setDetailTask(undefined)}
+          onChanged={load}
           onSaved={() => {
             setDetailTask(undefined);
             toast('Task updated');

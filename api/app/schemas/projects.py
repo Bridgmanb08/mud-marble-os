@@ -35,6 +35,9 @@ class ProjectUpdate(BaseModel):
     health_status: Optional[str] = None
     is_archived: Optional[bool] = None
     color: Optional[str] = None
+    checking_balance: Optional[float] = None
+    credit_card_balance: Optional[float] = None
+    pending_invoices_manual: Optional[float] = None
 
 
 class ClientBrief(BaseModel):
@@ -60,8 +63,23 @@ class ProjectOut(BaseModel):
     health_status: Optional[str] = None
     is_archived: bool = False
     color: Optional[str] = None
+    checking_balance: Optional[float] = None
+    credit_card_balance: Optional[float] = None
+    pending_invoices_manual: Optional[float] = None
     created_at: str
     clients: Optional[ClientBrief] = None
+
+
+class FinancialSummaryOut(BaseModel):
+    owner_price: float = 0
+    builder_cost: float = 0
+    profit: float = 0
+    contracted_to_subs: float = 0
+    paid_to_subs: float = 0
+    left_to_pay: float = 0
+    checking_balance: Optional[float] = None
+    credit_card_balance: Optional[float] = None
+    pending_invoices_manual: Optional[float] = None
 
 
 class ProjectNoteCreate(BaseModel):

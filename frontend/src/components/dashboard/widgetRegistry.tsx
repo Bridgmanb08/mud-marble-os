@@ -6,7 +6,7 @@ import {
   UpcomingTasksWidget,
   RecentActivityWidget,
 } from './widgets/OverviewWidgets';
-import { ContractorMilestonesWidget, ClientCommunicationsWidget, ChangeOrdersActionWidget } from './widgets/OpsWidgets';
+import { TaskManagementWidget, ClientCommunicationsWidget, ChangeOrdersActionWidget } from './widgets/OpsWidgets';
 import {
   ARAgingWidget,
   ProjectProfitabilityWidget,
@@ -33,7 +33,7 @@ export const WIDGET_REGISTRY: Record<WidgetId, WidgetDef> = {
   upcoming_tasks: { title: 'Upcoming tasks', Component: UpcomingTasksWidget },
   recent_activity: { title: 'Recent activity', Component: RecentActivityWidget, wide: true },
   fathom_import: { title: 'Import Fathom transcript', Component: FathomImportWidget },
-  contractor_milestones: { title: 'Contractor milestones', Component: ContractorMilestonesWidget },
+  contractor_milestones: { title: 'Task management', Component: TaskManagementWidget },
   client_communications: { title: 'Client communication log', Component: ClientCommunicationsWidget },
   change_orders_action: { title: 'Change orders — action needed', Component: ChangeOrdersActionWidget },
   ar_aging: { title: 'AR aging', Component: ARAgingWidget, wide: true },

@@ -20,6 +20,7 @@ from ..schemas.tasks import (
     SubtaskCreate,
     SubtaskOut,
     SubtaskUpdate,
+    TaskClarifyUpdate,
     TaskCreate,
     TaskOut,
     TaskUpdate,
@@ -101,6 +102,8 @@ async def list_tasks(
 @router.post("", response_model=TaskOut)
 async def create_task(body: TaskCreate, _: CurrentUser = Depends(get_current_user)):
     data = body.model_dump(exclude_none=True)
+    if data.get("assignees"):
+        data["assigned_to"] = data["assignees"][0]
     siblings = await db_get(
         "schedule_items", f"?status=eq.{body.status}&order=position.desc&limit=1&select=position"
     )
@@ -154,6 +157,7 @@ async def bulk_update_tasks(body: BulkUpdateRequest, _: CurrentUser = Depends(ge
         updates["status"] = body.status
     if body.assigned_to is not None:
         updates["assigned_to"] = body.assigned_to
+        updates["assignees"] = [body.assigned_to] if body.assigned_to else []
     if not updates:
         raise HTTPException(status_code=400, detail="No fields to update")
     for task_id in body.ids:
@@ -318,8 +322,23 @@ async def update_task(task_id: str, body: TaskUpdate, _: CurrentUser = Depends(g
                 )
 
     updates = body.model_dump(exclude_none=True, exclude={"expected_version"})
+    if "assignees" in updates:
+        updates["assigned_to"] = updates["assignees"][0] if updates["assignees"] else None
     updates["version"] = current[0]["version"] + 1
     await db_patch("schedule_items", task_id, updates)
+    full = await db_get("schedule_items", f"?id=eq.{task_id}&select=*,projects(name),subcontractors(company_name,trade)")
+    enriched = await _enrich(full)
+    return enriched[0]
+
+
+@router.patch("/{task_id}/clarify", response_model=TaskOut)
+async def update_clarify(task_id: str, body: TaskClarifyUpdate, _: CurrentUser = Depends(get_current_user)):
+    """Dedicated endpoint so clearing the flag (clarify_from: null) actually
+    reaches the database -- the generic update_task path uses
+    exclude_none=True, which would silently drop an explicit null."""
+    rows = await db_patch("schedule_items", task_id, {"clarify_from": body.clarify_from})
+    if not rows:
+        raise HTTPException(status_code=404, detail="Task not found")
     full = await db_get("schedule_items", f"?id=eq.{task_id}&select=*,projects(name),subcontractors(company_name,trade)")
     enriched = await _enrich(full)
     return enriched[0]

@@ -2,6 +2,7 @@ import { useState, type FormEvent } from 'react';
 import { api, ApiError } from '../../api/client';
 import { Modal } from '../ui/Modal';
 import { openDatePicker } from '../../lib/datePicker';
+import { SubcontractorFilesSection } from './SubcontractorFilesSection';
 import type { Subcontractor } from '../../types';
 
 interface NewSubcontractorModalProps {
@@ -112,6 +113,9 @@ export function NewSubcontractorModal({ onClose, onSaved, sub }: NewSubcontracto
             <input type="checkbox" checked={w9OnFile} onChange={(e) => setW9OnFile(e.target.checked)} /> W9 on file
           </label>
         </div>
+
+        {sub && <SubcontractorFilesSection subcontractorId={sub.id} />}
+
         <div className="ma">
           <button type="button" className="btn" onClick={onClose}>
             Cancel

@@ -3,6 +3,7 @@ import { IconPlus } from '@tabler/icons-react';
 import { api, ApiError } from '../../api/client';
 import { Modal } from '../ui/Modal';
 import { NewSubcontractorModal } from '../subcontractors/NewSubcontractorModal';
+import { MultiAssigneeInput } from './MultiAssigneeInput';
 import { openDatePicker } from '../../lib/datePicker';
 import type { CostCode, Project, Subcontractor, UserDirectoryEntry } from '../../types';
 
@@ -20,7 +21,7 @@ export function NewTaskModal({ onClose, onSaved, defaultStatus, defaultProjectId
   const [subcontractors, setSubcontractors] = useState<Subcontractor[]>([]);
   const [projectId, setProjectId] = useState(defaultProjectId || '');
   const [title, setTitle] = useState('');
-  const [assignedTo, setAssignedTo] = useState('');
+  const [assignees, setAssignees] = useState<string[]>([]);
   const [subcontractorId, setSubcontractorId] = useState('');
   const [phase, setPhase] = useState('');
   const [status, setStatus] = useState(defaultStatus || 'upcoming');
@@ -56,7 +57,7 @@ export function NewTaskModal({ onClose, onSaved, defaultStatus, defaultProjectId
     const payload = {
       project_id: projectId || null,
       title: title.trim(),
-      assigned_to: assignedTo || null,
+      assignees,
       subcontractor_id: subcontractorId || null,
       phase: phase.trim() || null,
       status,
@@ -99,18 +100,7 @@ export function NewTaskModal({ onClose, onSaved, defaultStatus, defaultProjectId
           </div>
           <div className="fg">
             <label className="fl">Assigned to</label>
-            <input
-              className="fi"
-              list="assignee-options"
-              value={assignedTo}
-              onChange={(e) => setAssignedTo(e.target.value)}
-              placeholder="Shannon"
-            />
-            <datalist id="assignee-options">
-              {directory.map((u) => (
-                <option key={u.id} value={u.name} />
-              ))}
-            </datalist>
+            <MultiAssigneeInput value={assignees} onChange={setAssignees} directory={directory} listId="assignee-options-new" />
           </div>
         </div>
         <div className="fg">

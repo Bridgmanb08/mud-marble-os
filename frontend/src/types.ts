@@ -14,6 +14,7 @@ export interface Task {
   project_id: string | null;
   title: string;
   assigned_to: string | null;
+  assignees: string[];
   subcontractor_id: string | null;
   phase: string | null;
   status: string;
@@ -24,6 +25,7 @@ export interface Task {
   notes: string | null;
   is_milestone: boolean;
   is_punch_list: boolean;
+  clarify_from: string | null;
   version: number;
   created_at: string;
   projects: ProjectBrief | null;
@@ -262,6 +264,7 @@ export interface Transaction {
   amount: number;
   payment_source: string | null;
   cost_code_id: string | null;
+  subcontractor_id: string | null;
   description: string | null;
   is_allowance: boolean;
   is_change_order: boolean;
@@ -270,6 +273,7 @@ export interface Transaction {
   created_at: string;
   projects: ProjectBrief | null;
   cost_codes: { code: string; name: string } | null;
+  subcontractors: { company_name: string; trade: string | null } | null;
 }
 
 export interface CostCode {
@@ -277,6 +281,7 @@ export interface CostCode {
   code: string;
   name: string;
   is_active: boolean;
+  default_description: string | null;
 }
 
 export interface ClientBrief {
@@ -302,8 +307,34 @@ export interface Project {
   health_status: string | null;
   is_archived: boolean;
   color: string | null;
+  checking_balance: number | null;
+  credit_card_balance: number | null;
+  pending_invoices_manual: number | null;
   created_at: string;
   clients: ClientBrief | null;
+}
+
+export interface FinancialSummary {
+  owner_price: number;
+  builder_cost: number;
+  profit: number;
+  contracted_to_subs: number;
+  paid_to_subs: number;
+  left_to_pay: number;
+  checking_balance: number | null;
+  credit_card_balance: number | null;
+  pending_invoices_manual: number | null;
+}
+
+export interface ProjectSubItem {
+  id: string;
+  project_id: string;
+  subcontractor_id: string;
+  description: string | null;
+  amount: number;
+  sort_order: number;
+  created_at: string;
+  subcontractors: { company_name: string; trade: string | null } | null;
 }
 
 export interface ProjectFile {
@@ -317,6 +348,18 @@ export interface ProjectFile {
   storage_path: string;
   created_at: string;
   task_ids: string[];
+}
+
+export interface SubcontractorFile {
+  id: string;
+  subcontractor_id: string;
+  uploaded_by: string | null;
+  file_name: string;
+  file_type: 'photo' | 'video' | 'plan' | 'other' | string;
+  mime_type: string | null;
+  size_bytes: number | null;
+  storage_path: string;
+  created_at: string;
 }
 
 export interface UploadUrlResponse {

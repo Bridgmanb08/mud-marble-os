@@ -2,33 +2,39 @@ import { useEffect, useState, type FormEvent } from 'react';
 import { api, ApiError } from '../../api/client';
 import { Modal } from '../ui/Modal';
 import { openDatePicker } from '../../lib/datePicker';
-import type { CostCode, Project } from '../../types';
+import type { CostCode, Project, Subcontractor, Transaction } from '../../types';
 
 interface NewTransactionModalProps {
   onClose: () => void;
   onCreated: () => void;
+  transaction?: Transaction;
+  defaultProjectId?: string;
+  lockProject?: boolean;
 }
 
-export function NewTransactionModal({ onClose, onCreated }: NewTransactionModalProps) {
+export function NewTransactionModal({ onClose, onCreated, transaction, defaultProjectId, lockProject }: NewTransactionModalProps) {
   const [projects, setProjects] = useState<Project[]>([]);
   const [costCodes, setCostCodes] = useState<CostCode[]>([]);
-  const [projectId, setProjectId] = useState('');
-  const [date, setDate] = useState(new Date().toISOString().split('T')[0]);
-  const [vendor, setVendor] = useState('');
-  const [transactionType, setTransactionType] = useState('expense');
-  const [amount, setAmount] = useState('');
-  const [paymentSource, setPaymentSource] = useState('checking');
-  const [costCodeId, setCostCodeId] = useState('');
-  const [description, setDescription] = useState('');
-  const [isAllowance, setIsAllowance] = useState(false);
-  const [isChangeOrder, setIsChangeOrder] = useState(false);
-  const [quickbooksSynced, setQuickbooksSynced] = useState(false);
+  const [subcontractors, setSubcontractors] = useState<Subcontractor[]>([]);
+  const [projectId, setProjectId] = useState(transaction?.project_id || defaultProjectId || '');
+  const [date, setDate] = useState(transaction?.transaction_date?.slice(0, 10) || new Date().toISOString().split('T')[0]);
+  const [vendor, setVendor] = useState(transaction?.vendor || '');
+  const [transactionType, setTransactionType] = useState(transaction?.transaction_type || 'expense');
+  const [amount, setAmount] = useState(transaction ? String(Math.abs(transaction.amount)) : '');
+  const [paymentSource, setPaymentSource] = useState(transaction?.payment_source || 'checking');
+  const [costCodeId, setCostCodeId] = useState(transaction?.cost_code_id || '');
+  const [subcontractorId, setSubcontractorId] = useState(transaction?.subcontractor_id || '');
+  const [description, setDescription] = useState(transaction?.description || '');
+  const [isAllowance, setIsAllowance] = useState(transaction?.is_allowance || false);
+  const [isChangeOrder, setIsChangeOrder] = useState(transaction?.is_change_order || false);
+  const [quickbooksSynced, setQuickbooksSynced] = useState(transaction?.quickbooks_synced || false);
   const [error, setError] = useState('');
   const [saving, setSaving] = useState(false);
 
   useEffect(() => {
     api.get<Project[]>('/projects').then(setProjects).catch(() => {});
     api.get<CostCode[]>('/transactions/cost-codes').then(setCostCodes).catch(() => {});
+    api.get<Subcontractor[]>('/subcontractors').then(setSubcontractors).catch(() => {});
   }, []);
 
   async function handleSubmit(e: FormEvent) {
@@ -44,30 +50,36 @@ export function NewTransactionModal({ onClose, onCreated }: NewTransactionModalP
     }
     setSaving(true);
     setError('');
+    const payload = {
+      project_id: projectId,
+      transaction_date: date,
+      vendor: vendor.trim() || null,
+      transaction_type: transactionType,
+      amount: transactionType === 'income' ? amt : -amt,
+      payment_source: paymentSource,
+      cost_code_id: costCodeId || null,
+      subcontractor_id: subcontractorId || null,
+      description: description.trim() || null,
+      is_allowance: isAllowance,
+      is_change_order: isChangeOrder,
+      quickbooks_synced: quickbooksSynced,
+    };
     try {
-      await api.post('/transactions', {
-        project_id: projectId,
-        transaction_date: date,
-        vendor: vendor.trim() || null,
-        transaction_type: transactionType,
-        amount: transactionType === 'income' ? amt : -amt,
-        payment_source: paymentSource,
-        cost_code_id: costCodeId || null,
-        description: description.trim() || null,
-        is_allowance: isAllowance,
-        is_change_order: isChangeOrder,
-        quickbooks_synced: quickbooksSynced,
-      });
+      if (transaction) {
+        await api.patch(`/transactions/${transaction.id}`, payload);
+      } else {
+        await api.post('/transactions', payload);
+      }
       onCreated();
     } catch (err) {
-      setError(err instanceof ApiError ? err.message : 'Failed to add transaction');
+      setError(err instanceof ApiError ? err.message : 'Failed to save transaction');
     } finally {
       setSaving(false);
     }
   }
 
   return (
-    <Modal title="Add transaction" onClose={onClose} wide>
+    <Modal title={transaction ? 'Edit transaction' : 'Add transaction'} onClose={onClose} wide>
       <form onSubmit={handleSubmit}>
         {error && <div className="merr">{error}</div>}
         <div className="fr">
@@ -77,7 +89,7 @@ export function NewTransactionModal({ onClose, onCreated }: NewTransactionModalP
           </div>
           <div className="fg">
             <label className="fl">Project</label>
-            <select className="fi" value={projectId} onChange={(e) => setProjectId(e.target.value)}>
+            <select className="fi" value={projectId} onChange={(e) => setProjectId(e.target.value)} disabled={lockProject}>
               <option value="">— Select project —</option>
               {projects.map((p) => (
                 <option key={p.id} value={p.id}>
@@ -129,9 +141,21 @@ export function NewTransactionModal({ onClose, onCreated }: NewTransactionModalP
             </select>
           </div>
           <div className="fg">
-            <label className="fl">Description</label>
-            <input className="fi" value={description} onChange={(e) => setDescription(e.target.value)} />
+            <label className="fl">Subcontractor</label>
+            <select className="fi" value={subcontractorId} onChange={(e) => setSubcontractorId(e.target.value)}>
+              <option value="">— None —</option>
+              {subcontractors.map((s) => (
+                <option key={s.id} value={s.id}>
+                  {s.company_name}
+                  {s.trade ? ` (${s.trade})` : ''}
+                </option>
+              ))}
+            </select>
           </div>
+        </div>
+        <div className="fg">
+          <label className="fl">Description</label>
+          <input className="fi" value={description} onChange={(e) => setDescription(e.target.value)} />
         </div>
         <div style={{ display: 'flex', gap: 20, marginBottom: 14 }}>
           <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 13, cursor: 'pointer' }}>
@@ -149,7 +173,7 @@ export function NewTransactionModal({ onClose, onCreated }: NewTransactionModalP
             Cancel
           </button>
           <button type="submit" className="btn btn-p" disabled={saving}>
-            {saving ? 'Saving…' : 'Add transaction'}
+            {saving ? 'Saving…' : transaction ? 'Save changes' : 'Add transaction'}
           </button>
         </div>
       </form>

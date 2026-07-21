@@ -60,6 +60,11 @@ export function LineItemModal({ estimateId, item, defaultBucket, onClose, onSave
     setCostCodeQuery(value);
     const match = costCodes.find((c) => `${c.code} - ${c.name}` === value);
     setCostCodeId(match ? match.id : '');
+    // Auto-fill the standard scope language for this cost code, but only if
+    // the description is still blank -- never clobber something already typed.
+    if (match?.default_description && !notesExternal.trim()) {
+      setNotesExternal(match.default_description);
+    }
   }
 
   const [showReference, setShowReference] = useState(!item);
@@ -341,7 +346,19 @@ export function LineItemModal({ estimateId, item, defaultBucket, onClose, onSave
         </div>
         <div className="fr">
           <div className="fg">
-            <label className="fl">Description (client-facing)</label>
+            <label className="fl" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+              Description (client-facing)
+              {costCodes.find((c) => c.id === costCodeId)?.default_description && (
+                <button
+                  type="button"
+                  className="btn-reset"
+                  style={{ fontSize: 11, color: 'var(--t2)', textTransform: 'none', fontWeight: 400, cursor: 'pointer' }}
+                  onClick={() => setNotesExternal(costCodes.find((c) => c.id === costCodeId)?.default_description || '')}
+                >
+                  Use standard description
+                </button>
+              )}
+            </label>
             <textarea className="fi" value={notesExternal} onChange={(e) => setNotesExternal(e.target.value)} />
           </div>
           <div className="fg">

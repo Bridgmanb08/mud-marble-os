@@ -7,12 +7,10 @@ import { Modal } from '../components/ui/Modal';
 import { NewSubcontractorModal } from '../components/subcontractors/NewSubcontractorModal';
 import type { CostCode, Subcontractor } from '../types';
 
-const SETTINGS_TABS = ['Cost Codes', 'Subcontractors'] as const;
-type SettingsTab = (typeof SETTINGS_TABS)[number];
-
 function CostCodeModal({ onClose, onSaved }: { onClose: () => void; onSaved: () => void }) {
   const [code, setCode] = useState('');
   const [name, setName] = useState('');
+  const [defaultDescription, setDefaultDescription] = useState('');
   const [error, setError] = useState('');
   const [saving, setSaving] = useState(false);
 
@@ -25,7 +23,11 @@ function CostCodeModal({ onClose, onSaved }: { onClose: () => void; onSaved: () 
     setSaving(true);
     setError('');
     try {
-      await api.post('/cost-codes', { code: code.trim(), name: name.trim() });
+      await api.post('/cost-codes', {
+        code: code.trim(),
+        name: name.trim(),
+        default_description: defaultDescription.trim() || null,
+      });
       onSaved();
     } catch (err) {
       setError(err instanceof ApiError ? err.message : 'Failed to create cost code');
@@ -46,6 +48,15 @@ function CostCodeModal({ onClose, onSaved }: { onClose: () => void; onSaved: () 
           <label className="fl">Name</label>
           <input className="fi" value={name} onChange={(e) => setName(e.target.value)} placeholder="Electrical" />
         </div>
+        <div className="fg">
+          <label className="fl">Default customer-facing description</label>
+          <textarea
+            className="fi"
+            value={defaultDescription}
+            onChange={(e) => setDefaultDescription(e.target.value)}
+            placeholder="Standard scope language used whenever this cost code is added to an estimate…"
+          />
+        </div>
         <div className="ma">
           <button type="button" className="btn" onClick={onClose}>
             Cancel
@@ -62,6 +73,7 @@ function CostCodeModal({ onClose, onSaved }: { onClose: () => void; onSaved: () 
 function EditCostCodeModal({ costCode, onClose, onSaved }: { costCode: CostCode; onClose: () => void; onSaved: () => void }) {
   const [code, setCode] = useState(costCode.code);
   const [name, setName] = useState(costCode.name);
+  const [defaultDescription, setDefaultDescription] = useState(costCode.default_description || '');
   const [error, setError] = useState('');
   const [saving, setSaving] = useState(false);
 
@@ -74,7 +86,11 @@ function EditCostCodeModal({ costCode, onClose, onSaved }: { costCode: CostCode;
     setSaving(true);
     setError('');
     try {
-      await api.patch(`/cost-codes/${costCode.id}`, { code: code.trim(), name: name.trim() });
+      await api.patch(`/cost-codes/${costCode.id}`, {
+        code: code.trim(),
+        name: name.trim(),
+        default_description: defaultDescription.trim() || null,
+      });
       onSaved();
     } catch (err) {
       setError(err instanceof ApiError ? err.message : 'Failed to save cost code');
@@ -94,6 +110,15 @@ function EditCostCodeModal({ costCode, onClose, onSaved }: { costCode: CostCode;
         <div className="fg">
           <label className="fl">Name</label>
           <input className="fi" value={name} onChange={(e) => setName(e.target.value)} />
+        </div>
+        <div className="fg">
+          <label className="fl">Default customer-facing description</label>
+          <textarea
+            className="fi"
+            value={defaultDescription}
+            onChange={(e) => setDefaultDescription(e.target.value)}
+            placeholder="Standard scope language used whenever this cost code is added to an estimate…"
+          />
         </div>
         <div className="ma">
           <button type="button" className="btn" onClick={onClose}>
@@ -159,6 +184,7 @@ function CostCodesTab() {
             <tr>
               <th>Code</th>
               <th>Name</th>
+              <th>Description</th>
               <th>Status</th>
               <th></th>
             </tr>
@@ -168,6 +194,13 @@ function CostCodesTab() {
               <tr key={cc.id} onClick={() => setEditing(cc)} style={{ cursor: 'pointer' }}>
                 <td style={{ fontWeight: 500 }}>{cc.code}</td>
                 <td>{cc.name}</td>
+                <td>
+                  {cc.default_description ? (
+                    <span className="badge bg-green">Set</span>
+                  ) : (
+                    <span className="badge bg-amber">Not set</span>
+                  )}
+                </td>
                 <td>
                   <span className={`badge ${cc.is_active ? 'bg-green' : 'bg-gray'}`}>{cc.is_active ? 'Active' : 'Inactive'}</span>
                 </td>
@@ -233,20 +266,16 @@ function SubcontractorsTab() {
       <div className="sh">
         <div className="st">Subcontractors {subs ? `(${subs.length})` : ''}</div>
         <button className="btn btn-p btn-sm" onClick={() => setShowNew(true)}>
-          <IconPlus size={14} /> Add subcontractor
+          <IconPlus size={14} /> Add sub
         </button>
       </div>
-      <p className="empty-s" style={{ marginTop: -8 }}>
-        This is the same list used everywhere a task or calendar entry needs a subcontractor -- the roster page has
-        compliance details (insurance, W9); this is the fast add/edit view.
-      </p>
 
       {subs === null ? (
         <div className="empty">
           <div className="empty-t">Loading…</div>
         </div>
       ) : subs.length === 0 ? (
-        <div className="empty-s">No subcontractors yet.</div>
+        <div className="empty-s">No subcontractors yet. Add your trade partners to build the roster.</div>
       ) : (
         <table className="tbl">
           <thead>
@@ -254,7 +283,6 @@ function SubcontractorsTab() {
               <th>Company</th>
               <th>Trade</th>
               <th>Contact</th>
-              <th>Phone</th>
               <th>Status</th>
             </tr>
           </thead>
@@ -264,9 +292,9 @@ function SubcontractorsTab() {
                 <td style={{ fontWeight: 500 }}>{s.company_name}</td>
                 <td>{s.trade || '—'}</td>
                 <td>{s.contact_name || '—'}</td>
-                <td>{s.phone || '—'}</td>
-                <td>
-                  <span className={`badge ${s.is_active ? 'bg-green' : 'bg-gray'}`}>{s.is_active ? 'Active' : 'Inactive'}</span>
+                <td style={{ display: 'flex', gap: 6 }}>
+                  {s.preferred && <span className="badge bg-green">Preferred</span>}
+                  {s.w9_on_file ? <span className="badge bg-green">W9 ✓</span> : <span className="badge bg-amber">W9 needed</span>}
                 </td>
               </tr>
             ))}
@@ -279,7 +307,7 @@ function SubcontractorsTab() {
           onClose={() => setShowNew(false)}
           onSaved={() => {
             setShowNew(false);
-            toast('Subcontractor added');
+            toast('Sub added');
             load();
           }}
         />
@@ -291,7 +319,7 @@ function SubcontractorsTab() {
           onClose={() => setEditing(undefined)}
           onSaved={() => {
             setEditing(undefined);
-            toast('Subcontractor updated');
+            toast('Sub updated');
             load();
           }}
         />
@@ -302,7 +330,7 @@ function SubcontractorsTab() {
 
 export default function Settings() {
   const { user } = useAuth();
-  const [tab, setTab] = useState<SettingsTab>('Cost Codes');
+  const [tab, setTab] = useState<'cost-codes' | 'subcontractors'>('cost-codes');
 
   if (!user?.is_admin) {
     return (
@@ -323,14 +351,15 @@ export default function Settings() {
       </div>
 
       <div className="tabs" style={{ marginBottom: 16 }}>
-        {SETTINGS_TABS.map((t) => (
-          <button key={t} type="button" className={`tab${tab === t ? ' on' : ''}`} onClick={() => setTab(t)}>
-            {t}
-          </button>
-        ))}
+        <button className={`tab${tab === 'cost-codes' ? ' on' : ''}`} onClick={() => setTab('cost-codes')}>
+          Cost codes
+        </button>
+        <button className={`tab${tab === 'subcontractors' ? ' on' : ''}`} onClick={() => setTab('subcontractors')}>
+          Subcontractors
+        </button>
       </div>
 
-      {tab === 'Cost Codes' ? <CostCodesTab /> : <SubcontractorsTab />}
+      {tab === 'cost-codes' ? <CostCodesTab /> : <SubcontractorsTab />}
     </>
   );
 }

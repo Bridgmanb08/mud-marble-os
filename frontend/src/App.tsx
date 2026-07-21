@@ -14,6 +14,7 @@ import EstimateWorksheet from './pages/EstimateWorksheet';
 import Invoices from './pages/Invoices';
 import ChangeOrders from './pages/ChangeOrders';
 import InHouse from './pages/InHouse';
+import InHouseWorkshop from './pages/InHouseWorkshop';
 import Tasks from './pages/Tasks';
 import Schedule from './pages/Schedule';
 import Subcontractors from './pages/Subcontractors';
@@ -45,6 +46,7 @@ export default function App() {
             <Route path="invoices" element={<Invoices />} />
             <Route path="change-orders" element={<ChangeOrders />} />
             <Route path="inhouse" element={<InHouse />} />
+            <Route path="inhouse/:id" element={<InHouseWorkshop />} />
             <Route path="tasks" element={<Tasks />} />
             <Route path="schedule" element={<Schedule />} />
             <Route path="subcontractors" element={<Subcontractors />} />
