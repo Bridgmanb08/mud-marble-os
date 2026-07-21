@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { IconArrowLeft, IconPlus } from '@tabler/icons-react';
+import { IconArrowLeft, IconPlus, IconCalendar, IconList } from '@tabler/icons-react';
 import { api } from '../api/client';
 import { useToast } from '../components/ui/Toast';
 import { fmt, fmtD } from '../lib/format';
@@ -11,6 +11,7 @@ import { NewInvoiceModal } from '../components/invoices/NewInvoiceModal';
 import { NewTaskModal } from '../components/tasks/NewTaskModal';
 import { TaskDetailDrawer } from '../components/tasks/TaskDetailDrawer';
 import { FilesTab } from '../components/projects/FilesTab';
+import { WeekScrollCalendar } from '../components/schedule/WeekScrollCalendar';
 
 const TABS = ['Overview', 'Notes', 'Estimate', 'Change Orders', 'Invoices', 'Schedule', 'Files'];
 
@@ -43,6 +44,7 @@ export default function ProjectDetail() {
   const [showNewTask, setShowNewTask] = useState(false);
   const [detailTask, setDetailTask] = useState<Task | undefined>(undefined);
   const [startingEstimate, setStartingEstimate] = useState(false);
+  const [scheduleView, setScheduleView] = useState<'calendar' | 'list'>('calendar');
 
   async function loadNotes() {
     if (!id) return;
@@ -325,11 +327,37 @@ export default function ProjectDetail() {
           <>
             <div className="sh">
               <div className="st">{tasks.length} tasks</div>
-              <button className="btn btn-p btn-sm" onClick={() => setShowNewTask(true)}>
-                <IconPlus size={14} /> New task
-              </button>
+              <div style={{ display: 'flex', gap: 8 }}>
+                <div style={{ display: 'flex', background: 'var(--bg)', border: '1px solid var(--border)', borderRadius: 8, padding: 3, gap: 2 }}>
+                  <button
+                    className="btn btn-sm btn-ghost"
+                    style={{ background: scheduleView === 'calendar' ? 'var(--surface)' : undefined, boxShadow: scheduleView === 'calendar' ? '0 1px 3px rgba(0,0,0,.08)' : undefined }}
+                    onClick={() => setScheduleView('calendar')}
+                  >
+                    <IconCalendar size={14} /> Calendar
+                  </button>
+                  <button
+                    className="btn btn-sm btn-ghost"
+                    style={{ background: scheduleView === 'list' ? 'var(--surface)' : undefined, boxShadow: scheduleView === 'list' ? '0 1px 3px rgba(0,0,0,.08)' : undefined }}
+                    onClick={() => setScheduleView('list')}
+                  >
+                    <IconList size={14} /> List
+                  </button>
+                </div>
+                <button className="btn btn-p btn-sm" onClick={() => setShowNewTask(true)}>
+                  <IconPlus size={14} /> New task
+                </button>
+              </div>
             </div>
-            {tasks.length === 0 ? (
+
+            {scheduleView === 'calendar' ? (
+              <>
+                <p className="empty-s" style={{ marginTop: -6, marginBottom: 10 }}>
+                  Drag to create a task across days, drag a task to move it, or drag its edges to resize. Click a task for details.
+                </p>
+                <WeekScrollCalendar tasks={tasks} projectId={id} onOpenTask={openTask} onChanged={loadTasks} />
+              </>
+            ) : tasks.length === 0 ? (
               <div className="empty-s">No tasks scheduled yet.</div>
             ) : (
               <table className="tbl">
