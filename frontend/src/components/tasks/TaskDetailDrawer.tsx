@@ -5,6 +5,7 @@ import { Modal } from '../ui/Modal';
 import { useToast } from '../ui/Toast';
 import { MentionTextarea } from '../ui/MentionTextarea';
 import { TaskFilesSection } from './TaskFilesSection';
+import { MultiAssigneeInput } from './MultiAssigneeInput';
 import { openDatePicker } from '../../lib/datePicker';
 import type { CostCode, Project, Subcontractor, Task, TaskComment, TaskDependency, TaskSubtask, UserDirectoryEntry } from '../../types';
 
@@ -24,7 +25,8 @@ export function TaskDetailDrawer({ task, allTasks, onClose, onSaved, onDeleted }
   const [subcontractors, setSubcontractors] = useState<Subcontractor[]>([]);
   const [title, setTitle] = useState(task.title);
   const [projectId, setProjectId] = useState(task.project_id || '');
-  const [assignedTo, setAssignedTo] = useState(task.assigned_to || '');
+  const [assignees, setAssignees] = useState<string[]>(task.assignees || []);
+  const [clarifyFrom, setClarifyFrom] = useState(task.clarify_from || '');
   const [subcontractorId, setSubcontractorId] = useState(task.subcontractor_id || '');
   const [phase, setPhase] = useState(task.phase || '');
   const [status, setStatus] = useState(task.status);
@@ -89,7 +91,7 @@ export function TaskDetailDrawer({ task, allTasks, onClose, onSaved, onDeleted }
       await api.patch(`/tasks/${task.id}`, {
         project_id: projectId || null,
         title: title.trim(),
-        assigned_to: assignedTo || null,
+        assignees,
         subcontractor_id: subcontractorId || null,
         phase: phase.trim() || null,
         status,
@@ -101,6 +103,11 @@ export function TaskDetailDrawer({ task, allTasks, onClose, onSaved, onDeleted }
         is_punch_list: isPunchList,
         expected_version: task.version,
       });
+      // Dedicated endpoint -- the generic PATCH above drops explicit nulls
+      // (exclude_none), so clearing the flag has to go through /clarify.
+      if (clarifyFrom !== (task.clarify_from || '')) {
+        await api.patch(`/tasks/${task.id}/clarify`, { clarify_from: clarifyFrom || null });
+      }
       onSaved();
     } catch (err) {
       setError(err instanceof ApiError ? err.message : 'Failed to save task');
@@ -213,25 +220,33 @@ export function TaskDetailDrawer({ task, allTasks, onClose, onSaved, onDeleted }
           </div>
           <div className="fg">
             <label className="fl">Assigned to</label>
-            <input className="fi" list="assignee-options-drawer" value={assignedTo} onChange={(e) => setAssignedTo(e.target.value)} />
-            <datalist id="assignee-options-drawer">
-              {directory.map((u) => (
-                <option key={u.id} value={u.name} />
-              ))}
-            </datalist>
+            <MultiAssigneeInput value={assignees} onChange={setAssignees} directory={directory} listId="assignee-options-drawer" />
           </div>
         </div>
-        <div className="fg">
-          <label className="fl">Subcontractor</label>
-          <select className="fi" value={subcontractorId} onChange={(e) => setSubcontractorId(e.target.value)}>
-            <option value="">— None —</option>
-            {subcontractors.map((s) => (
-              <option key={s.id} value={s.id}>
-                {s.company_name}
-                {s.trade ? ` (${s.trade})` : ''}
-              </option>
-            ))}
-          </select>
+        <div className="fr">
+          <div className="fg">
+            <label className="fl">Subcontractor</label>
+            <select className="fi" value={subcontractorId} onChange={(e) => setSubcontractorId(e.target.value)}>
+              <option value="">— None —</option>
+              {subcontractors.map((s) => (
+                <option key={s.id} value={s.id}>
+                  {s.company_name}
+                  {s.trade ? ` (${s.trade})` : ''}
+                </option>
+              ))}
+            </select>
+          </div>
+          <div className="fg">
+            <label className="fl">Needs clarity from</label>
+            <select className="fi" value={clarifyFrom} onChange={(e) => setClarifyFrom(e.target.value)}>
+              <option value="">— Not flagged —</option>
+              {directory.map((u) => (
+                <option key={u.id} value={u.name}>
+                  {u.name}
+                </option>
+              ))}
+            </select>
+          </div>
         </div>
         <div className="fr3">
           <div className="fg">

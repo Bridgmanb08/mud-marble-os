@@ -14,6 +14,7 @@ export interface Task {
   project_id: string | null;
   title: string;
   assigned_to: string | null;
+  assignees: string[];
   subcontractor_id: string | null;
   phase: string | null;
   status: string;
@@ -24,6 +25,7 @@ export interface Task {
   notes: string | null;
   is_milestone: boolean;
   is_punch_list: boolean;
+  clarify_from: string | null;
   version: number;
   created_at: string;
   projects: ProjectBrief | null;

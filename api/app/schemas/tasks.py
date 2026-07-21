@@ -12,6 +12,7 @@ class TaskCreate(BaseModel):
     project_id: Optional[str] = None
     title: str
     assigned_to: Optional[str] = None
+    assignees: list[str] = []
     subcontractor_id: Optional[str] = None
     phase: Optional[str] = None
     status: str = "upcoming"
@@ -21,6 +22,7 @@ class TaskCreate(BaseModel):
     notes: Optional[str] = None
     is_milestone: bool = False
     is_punch_list: bool = False
+    clarify_from: Optional[str] = None
 
     @model_validator(mode="after")
     def _validate_dates(self):
@@ -31,6 +33,7 @@ class TaskCreate(BaseModel):
 class TaskUpdate(BaseModel):
     title: Optional[str] = None
     assigned_to: Optional[str] = None
+    assignees: Optional[list[str]] = None
     subcontractor_id: Optional[str] = None
     phase: Optional[str] = None
     status: Optional[str] = None
@@ -50,6 +53,10 @@ class TaskUpdate(BaseModel):
         return self
 
 
+class TaskClarifyUpdate(BaseModel):
+    clarify_from: Optional[str] = None
+
+
 class ProjectBrief(BaseModel):
     name: str
 
@@ -64,6 +71,7 @@ class TaskOut(BaseModel):
     project_id: Optional[str] = None
     title: str
     assigned_to: Optional[str] = None
+    assignees: list[str] = []
     subcontractor_id: Optional[str] = None
     phase: Optional[str] = None
     status: str
@@ -74,6 +82,7 @@ class TaskOut(BaseModel):
     notes: Optional[str] = None
     is_milestone: bool = False
     is_punch_list: bool = False
+    clarify_from: Optional[str] = None
     version: int = 1
     created_at: str
     projects: Optional[ProjectBrief] = None
