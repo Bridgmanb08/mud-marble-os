@@ -2,12 +2,14 @@ import { useEffect, useRef, useState, type ChangeEvent } from 'react';
 import {
   DndContext,
   closestCorners,
+  pointerWithin,
   PointerSensor,
   TouchSensor,
   KeyboardSensor,
   useSensor,
   useSensors,
   useDroppable,
+  type CollisionDetection,
   type DragEndEvent,
   type DragOverEvent,
   type DragStartEvent,
@@ -430,6 +432,18 @@ export function KanbanBoard({
     return Object.keys(columns).find((col) => columns[col].includes(id));
   }
 
+  // `closestCorners` alone measures corner-to-corner distance between rects,
+  // which is unreliable for an *empty* column -- there's nothing but the
+  // column's own (large) droppable rect to compare against, and it can lose
+  // out to the still-registered rect of the card being dragged. Checking
+  // literal pointer containment first (pointerWithin) fixes empty-column
+  // drops; falling back to closestCorners keeps precise card-to-card
+  // collision (e.g. dropping between two cards) working as before.
+  const collisionDetection: CollisionDetection = (args) => {
+    const pointerCollisions = pointerWithin(args);
+    return pointerCollisions.length > 0 ? pointerCollisions : closestCorners(args);
+  };
+
   function handleDragStart(_event: DragStartEvent) {
     // Snapshot so we can cleanly roll back if the server rejects this move
     // (stale version, someone else moved the board, etc.) instead of leaving
@@ -457,28 +471,42 @@ export function KanbanBoard({
     snapshotRef.current = null;
 
     if (!over) return;
-    const activeCol = findColumn(active.id as string);
+    // Always derive the destination from *this* drop event (`over`), not
+    // from the live `columns` state -- keeps status persistence correct
+    // even if handleDragOver's running preview ever falls behind.
     const overCol = COLUMNS.some((c) => c.id === over.id) ? (over.id as string) : findColumn(over.id as string);
-    if (!activeCol || !overCol) return;
+    if (!overCol) return;
 
-    let finalColumns = columns;
-    if (activeCol === overCol) {
-      const oldIndex = columns[activeCol].indexOf(active.id as string);
-      const newIndex = columns[activeCol].indexOf(over.id as string);
-      if (oldIndex !== newIndex && newIndex !== -1) {
-        finalColumns = { ...columns, [activeCol]: arrayMove(columns[activeCol], oldIndex, newIndex) };
-        setColumns(finalColumns);
-      }
-    }
-
-    // findColumn(active.id) now reflects the *destination* column, since
-    // handleDragOver already moved it there live during the drag. Compare
-    // against the pre-drag snapshot to see whether this drag actually
-    // changed the task's status (moved columns) or just reordered in place.
+    // Where the task started, from the snapshot taken at drag start --
+    // reliable regardless of how many (possibly stale) dragover updates
+    // happened in between, unlike re-deriving it from `columns` here.
     const originalCol = rollback
       ? Object.keys(rollback).find((col) => rollback[col].includes(active.id as string))
-      : undefined;
-    const statusChanged = originalCol !== undefined && originalCol !== activeCol;
+      : findColumn(active.id as string);
+    if (!originalCol) return;
+    const statusChanged = originalCol !== overCol;
+
+    let finalColumns = columns;
+    if (!statusChanged) {
+      const ids = columns[overCol] || [];
+      const oldIndex = ids.indexOf(active.id as string);
+      const newIndex = ids.indexOf(over.id as string);
+      if (oldIndex !== newIndex && newIndex !== -1) {
+        finalColumns = { ...columns, [overCol]: arrayMove(ids, oldIndex, newIndex) };
+        setColumns(finalColumns);
+      }
+    } else {
+      // Cross-column: rebuild the bucketing from scratch so the dragged
+      // task ends up in exactly one column -- the real destination -- no
+      // matter what handleDragOver's running state currently thinks.
+      const cleaned: Record<string, string[]> = {};
+      for (const colId of Object.keys(columns)) {
+        cleaned[colId] = columns[colId].filter((id) => id !== active.id);
+      }
+      cleaned[overCol] = [...(cleaned[overCol] || []), active.id as string];
+      finalColumns = cleaned;
+      setColumns(finalColumns);
+    }
 
     if (filtersActive && !statusChanged) {
       // Reordering position within a column requires knowing every sibling's
@@ -498,7 +526,7 @@ export function KanbanBoard({
         [
           {
             id: active.id as string,
-            status: activeCol,
+            status: overCol,
             position: Date.now(),
             expected_version: tasksById.get(active.id as string)?.version,
           },
@@ -529,7 +557,7 @@ export function KanbanBoard({
       )}
       <DndContext
         sensors={sensors}
-        collisionDetection={closestCorners}
+        collisionDetection={collisionDetection}
         onDragStart={handleDragStart}
         onDragOver={handleDragOver}
         onDragEnd={handleDragEnd}
