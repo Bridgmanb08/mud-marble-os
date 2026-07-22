@@ -140,8 +140,19 @@ function TaskCard({
   });
   const [expanded, setExpanded] = useState(false);
   const [clarifyPicking, setClarifyPicking] = useState(false);
+  const [pendingChecked, setPendingChecked] = useState<boolean | null>(null);
   const overdue = task.overdue;
   const assignees = task.assignees && task.assignees.length > 0 ? task.assignees : task.assigned_to ? [task.assigned_to] : [];
+
+  // Drop the optimistic override once the real task data reflects it --
+  // otherwise a stale override could stick around across an unrelated
+  // re-render and mask a later change to this same task.
+  useEffect(() => {
+    if (pendingChecked !== null && (task.status === 'complete') === pendingChecked) {
+      setPendingChecked(null);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [task.status]);
 
   async function handleProjectChange(e: ChangeEvent<HTMLSelectElement>) {
     const projectId = e.target.value;
@@ -155,10 +166,15 @@ function TaskCard({
 
   async function toggleComplete(e: ChangeEvent<HTMLInputElement>) {
     const next = e.target.checked;
+    // Flip the checkbox immediately instead of waiting on the round trip --
+    // the request below still fully persists it; this just removes the
+    // visible delay while it's in flight, and reverts if it fails.
+    setPendingChecked(next);
     try {
       await api.patch(`/tasks/${task.id}`, { status: next ? 'complete' : 'upcoming', expected_version: task.version });
       onChanged();
     } catch (err) {
+      setPendingChecked(null);
       toast(err instanceof ApiError ? err.message : 'Failed to update task', true);
     }
   }
@@ -191,7 +207,7 @@ function TaskCard({
       <div className="task-title" style={{ display: 'flex', alignItems: 'flex-start', gap: 6 }}>
         <input
           type="checkbox"
-          checked={task.status === 'complete'}
+          checked={pendingChecked !== null ? pendingChecked : task.status === 'complete'}
           onChange={toggleComplete}
           onClick={(e) => e.stopPropagation()}
           onPointerDown={(e) => e.stopPropagation()}
