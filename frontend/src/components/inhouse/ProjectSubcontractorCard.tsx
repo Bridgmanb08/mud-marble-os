@@ -1,5 +1,8 @@
 import { useState } from 'react';
-import { IconTrash, IconChevronDown, IconChevronRight } from '@tabler/icons-react';
+import { DndContext, PointerSensor, useSensor, useSensors, type DragEndEvent } from '@dnd-kit/core';
+import { SortableContext, verticalListSortingStrategy, useSortable, arrayMove } from '@dnd-kit/sortable';
+import { CSS } from '@dnd-kit/utilities';
+import { IconTrash, IconChevronDown, IconChevronRight, IconGripVertical } from '@tabler/icons-react';
 import { api, ApiError } from '../../api/client';
 import { useToast } from '../ui/Toast';
 import { fmt } from '../../lib/format';
@@ -46,12 +49,62 @@ function AmountInput({ item, onSaved }: { item: ProjectSubItem; onSaved: () => v
   );
 }
 
+function SortableSubItemRow({
+  item,
+  onSaved,
+  onDelete,
+}: {
+  item: ProjectSubItem;
+  onSaved: () => void;
+  onDelete: (id: string) => void;
+}) {
+  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: item.id });
+  return (
+    <div
+      ref={setNodeRef}
+      style={{
+        display: 'flex',
+        alignItems: 'center',
+        gap: 8,
+        padding: '6px 0',
+        borderBottom: '1px solid var(--border)',
+        transform: CSS.Transform.toString(transform),
+        transition,
+        opacity: isDragging ? 0.5 : 1,
+        background: isDragging ? 'var(--surface)' : undefined,
+      }}
+    >
+      <button
+        type="button"
+        className="btn-reset"
+        {...attributes}
+        {...listeners}
+        style={{ display: 'flex', flexShrink: 0, cursor: 'grab', color: 'var(--t3)', touchAction: 'none' }}
+        title="Drag to reorder"
+      >
+        <IconGripVertical size={14} />
+      </button>
+      <div style={{ flex: 1 }}>
+        <div style={{ fontSize: 13 }}>{item.description || '—'}</div>
+        {item.builder_cost != null && (
+          <div style={{ fontSize: 11, color: 'var(--t2)' }}>Est. builder cost: {fmt(item.builder_cost)}</div>
+        )}
+      </div>
+      <AmountInput item={item} onSaved={onSaved} />
+      <button type="button" className="btn btn-ghost btn-sm" onClick={() => onDelete(item.id)}>
+        <IconTrash size={13} />
+      </button>
+    </div>
+  );
+}
+
 export function ProjectSubcontractorCard({ projectId, subcontractor, items, lineItems, paid, onChanged }: ProjectSubcontractorCardProps) {
   const toast = useToast();
   const [description, setDescription] = useState('');
   const [amount, setAmount] = useState('');
   const [saving, setSaving] = useState(false);
   const [showPicker, setShowPicker] = useState(false);
+  const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 5 } }));
 
   const contracted = items.reduce((s, i) => s + (i.amount || 0), 0);
   const remaining = contracted - paid;
@@ -84,6 +137,26 @@ export function ProjectSubcontractorCard({ projectId, subcontractor, items, line
       onChanged();
     } catch (err) {
       toast(err instanceof ApiError ? err.message : 'Failed to remove item', true);
+    }
+  }
+
+  async function handleReorder(event: DragEndEvent) {
+    const { active, over } = event;
+    if (!over || active.id === over.id) return;
+    const oldIndex = items.findIndex((i) => i.id === active.id);
+    const newIndex = items.findIndex((i) => i.id === over.id);
+    if (oldIndex === -1 || newIndex === -1) return;
+    const reordered = arrayMove(items, oldIndex, newIndex);
+    const changed = reordered
+      .map((item, i) => ({ id: item.id, oldOrder: item.sort_order, newOrder: i }))
+      .filter(({ oldOrder, newOrder }) => oldOrder !== newOrder);
+    if (changed.length === 0) return;
+    try {
+      await Promise.all(changed.map(({ id: itemId, newOrder }) => api.patch(`/subcontractor-items/${itemId}`, { sort_order: newOrder })));
+    } catch (err) {
+      toast(err instanceof ApiError ? err.message : 'Failed to save the new order', true);
+    } finally {
+      onChanged();
     }
   }
 
@@ -128,20 +201,13 @@ export function ProjectSubcontractorCard({ projectId, subcontractor, items, line
         </div>
       </div>
       <div style={{ padding: '8px 16px' }}>
-        {items.map((item) => (
-          <div key={item.id} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '6px 0', borderBottom: '1px solid var(--border)' }}>
-            <div style={{ flex: 1 }}>
-              <div style={{ fontSize: 13 }}>{item.description || '—'}</div>
-              {item.builder_cost != null && (
-                <div style={{ fontSize: 11, color: 'var(--t2)' }}>Est. builder cost: {fmt(item.builder_cost)}</div>
-              )}
-            </div>
-            <AmountInput item={item} onSaved={onChanged} />
-            <button type="button" className="btn btn-ghost btn-sm" onClick={() => deleteItem(item.id)}>
-              <IconTrash size={13} />
-            </button>
-          </div>
-        ))}
+        <DndContext sensors={sensors} onDragEnd={handleReorder}>
+          <SortableContext items={items.map((i) => i.id)} strategy={verticalListSortingStrategy}>
+            {items.map((item) => (
+              <SortableSubItemRow key={item.id} item={item} onSaved={onChanged} onDelete={deleteItem} />
+            ))}
+          </SortableContext>
+        </DndContext>
 
         <div style={{ marginTop: 8 }}>
           <button

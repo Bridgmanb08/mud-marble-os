@@ -1,12 +1,79 @@
 import { useEffect, useMemo, useState } from 'react';
-import { IconTrash } from '@tabler/icons-react';
+import { DndContext, PointerSensor, useSensor, useSensors, type DragEndEvent } from '@dnd-kit/core';
+import { SortableContext, verticalListSortingStrategy, useSortable, arrayMove } from '@dnd-kit/sortable';
+import { CSS } from '@dnd-kit/utilities';
+import { IconTrash, IconGripVertical } from '@tabler/icons-react';
 import { api } from '../../api/client';
 import { useToast } from '../ui/Toast';
 import { fmtD } from '../../lib/format';
 import type { Task, UserDirectoryEntry } from '../../types';
 
-type SortKey = 'title' | 'status' | 'priority' | 'scheduled_end' | 'assigned_to';
+type SortKey = 'title' | 'status' | 'priority' | 'scheduled_end' | 'assigned_to' | 'manual_position';
 export type TaskGroupBy = 'none' | 'project' | 'assigned_to' | 'status';
+
+function TaskTableRow({
+  task,
+  dragEnabled,
+  displayOrder,
+  selected,
+  onToggleSelect,
+  onTaskClick,
+}: {
+  task: Task;
+  dragEnabled: boolean;
+  displayOrder: number | null;
+  selected: boolean;
+  onToggleSelect: (id: string) => void;
+  onTaskClick: (id: string) => void;
+}) {
+  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
+    id: task.id,
+    disabled: !dragEnabled,
+  });
+  return (
+    <tr
+      ref={setNodeRef}
+      onClick={() => onTaskClick(task.id)}
+      style={{
+        transform: CSS.Transform.toString(transform),
+        transition,
+        opacity: isDragging ? 0.5 : 1,
+        position: 'relative',
+        background: isDragging ? 'var(--surface)' : undefined,
+      }}
+    >
+      {dragEnabled && (
+        <td onClick={(e) => e.stopPropagation()} style={{ width: 24 }}>
+          <button
+            type="button"
+            className="btn-reset"
+            {...attributes}
+            {...listeners}
+            style={{ display: 'flex', cursor: 'grab', color: 'var(--t3)', touchAction: 'none' }}
+            title="Drag to reorder"
+          >
+            <IconGripVertical size={14} />
+          </button>
+        </td>
+      )}
+      <td onClick={(e) => e.stopPropagation()}>
+        <input type="checkbox" checked={selected} onChange={() => onToggleSelect(task.id)} />
+      </td>
+      <td style={{ color: 'var(--t2)' }}>{displayOrder != null ? displayOrder + 1 : '—'}</td>
+      <td style={{ fontWeight: 500 }}>{task.title}</td>
+      <td>{task.projects?.name?.replace(/\|.*/, '').trim() || '—'}</td>
+      <td>{task.assigned_to || '—'}</td>
+      <td>
+        <span className="badge bg-gray">{task.status.replace('_', ' ')}</span>
+      </td>
+      <td>{task.priority}</td>
+      <td style={{ color: task.overdue ? 'var(--red)' : undefined, fontWeight: task.overdue ? 500 : undefined }}>
+        {task.overdue ? '⚠ ' : ''}
+        {fmtD(task.scheduled_end)}
+      </td>
+    </tr>
+  );
+}
 
 export function TableView({
   tasks,
@@ -29,10 +96,31 @@ export function TableView({
   const [bulkAssignee, setBulkAssignee] = useState('');
   const [bulkBusy, setBulkBusy] = useState(false);
   const [directory, setDirectory] = useState<UserDirectoryEntry[]>([]);
+  // Optimistic manual_position overrides, keyed by task id -- cleared once the
+  // corresponding task in the `tasks` prop reflects the same value (i.e. the
+  // reorder round-tripped through the server and back down via onChanged()).
+  const [manualOverride, setManualOverride] = useState<Record<string, number>>({});
+  const dragEnabled = sortKey === 'manual_position';
+
+  const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 5 } }));
 
   useEffect(() => {
     api.get<UserDirectoryEntry[]>('/users/directory').then(setDirectory).catch(() => {});
   }, []);
+
+  useEffect(() => {
+    setManualOverride((prev) => {
+      let changed = false;
+      const next = { ...prev };
+      for (const t of tasks) {
+        if (next[t.id] !== undefined && t.manual_position === next[t.id]) {
+          delete next[t.id];
+          changed = true;
+        }
+      }
+      return changed ? next : prev;
+    });
+  }, [tasks]);
 
   function toggleSort(key: SortKey) {
     if (sortKey === key) setSortDir((d) => (d === 'asc' ? 'desc' : 'asc'));
@@ -44,14 +132,23 @@ export function TableView({
 
   const sorted = useMemo(() => {
     const copy = [...tasks];
-    copy.sort((a, b) => {
-      const av = String(a[sortKey] ?? '');
-      const bv = String(b[sortKey] ?? '');
-      const cmp = av.localeCompare(bv);
-      return sortDir === 'asc' ? cmp : -cmp;
-    });
+    if (sortKey === 'manual_position') {
+      copy.sort((a, b) => {
+        const av = manualOverride[a.id] ?? a.manual_position ?? Infinity;
+        const bv = manualOverride[b.id] ?? b.manual_position ?? Infinity;
+        if (av !== bv) return sortDir === 'asc' ? av - bv : bv - av;
+        return (a.scheduled_end || '').localeCompare(b.scheduled_end || '');
+      });
+    } else {
+      copy.sort((a, b) => {
+        const av = String(a[sortKey] ?? '');
+        const bv = String(b[sortKey] ?? '');
+        const cmp = av.localeCompare(bv);
+        return sortDir === 'asc' ? cmp : -cmp;
+      });
+    }
     return copy;
-  }, [tasks, sortKey, sortDir]);
+  }, [tasks, sortKey, sortDir, manualOverride]);
 
   const groups = useMemo(() => {
     if (groupBy === 'none') return { All: sorted };
@@ -86,6 +183,35 @@ export function TableView({
       else ids.forEach((id) => next.add(id));
       return next;
     });
+  }
+
+  async function handlePriorityReorder(groupItems: Task[], event: DragEndEvent) {
+    const { active, over } = event;
+    if (!over || active.id === over.id) return;
+    const oldIndex = groupItems.findIndex((t) => t.id === active.id);
+    const newIndex = groupItems.findIndex((t) => t.id === over.id);
+    if (oldIndex === -1 || newIndex === -1) return;
+
+    const reordered = arrayMove(groupItems, oldIndex, newIndex);
+    const overrides: Record<string, number> = {};
+    reordered.forEach((t, i) => {
+      overrides[t.id] = i;
+    });
+    setManualOverride((prev) => ({ ...prev, ...overrides }));
+
+    try {
+      await api.patch('/tasks/reorder-priority', {
+        items: reordered.map((t, i) => ({ id: t.id, manual_position: i })),
+      });
+      onChanged();
+    } catch (e) {
+      setManualOverride((prev) => {
+        const next = { ...prev };
+        for (const id of Object.keys(overrides)) delete next[id];
+        return next;
+      });
+      toast(e instanceof Error ? e.message : 'Failed to save the new order', true);
+    }
   }
 
   async function applyBulkStatus() {
@@ -186,9 +312,30 @@ export function TableView({
           <option value="status">Group by status</option>
         </select>
       </div>
+      {dragEnabled && (
+        <div className="alert alert-a" style={{ marginBottom: 12 }}>
+          Sorted by priority — drag the handle to reorder within a group. Switch to another column sort to hide the
+          handles.
+        </div>
+      )}
       {Object.entries(groups).map(([group, items]) => {
         const groupIds = items.map((t) => t.id);
         const groupAllSelected = groupIds.length > 0 && groupIds.every((id) => selected.has(id));
+        const tbody = (
+          <tbody>
+            {items.map((t) => (
+              <TaskTableRow
+                key={t.id}
+                task={t}
+                dragEnabled={dragEnabled}
+                displayOrder={manualOverride[t.id] ?? t.manual_position}
+                selected={selected.has(t.id)}
+                onToggleSelect={toggleSelect}
+                onTaskClick={onTaskClick}
+              />
+            ))}
+          </tbody>
+        );
         return (
           <div key={group} style={{ marginBottom: 16 }}>
             {groupBy !== 'none' && (
@@ -200,8 +347,16 @@ export function TableView({
               <table className="tbl">
                 <thead>
                   <tr>
+                    {dragEnabled && <th style={{ width: 24 }} />}
                     <th style={{ width: 28 }}>
                       <input type="checkbox" checked={groupAllSelected} onChange={() => toggleSelectGroup(groupIds)} onClick={(e) => e.stopPropagation()} />
+                    </th>
+                    <th
+                      className="sortable"
+                      onClick={() => toggleSort('manual_position')}
+                      title="Sort by your own manual order -- reveals drag handles to reorder"
+                    >
+                      Order
                     </th>
                     <th className="sortable" onClick={() => toggleSort('title')}>
                       Title
@@ -221,26 +376,15 @@ export function TableView({
                     </th>
                   </tr>
                 </thead>
-                <tbody>
-                  {items.map((t) => (
-                    <tr key={t.id} onClick={() => onTaskClick(t.id)}>
-                      <td onClick={(e) => e.stopPropagation()}>
-                        <input type="checkbox" checked={selected.has(t.id)} onChange={() => toggleSelect(t.id)} />
-                      </td>
-                      <td style={{ fontWeight: 500 }}>{t.title}</td>
-                      <td>{t.projects?.name?.replace(/\|.*/, '').trim() || '—'}</td>
-                      <td>{t.assigned_to || '—'}</td>
-                      <td>
-                        <span className="badge bg-gray">{t.status.replace('_', ' ')}</span>
-                      </td>
-                      <td>{t.priority}</td>
-                      <td style={{ color: t.overdue ? 'var(--red)' : undefined, fontWeight: t.overdue ? 500 : undefined }}>
-                        {t.overdue ? '⚠ ' : ''}
-                        {fmtD(t.scheduled_end)}
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
+                {dragEnabled ? (
+                  <DndContext sensors={sensors} onDragEnd={(e) => handlePriorityReorder(items, e)}>
+                    <SortableContext items={groupIds} strategy={verticalListSortingStrategy}>
+                      {tbody}
+                    </SortableContext>
+                  </DndContext>
+                ) : (
+                  tbody
+                )}
               </table>
             </div>
           </div>

@@ -127,6 +127,14 @@ async def get_dashboard(_: CurrentUser = Depends(get_current_user)):
     overdue_invoices = len([i for i in invoices if i.get("status") == "overdue"])
 
     incomplete_tasks = [t for t in schedule_items if t.get("status") != "complete"]
+    # Manually-prioritized tasks (dragged to the top in the widget itself) win first,
+    # in the order the user put them in; everything else falls back to due-date order.
+    incomplete_tasks.sort(
+        key=lambda t: (
+            t["manual_position"] if t.get("manual_position") is not None else float("inf"),
+            t.get("scheduled_end") or "",
+        )
+    )
 
     # -- contractor milestones --
     contractor_milestones = []
