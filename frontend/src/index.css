@@ -213,6 +213,8 @@ textarea.fi{resize:vertical;min-height:80px;}
 @keyframes ai-bounce{0%,80%,100%{transform:scale(.6);opacity:.5;}40%{transform:scale(1);opacity:1;}}
 .ai-input-row{display:flex;gap:8px;padding:12px;border-top:1px solid var(--border);flex-shrink:0;}
 .ai-input{flex:1;padding:8px 10px;font-size:13px;font-family:var(--font);border:1px solid var(--border-md);border-radius:var(--r);background:var(--surface);color:var(--text);}
+.ai-mic-btn.on{background:#E23; border-color:#E23; color:#fff; animation:ai-mic-pulse 1.4s infinite;}
+@keyframes ai-mic-pulse{0%,100%{box-shadow:0 0 0 0 rgba(238,34,34,.35);}50%{box-shadow:0 0 0 6px rgba(238,34,34,0);}}
 
 @media(max-width:768px){
   :root{--sb:52px;}
