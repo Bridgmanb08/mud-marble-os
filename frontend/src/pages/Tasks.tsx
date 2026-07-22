@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { IconPlus, IconLayoutKanban, IconTable, IconTimeline, IconBookmark, IconTrash } from '@tabler/icons-react';
 import { api } from '../api/client';
 import { useAuth } from '../auth/AuthContext';
@@ -39,6 +40,7 @@ function loadSavedState(): SavedViewState | null {
 export default function Tasks() {
   const saved = loadSavedState();
   const { user } = useAuth();
+  const [searchParams, setSearchParams] = useSearchParams();
 
   const [tasks, setTasks] = useState<Task[] | null>(null);
   const [view, setView] = useState<ViewMode>(saved?.view || 'kanban');
@@ -77,6 +79,18 @@ export default function Tasks() {
     loadViews();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  // Supports the global command palette's "New task" quick action deep-linking
+  // in via ?new=1 -- open the modal once, then strip the param so a refresh
+  // or back-navigation doesn't reopen it.
+  useEffect(() => {
+    if (searchParams.get('new') === '1') {
+      setDefaultStatus('upcoming');
+      setShowModal(true);
+      setSearchParams({}, { replace: true });
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [searchParams]);
 
   // Remember the last view/tab/filters the user had open so returning to
   // the Task Board doesn't dump them back to a blank Kanban view.
