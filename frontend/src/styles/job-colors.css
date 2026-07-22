@@ -17,8 +17,11 @@
 
 .job-color-pop-backdrop{position:fixed;inset:0;z-index:299;}
 .job-color-pop{
-  position:absolute;top:18px;left:0;z-index:300;padding:8px;
-  display:flex;flex-wrap:wrap;gap:6px;width:120px;
+  /* position/top/left are set inline (JobColorDot portals this to document.body
+     and positions it off the trigger button's rect, so it isn't clipped by the
+     job sidebar's overflow-y:auto) -- only static layout lives here. */
+  z-index:300;padding:8px;
+  display:flex;flex-wrap:wrap;gap:6px;width:150px;
   box-shadow:0 4px 16px rgba(0,0,0,.16);
 }
 .job-color-swatch{
