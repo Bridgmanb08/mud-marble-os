@@ -2,7 +2,7 @@ import urllib.parse
 from datetime import datetime, timezone
 from typing import Any, Optional
 
-from .supabase_client import db_get
+from .supabase_client import db_get, db_patch
 
 MAX_LIMIT = 50
 
@@ -177,6 +177,92 @@ async def get_dashboard_summary(current_user) -> dict:
     return summary.model_dump()
 
 
+async def create_task(
+    current_user,
+    title: str,
+    project_name: Optional[str] = None,
+    assigned_to: Optional[str] = None,
+    scheduled_start: Optional[str] = None,
+    scheduled_end: Optional[str] = None,
+    priority: str = "normal",
+    notes: Optional[str] = None,
+    is_milestone: bool = False,
+) -> dict:
+    from .routers.tasks import create_task as _create_task
+    from .schemas.tasks import TaskCreate
+
+    project_id = None
+    if project_name:
+        ids = await _resolve_project_ids(project_name)
+        if not ids:
+            return {
+                "error": f"No project matching '{project_name}' found. Use search_projects to confirm the "
+                "exact name before retrying, or ask the user which job they mean."
+            }
+        project_id = ids[0]
+
+    body = TaskCreate(
+        title=title,
+        project_id=project_id,
+        assigned_to=assigned_to,
+        assignees=[assigned_to] if assigned_to else [],
+        scheduled_start=scheduled_start,
+        scheduled_end=scheduled_end,
+        priority=priority,
+        notes=notes,
+        is_milestone=is_milestone,
+    )
+    created = await _create_task(body, current_user)
+    return {"created": True, "task": created.model_dump()}
+
+
+async def create_client(
+    current_user,
+    first_name: str,
+    last_name: Optional[str] = None,
+    phone: Optional[str] = None,
+    email: Optional[str] = None,
+    referral_name: Optional[str] = None,
+    notes: Optional[str] = None,
+) -> dict:
+    from .routers.clients import create_client as _create_client
+    from .schemas.clients import ClientCreate
+
+    body = ClientCreate(
+        first_name=first_name,
+        last_name=last_name,
+        phone=phone,
+        email=email,
+        referral_name=referral_name,
+        notes=notes,
+    )
+    created = await _create_client(body, current_user)
+    return {"created": True, "client": created}
+
+
+async def add_client_note(client_name: str, note: str) -> dict:
+    needle = _q(client_name)
+    rows = await db_get(
+        "clients",
+        f"?or=(first_name.ilike.*{needle}*,last_name.ilike.*{needle}*)&select=id,first_name,last_name,notes&limit=5",
+    )
+    if not rows:
+        return {
+            "error": f"No client matching '{client_name}' found. Use search_clients to confirm the exact "
+            "name, or offer to create them as a new client first."
+        }
+    if len(rows) > 1:
+        names = ", ".join(f"{r['first_name']} {r.get('last_name') or ''}".strip() for r in rows)
+        return {"error": f"Multiple clients match '{client_name}': {names}. Ask which one before retrying."}
+
+    client = rows[0]
+    today = datetime.now(timezone.utc).date().isoformat()
+    existing = (client.get("notes") or "").strip()
+    combined = f"{existing}\n\n[{today}] {note}".strip() if existing else f"[{today}] {note}"
+    updated = await db_patch("clients", client["id"], {"notes": combined})
+    return {"updated": True, "client": updated[0]}
+
+
 TOOLS: list[dict] = [
     {
         "name": "search_projects",
@@ -273,6 +359,55 @@ TOOLS: list[dict] = [
         "description": "Get the company-wide CFO/owner dashboard snapshot: active project count, total contract value, collected/outstanding AR, open change orders, AR aging buckets, project profitability, cash position. Takes no arguments -- use this for high-level 'how are we doing' questions before drilling into individual searches.",
         "input_schema": {"type": "object", "properties": {}},
     },
+    {
+        "name": "create_task",
+        "description": "Create a new task on the Task Board. This is ALSO how you create a calendar/schedule event -- "
+        "the Schedule page is just tasks with scheduled_start/scheduled_end set, there is no separate calendar "
+        "entity. Use search_projects first if you're not certain of the exact project name.",
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "title": {"type": "string", "description": "Short task title, e.g. 'Siding work' or 'Follow up with Carlos on permit'"},
+                "project_name": {"type": "string", "description": "Substring of the project name to attach this to, if any"},
+                "assigned_to": {"type": "string", "description": "Name of the person responsible, e.g. Shannon, Otto, Brent"},
+                "scheduled_start": {"type": "string", "description": "ISO date (YYYY-MM-DD) this starts on"},
+                "scheduled_end": {"type": "string", "description": "ISO date (YYYY-MM-DD) this is due/ends on"},
+                "priority": {"type": "string", "description": "low, normal, high, or urgent (default normal)"},
+                "notes": {"type": "string", "description": "Any additional detail"},
+                "is_milestone": {"type": "boolean", "description": "Mark as a milestone on the schedule"},
+            },
+            "required": ["title"],
+        },
+    },
+    {
+        "name": "create_client",
+        "description": "Add a new person to the Client Directory.",
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "first_name": {"type": "string"},
+                "last_name": {"type": "string"},
+                "phone": {"type": "string"},
+                "email": {"type": "string"},
+                "referral_name": {"type": "string", "description": "Who referred them, if mentioned"},
+                "notes": {"type": "string"},
+            },
+            "required": ["first_name"],
+        },
+    },
+    {
+        "name": "add_client_note",
+        "description": "Append a dated note to an existing client's record in the Client Directory. Fails with an "
+        "explanation if the name matches zero or more than one client -- use search_clients first if unsure.",
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "client_name": {"type": "string", "description": "First and/or last name of the existing client"},
+                "note": {"type": "string", "description": "The note text to add"},
+            },
+            "required": ["client_name", "note"],
+        },
+    },
 ]
 
 _HANDLERS = {
@@ -283,12 +418,26 @@ _HANDLERS = {
     "search_transactions": search_transactions,
     "search_invoices": search_invoices,
     "search_change_orders": search_change_orders,
+    "add_client_note": add_client_note,
+}
+
+# Tools that need the caller's identity (they go through a real router
+# endpoint, which expects a CurrentUser) -- everything else in _HANDLERS is a
+# read-only search that doesn't care who's asking.
+_USER_SCOPED_HANDLERS = {
+    "get_dashboard_summary": get_dashboard_summary,
+    "create_task": create_task,
+    "create_client": create_client,
 }
 
 
 async def run_tool(name: str, tool_input: dict, current_user) -> Any:
-    if name == "get_dashboard_summary":
-        return await get_dashboard_summary(current_user)
+    user_scoped = _USER_SCOPED_HANDLERS.get(name)
+    if user_scoped:
+        try:
+            return await user_scoped(current_user, **tool_input)
+        except TypeError as e:
+            return {"error": f"invalid arguments: {e}"}
     handler = _HANDLERS.get(name)
     if not handler:
         return {"error": f"unknown tool '{name}'"}
