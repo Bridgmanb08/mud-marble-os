@@ -25,6 +25,9 @@ Supabase (Postgres via REST) for storage, deployed as a single Vercel project.
 | `FRONTEND_ORIGIN` | api | your deployed origin, for CORS (defaults to `http://localhost:5173`) |
 | `VITE_SUPABASE_URL` | frontend (build-time) | same Supabase URL as above — the browser uploads/downloads project files directly to Supabase Storage via short-lived signed URLs, so it needs to know where to send them |
 | `VITE_SUPABASE_ANON_KEY` | frontend (build-time) | the **anon** key (not service-role) — safe to embed in the client bundle by design; Supabase Storage still requires it on requests alongside the signed token |
+| `TWILIO_ACCOUNT_SID` | api | optional — only needed for the Twilio MMS integration (see below) |
+| `TWILIO_AUTH_TOKEN` | api | optional — **secret**; verifies incoming webhook requests are actually from Twilio |
+| `PUBLIC_BASE_URL` | api | optional — your deployed origin (e.g. `https://mudmarbleos.vercel.app`), used to verify Twilio's webhook signature correctly behind Vercel's proxy |
 
 ## First-time setup
 
@@ -54,3 +57,22 @@ npm run dev
 ```
 
 Visit `http://localhost:5173`.
+
+## Twilio MMS setup (optional)
+
+Lets crew text photos, videos, and plans to a phone number and have them auto-filed to the right
+project (matched from the message text; if that fails, it texts back asking which project; if that
+also fails, it lands in the admin Review page and notifies admins). Not required for the rest of the
+app to work.
+
+1. Run `supabase/migrations/0024_inbound_media.sql` (covered by the "run the SQL files in order" step
+   above if you haven't set up the database yet).
+2. Deploy the app (Twilio needs a real public URL to call — it can't reach localhost).
+3. Sign up for [Twilio](https://www.twilio.com/) and buy a phone number with **MMS capability** (not
+   all numbers support it — confirm at purchase).
+4. Grab the **Account SID** and **Auth Token** from the Twilio Console.
+5. Set `TWILIO_ACCOUNT_SID`, `TWILIO_AUTH_TOKEN`, and `PUBLIC_BASE_URL` in Vercel (see table above),
+   then redeploy so they take effect.
+6. In the Twilio Console: Phone Numbers → your number → Messaging Configuration → "A message comes
+   in" → **Webhook**, **HTTP POST** → `https://<your-deployed-url>/api/twilio/sms`.
+7. Text a photo to the number from a real phone to confirm it lands in the right project's Files tab.
