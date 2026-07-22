@@ -12,6 +12,7 @@ const STATUS_BADGE: Record<string, string> = {
   complete: 'bg-green',
   estimating: 'bg-amber',
   proposed: 'bg-blue',
+  pre_construction: 'bg-purple',
   lead: 'bg-gray',
   vetting: 'bg-gray',
   punch_list: 'bg-purple',
@@ -19,7 +20,7 @@ const STATUS_BADGE: Record<string, string> = {
   lost: 'bg-red',
 };
 
-const FILTERS = ['all', 'lead', 'vetting', 'estimating', 'proposed', 'active', 'complete', 'on_hold'];
+const FILTERS = ['all', 'lead', 'vetting', 'estimating', 'proposed', 'pre_construction', 'active', 'complete', 'on_hold'];
 
 function projectTitle(name: string) {
   return name.replace(/\|.*/, '').trim();

@@ -61,7 +61,7 @@ MAX_TRANSCRIPT_CHARS = 150_000
 
 async def _active_project_names() -> list[str]:
     rows = await db_get(
-        "projects", "?is_archived=eq.false&status=in.(active,estimating,proposed)&select=name&order=name.asc"
+        "projects", "?is_archived=eq.false&status=in.(active,estimating,proposed,pre_construction)&select=name&order=name.asc"
     )
     return [r["name"].split("|")[0].strip() for r in rows]
 
@@ -113,7 +113,7 @@ async def parse_transcript(body: ParseTranscriptRequest, _: CurrentUser = Depend
 @router.post("/import-tasks", response_model=ImportTasksResponse)
 async def import_tasks(body: ImportTasksRequest, _: CurrentUser = Depends(get_current_user)):
     projects = await db_get(
-        "projects", "?is_archived=eq.false&status=in.(active,estimating,proposed)&select=id,name"
+        "projects", "?is_archived=eq.false&status=in.(active,estimating,proposed,pre_construction)&select=id,name"
     )
 
     imported = 0

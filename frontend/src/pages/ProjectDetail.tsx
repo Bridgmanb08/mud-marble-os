@@ -22,6 +22,19 @@ const NOTE_COLORS: Record<string, string> = {
   daily_log: 'var(--green)',
 };
 
+const PROJECT_STATUS_OPTIONS = [
+  'lead',
+  'vetting',
+  'estimating',
+  'proposed',
+  'pre_construction',
+  'active',
+  'complete',
+  'on_hold',
+  'punch_list',
+  'lost',
+];
+
 const CO_TYPE_BADGE: Record<string, string> = { oversight: 'bg-amber', client_addition: 'bg-blue', unforeseen: 'bg-red' };
 const CO_STATUS_BADGE: Record<string, string> = { pending: 'bg-gray', sent: 'bg-amber', approved: 'bg-green', rejected: 'bg-red' };
 const INVOICE_STATUS_BADGE: Record<string, string> = { draft: 'bg-gray', sent: 'bg-amber', paid: 'bg-green', overdue: 'bg-red', void: 'bg-gray' };
@@ -121,6 +134,18 @@ export default function ProjectDetail() {
     if (t) setDetailTask(t);
   }
 
+  async function handleStatusChange(newStatus: string) {
+    if (!id || !project) return;
+    const previous = project.status;
+    setProject({ ...project, status: newStatus });
+    try {
+      await api.patch(`/projects/${id}`, { status: newStatus });
+    } catch (e) {
+      setProject((p) => (p ? { ...p, status: previous } : p));
+      toast(e instanceof Error ? e.message : 'Failed to update status', true);
+    }
+  }
+
   return (
     <>
       <button className="btn btn-sm" style={{ marginBottom: 12 }} onClick={() => navigate('/projects')}>
@@ -134,7 +159,20 @@ export default function ProjectDetail() {
             {project.address ? ` · ${project.address}` : ''}
           </p>
         </div>
-        <span className="badge bg-gray">{project.status.replace('_', ' ')}</span>
+        <select
+          className="fi"
+          style={{ maxWidth: 180, textTransform: 'capitalize' }}
+          value={project.status}
+          onChange={(e) => handleStatusChange(e.target.value)}
+        >
+          {(PROJECT_STATUS_OPTIONS.includes(project.status) ? PROJECT_STATUS_OPTIONS : [project.status, ...PROJECT_STATUS_OPTIONS]).map(
+            (s) => (
+              <option key={s} value={s}>
+                {s.replace(/_/g, ' ')}
+              </option>
+            )
+          )}
+        </select>
       </div>
 
       <div className="tabs" style={{ margin: '0 -24px 0', borderRadius: 0 }}>

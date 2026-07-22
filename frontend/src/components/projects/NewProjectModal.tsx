@@ -8,7 +8,7 @@ interface NewProjectModalProps {
   onCreated: () => void;
 }
 
-const STATUS_OPTIONS = ['lead', 'vetting', 'estimating', 'proposed', 'active'];
+const STATUS_OPTIONS = ['lead', 'vetting', 'estimating', 'proposed', 'pre_construction', 'active'];
 
 export function NewProjectModal({ onClose, onCreated }: NewProjectModalProps) {
   const [name, setName] = useState('');
@@ -73,7 +73,7 @@ export function NewProjectModal({ onClose, onCreated }: NewProjectModalProps) {
             <select className="fi" value={status} onChange={(e) => setStatus(e.target.value)}>
               {STATUS_OPTIONS.map((s) => (
                 <option key={s} value={s}>
-                  {s}
+                  {s.replace('_', ' ')}
                 </option>
               ))}
             </select>
