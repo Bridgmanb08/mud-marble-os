@@ -17,6 +17,10 @@ class UserCreate(BaseModel):
     is_admin: bool = False
 
 
+class PasswordReset(BaseModel):
+    password: str
+
+
 class UserDirectoryEntry(BaseModel):
     id: str
     name: str

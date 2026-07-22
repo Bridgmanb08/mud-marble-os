@@ -1,13 +1,15 @@
 import { useEffect, useState } from 'react';
-import { IconPlus, IconUsers, IconShieldCheck } from '@tabler/icons-react';
+import { IconPlus, IconUsers, IconShieldCheck, IconKey } from '@tabler/icons-react';
 import { api } from '../api/client';
 import { useToast } from '../components/ui/Toast';
 import type { UserSummary } from '../types';
 import { NewUserModal } from '../components/users/NewUserModal';
+import { ResetPasswordModal } from '../components/users/ResetPasswordModal';
 
 export default function Users() {
   const [users, setUsers] = useState<UserSummary[] | null>(null);
   const [showNew, setShowNew] = useState(false);
+  const [resetTarget, setResetTarget] = useState<UserSummary | null>(null);
   const toast = useToast();
 
   async function load() {
@@ -61,6 +63,9 @@ export default function Users() {
                   <IconShieldCheck size={11} style={{ marginRight: 3 }} /> Admin
                 </span>
               )}
+              <button className="btn btn-sm" onClick={() => setResetTarget(u)}>
+                <IconKey size={12} /> Reset password
+              </button>
             </div>
           </div>
         ))
@@ -73,6 +78,18 @@ export default function Users() {
             setShowNew(false);
             toast('User added');
             load();
+          }}
+        />
+      )}
+
+      {resetTarget && (
+        <ResetPasswordModal
+          userId={resetTarget.id}
+          userName={resetTarget.name}
+          onClose={() => setResetTarget(null)}
+          onReset={() => {
+            setResetTarget(null);
+            toast('Password reset');
           }}
         />
       )}
