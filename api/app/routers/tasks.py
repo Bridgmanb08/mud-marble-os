@@ -16,6 +16,7 @@ from ..schemas.tasks import (
     CommentOut,
     DependencyCreate,
     DependencyOut,
+    PriorityReorderRequest,
     ReorderRequest,
     SubtaskCreate,
     SubtaskOut,
@@ -147,6 +148,22 @@ async def reorder_tasks(body: ReorderRequest, _: CurrentUser = Depends(get_curre
         if item.id in current_versions:
             updates["version"] = current_versions[item.id] + 1
         await db_patch("schedule_items", item.id, updates)
+    return {"ok": True}
+
+
+@router.patch("/reorder-priority")
+async def reorder_priority(body: PriorityReorderRequest, _: CurrentUser = Depends(get_current_user)):
+    """Bulk manual_position update for drag-to-reorder priority lists (Dashboard's
+
+    Upcoming Tasks widget, the Task Board's Priority-sorted table view). Deliberately
+    separate from /reorder: that endpoint always writes status alongside kanban-column
+    position, but manual_position is a soft priority hint independent of both the
+    kanban column and the scheduled dates, so it needs its own lightweight bulk patch
+    with no status coupling and no version-conflict check (low-stakes ordering, not
+    board structure).
+    """
+    for item in body.items:
+        await db_patch("schedule_items", item.id, {"manual_position": item.manual_position})
     return {"ok": True}
 
 

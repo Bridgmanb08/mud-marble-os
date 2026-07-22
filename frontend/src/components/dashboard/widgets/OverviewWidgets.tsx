@@ -1,4 +1,8 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
+import { DndContext, PointerSensor, useSensor, useSensors, type DragEndEvent } from '@dnd-kit/core';
+import { SortableContext, verticalListSortingStrategy, useSortable, arrayMove } from '@dnd-kit/sortable';
+import { CSS } from '@dnd-kit/utilities';
+import { IconGripVertical } from '@tabler/icons-react';
 import { fmt, fmtD } from '../../../lib/format';
 import { DashboardTaskDrawer } from '../DashboardTaskDrawer';
 import { api, ApiError } from '../../../api/client';
@@ -53,11 +57,82 @@ export function ActiveProjectHealthWidget({ data }: { data: DashboardSummary }) 
   );
 }
 
+type UpcomingTaskItem = DashboardSummary['upcoming_tasks'][number];
+
+function SortableUpcomingRow({
+  task,
+  onMarkComplete,
+  onOpen,
+}: {
+  task: UpcomingTaskItem;
+  onMarkComplete: (id: string) => void;
+  onOpen: (id: string) => void;
+}) {
+  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: task.id });
+  return (
+    <div
+      ref={setNodeRef}
+      style={{
+        display: 'flex',
+        alignItems: 'center',
+        gap: 6,
+        padding: '7px 0',
+        borderBottom: '1px solid var(--border)',
+        transform: CSS.Transform.toString(transform),
+        transition,
+        opacity: isDragging ? 0.5 : 1,
+        background: 'var(--surface)',
+        position: 'relative',
+        zIndex: isDragging ? 1 : undefined,
+      }}
+    >
+      <button
+        type="button"
+        className="btn-reset"
+        {...attributes}
+        {...listeners}
+        style={{ display: 'flex', flexShrink: 0, color: 'var(--t3)', cursor: 'grab', touchAction: 'none' }}
+        title="Drag to reorder"
+      >
+        <IconGripVertical size={14} />
+      </button>
+      <input
+        type="checkbox"
+        title="Mark complete"
+        onChange={() => onMarkComplete(task.id)}
+        style={{ cursor: 'pointer', flexShrink: 0 }}
+      />
+      <button
+        type="button"
+        className="btn-reset"
+        onClick={() => onOpen(task.id)}
+        style={{ display: 'flex', flex: 1, minWidth: 0, textAlign: 'left', gap: 10, cursor: 'pointer' }}
+      >
+        <div style={{ flex: 1, minWidth: 0 }}>
+          <div style={{ fontSize: 12, fontWeight: 500 }}>{task.title}</div>
+          <div style={{ fontSize: 11, color: 'var(--t2)' }}>
+            {task.project_name || ''}
+            {task.assigned_to ? ` · ${task.assigned_to}` : ''}
+          </div>
+        </div>
+        <div style={{ fontSize: 11, color: 'var(--t3)' }}>{fmtD(task.scheduled_end)}</div>
+      </button>
+    </div>
+  );
+}
+
 export function UpcomingTasksWidget({ data }: { data: DashboardSummary }) {
   const toast = useToast();
   const [dismissed, setDismissed] = useState<Set<string>>(new Set());
   const [openTaskId, setOpenTaskId] = useState<string | null>(null);
-  const items = data.upcoming_tasks.filter((t) => !dismissed.has(t.id));
+  const [items, setItems] = useState<UpcomingTaskItem[]>(data.upcoming_tasks);
+
+  useEffect(() => {
+    setItems(data.upcoming_tasks);
+  }, [data.upcoming_tasks]);
+
+  const visible = items.filter((t) => !dismissed.has(t.id));
+  const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 5 } }));
 
   async function markComplete(id: string) {
     try {
@@ -68,34 +143,38 @@ export function UpcomingTasksWidget({ data }: { data: DashboardSummary }) {
     }
   }
 
-  if (!items.length) return <div style={{ fontSize: 13, color: 'var(--t2)' }}>No upcoming tasks.</div>;
+  async function handleDragEnd(event: DragEndEvent) {
+    const { active, over } = event;
+    if (!over || active.id === over.id) return;
+    const oldIndex = visible.findIndex((t) => t.id === active.id);
+    const newIndex = visible.findIndex((t) => t.id === over.id);
+    if (oldIndex === -1 || newIndex === -1) return;
+
+    const previous = items;
+    const reordered = arrayMove(visible, oldIndex, newIndex);
+    const dismissedItems = items.filter((t) => dismissed.has(t.id));
+    setItems([...reordered, ...dismissedItems]);
+
+    try {
+      await api.patch('/tasks/reorder-priority', {
+        items: reordered.map((t, i) => ({ id: t.id, manual_position: i })),
+      });
+    } catch (err) {
+      setItems(previous);
+      toast(err instanceof ApiError ? err.message : 'Failed to save the new order', true);
+    }
+  }
+
+  if (!visible.length) return <div style={{ fontSize: 13, color: 'var(--t2)' }}>No upcoming tasks.</div>;
   return (
     <>
-      {items.map((t) => (
-        <div key={t.id} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '7px 0', borderBottom: '1px solid var(--border)' }}>
-          <input
-            type="checkbox"
-            title="Mark complete"
-            onChange={() => markComplete(t.id)}
-            style={{ cursor: 'pointer', flexShrink: 0 }}
-          />
-          <button
-            type="button"
-            className="btn-reset"
-            onClick={() => setOpenTaskId(t.id)}
-            style={{ display: 'flex', flex: 1, minWidth: 0, textAlign: 'left', gap: 10, cursor: 'pointer' }}
-          >
-            <div style={{ flex: 1, minWidth: 0 }}>
-              <div style={{ fontSize: 12, fontWeight: 500 }}>{t.title}</div>
-              <div style={{ fontSize: 11, color: 'var(--t2)' }}>
-                {t.project_name || ''}
-                {t.assigned_to ? ` · ${t.assigned_to}` : ''}
-              </div>
-            </div>
-            <div style={{ fontSize: 11, color: 'var(--t3)' }}>{fmtD(t.scheduled_end)}</div>
-          </button>
-        </div>
-      ))}
+      <DndContext sensors={sensors} onDragEnd={handleDragEnd}>
+        <SortableContext items={visible.map((t) => t.id)} strategy={verticalListSortingStrategy}>
+          {visible.map((t) => (
+            <SortableUpcomingRow key={t.id} task={t} onMarkComplete={markComplete} onOpen={setOpenTaskId} />
+          ))}
+        </SortableContext>
+      </DndContext>
       {openTaskId && <DashboardTaskDrawer taskId={openTaskId} onClose={() => setOpenTaskId(null)} />}
     </>
   );

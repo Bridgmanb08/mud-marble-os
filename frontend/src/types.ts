@@ -20,6 +20,7 @@ export interface Task {
   status: string;
   priority: string;
   position: number;
+  manual_position: number | null;
   scheduled_start: string | null;
   scheduled_end: string | null;
   notes: string | null;

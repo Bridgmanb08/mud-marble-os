@@ -1,12 +1,67 @@
 import { useEffect, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { IconArrowLeft, IconPlus, IconDownload, IconFileSpreadsheet, IconCopy } from '@tabler/icons-react';
+import { DndContext, PointerSensor, useSensor, useSensors, type DragEndEvent } from '@dnd-kit/core';
+import { SortableContext, verticalListSortingStrategy, useSortable, arrayMove } from '@dnd-kit/sortable';
+import { CSS } from '@dnd-kit/utilities';
+import { IconArrowLeft, IconPlus, IconDownload, IconFileSpreadsheet, IconCopy, IconGripVertical } from '@tabler/icons-react';
 import { api, ApiError } from '../api/client';
 import { useToast } from '../components/ui/Toast';
 import { openDatePicker } from '../lib/datePicker';
 import { fmt, fmtD } from '../lib/format';
 import { LineItemModal } from '../components/estimates/LineItemModal';
 import type { Estimate, EstimateLineItem } from '../types';
+
+function SortableLineItemRow({
+  item,
+  hasDays,
+  onClick,
+}: {
+  item: EstimateLineItem;
+  hasDays: boolean;
+  onClick: () => void;
+}) {
+  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: item.id });
+  return (
+    <tr
+      ref={setNodeRef}
+      onClick={onClick}
+      style={{
+        cursor: 'pointer',
+        transform: CSS.Transform.toString(transform),
+        transition,
+        opacity: isDragging ? 0.5 : 1,
+        position: 'relative',
+        background: isDragging ? 'var(--surface)' : undefined,
+      }}
+    >
+      <td onClick={(e) => e.stopPropagation()} style={{ width: 24 }}>
+        <button
+          type="button"
+          className="btn-reset"
+          {...attributes}
+          {...listeners}
+          style={{ display: 'flex', cursor: 'grab', color: 'var(--t3)', touchAction: 'none' }}
+          title="Drag to reorder"
+        >
+          <IconGripVertical size={14} />
+        </button>
+      </td>
+      <td>
+        <div style={{ fontWeight: 500 }}>{item.title}</div>
+        {item.cost_codes && (
+          <div style={{ fontSize: 11, color: 'var(--t2)' }}>
+            {item.cost_codes.code} - {item.cost_codes.name}
+          </div>
+        )}
+      </td>
+      <td style={{ textAlign: 'right' }}>{item.quantity}</td>
+      <td style={{ textAlign: 'right' }}>{fmt(item.unit_cost)}</td>
+      <td style={{ textAlign: 'right' }}>{fmt(item.builder_cost)}</td>
+      <td style={{ textAlign: 'right', fontWeight: 500 }}>{fmt(item.owner_price)}</td>
+      {hasDays && <td style={{ textAlign: 'right' }}>{item.estimated_days != null ? item.estimated_days : '—'}</td>}
+    </tr>
+  );
+}
 
 const STATUS_OPTIONS = [
   { value: 'draft', label: 'Draft' },
@@ -43,6 +98,7 @@ export default function EstimateWorksheet() {
   const [editingItem, setEditingItem] = useState<EstimateLineItem | undefined>(undefined);
   const [newItemDefaults, setNewItemDefaults] = useState<{ bucket: string } | undefined>(undefined);
   const [duplicating, setDuplicating] = useState(false);
+  const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 5 } }));
 
   async function load() {
     if (!id) return;
@@ -152,6 +208,38 @@ export default function EstimateWorksheet() {
     setEditingItem(item);
     setNewItemDefaults(undefined);
     setShowItemModal(true);
+  }
+
+  async function handleReorder(groupName: string, groupItems: EstimateLineItem[], event: DragEndEvent, groups: Record<string, EstimateLineItem[]>) {
+    const { active, over } = event;
+    if (!over || active.id === over.id) return;
+    const oldIndex = groupItems.findIndex((i) => i.id === active.id);
+    const newIndex = groupItems.findIndex((i) => i.id === over.id);
+    if (oldIndex === -1 || newIndex === -1) return;
+    const reorderedGroup = arrayMove(groupItems, oldIndex, newIndex);
+
+    // sort_order is one shared sequence across the whole estimate (not scoped
+    // per group), so splice the reordered group's new sub-order back into the
+    // full flattened list, leaving every other group's relative order as-is.
+    const flattened: EstimateLineItem[] = [];
+    for (const [name, groupItemsInner] of Object.entries(groups)) {
+      flattened.push(...(name === groupName ? reorderedGroup : groupItemsInner));
+    }
+
+    const changed = flattened
+      .map((item, i) => ({ id: item.id, oldOrder: item.sort_order, newOrder: i }))
+      .filter(({ oldOrder, newOrder }) => oldOrder !== newOrder);
+
+    setItems(flattened.map((item, i) => (item.sort_order === i ? item : { ...item, sort_order: i })));
+
+    if (!id || changed.length === 0) return;
+    try {
+      await Promise.all(changed.map(({ id: itemId, newOrder }) => api.patch(`/estimates/${id}/items/${itemId}`, { sort_order: newOrder })));
+    } catch (e) {
+      toast(e instanceof ApiError ? e.message : 'Failed to save the new order', true);
+    } finally {
+      load();
+    }
   }
 
   return (
@@ -299,6 +387,7 @@ export default function EstimateWorksheet() {
             <table className="tbl">
               <thead>
                 <tr>
+                  <th style={{ width: 24 }} />
                   <th>Item</th>
                   <th style={{ textAlign: 'right' }}>Qty</th>
                   <th style={{ textAlign: 'right' }}>Unit price</th>
@@ -307,25 +396,15 @@ export default function EstimateWorksheet() {
                   {hasDays && <th style={{ textAlign: 'right' }}>Workdays</th>}
                 </tr>
               </thead>
-              <tbody>
-                {groupItems.map((item) => (
-                  <tr key={item.id} onClick={() => openEditItem(item)} style={{ cursor: 'pointer' }}>
-                    <td>
-                      <div style={{ fontWeight: 500 }}>{item.title}</div>
-                      {item.cost_codes && (
-                        <div style={{ fontSize: 11, color: 'var(--t2)' }}>
-                          {item.cost_codes.code} - {item.cost_codes.name}
-                        </div>
-                      )}
-                    </td>
-                    <td style={{ textAlign: 'right' }}>{item.quantity}</td>
-                    <td style={{ textAlign: 'right' }}>{fmt(item.unit_cost)}</td>
-                    <td style={{ textAlign: 'right' }}>{fmt(item.builder_cost)}</td>
-                    <td style={{ textAlign: 'right', fontWeight: 500 }}>{fmt(item.owner_price)}</td>
-                    {hasDays && <td style={{ textAlign: 'right' }}>{item.estimated_days != null ? item.estimated_days : '—'}</td>}
-                  </tr>
-                ))}
-              </tbody>
+              <DndContext sensors={sensors} onDragEnd={(e) => handleReorder(groupName, groupItems, e, groups)}>
+                <SortableContext items={groupItems.map((i) => i.id)} strategy={verticalListSortingStrategy}>
+                  <tbody>
+                    {groupItems.map((item) => (
+                      <SortableLineItemRow key={item.id} item={item} hasDays={hasDays} onClick={() => openEditItem(item)} />
+                    ))}
+                  </tbody>
+                </SortableContext>
+              </DndContext>
             </table>
           </div>
         ))

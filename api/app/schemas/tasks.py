@@ -44,6 +44,7 @@ class TaskUpdate(BaseModel):
     is_milestone: Optional[bool] = None
     is_punch_list: Optional[bool] = None
     position: Optional[int] = None
+    manual_position: Optional[int] = None
     project_id: Optional[str] = None
     expected_version: Optional[int] = None
 
@@ -77,6 +78,7 @@ class TaskOut(BaseModel):
     status: str
     priority: str = "normal"
     position: int = 0
+    manual_position: Optional[int] = None
     scheduled_start: Optional[str] = None
     scheduled_end: Optional[str] = None
     notes: Optional[str] = None
@@ -103,6 +105,15 @@ class ReorderItem(BaseModel):
 
 class ReorderRequest(BaseModel):
     items: list[ReorderItem]
+
+
+class PriorityReorderItem(BaseModel):
+    id: str
+    manual_position: int
+
+
+class PriorityReorderRequest(BaseModel):
+    items: list[PriorityReorderItem]
 
 
 class BulkUpdateRequest(BaseModel):
