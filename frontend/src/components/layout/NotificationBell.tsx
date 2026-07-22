@@ -28,7 +28,8 @@ export function NotificationBell() {
       setNotifications((prev) => prev.map((x) => (x.id === n.id ? { ...x, is_read: true } : x)));
     }
     setOpen(false);
-    if (n.project_id) navigate(`/projects/${n.project_id}`);
+    if (n.type === 'unclaimed_media') navigate('/review');
+    else if (n.project_id) navigate(`/projects/${n.project_id}`);
   }
 
   async function markAllRead() {

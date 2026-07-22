@@ -6,6 +6,19 @@ class UserSummary(BaseModel):
     name: str
     email: str
     role: str
+    is_admin: bool = False
+
+
+class UserCreate(BaseModel):
+    name: str
+    email: str
+    password: str
+    role: str = "member"
+    is_admin: bool = False
+
+
+class PasswordReset(BaseModel):
+    password: str
 
 
 class UserDirectoryEntry(BaseModel):

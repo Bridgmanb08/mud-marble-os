@@ -532,11 +532,24 @@ export interface UserSummary {
   name: string;
   email: string;
   role: string;
+  is_admin: boolean;
 }
 
 export interface UserDirectoryEntry {
   id: string;
   name: string;
+}
+
+export interface InboundMedia {
+  id: string;
+  from_phone: string;
+  body: string | null;
+  storage_path: string;
+  mime_type: string | null;
+  file_type: string;
+  status: string;
+  project_id: string | null;
+  created_at: string;
 }
 
 export interface AppNotification {

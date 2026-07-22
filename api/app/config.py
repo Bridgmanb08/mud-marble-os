@@ -13,6 +13,9 @@ class Settings(BaseSettings):
     jwt_expire_minutes: int = 60 * 24 * 7
     anthropic_api_key: str = ""
     frontend_origin: str = "http://localhost:5173"
+    twilio_account_sid: str = ""
+    twilio_auth_token: str = ""
+    public_base_url: str = ""
 
 
 settings = Settings()
