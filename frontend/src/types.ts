@@ -333,6 +333,8 @@ export interface ProjectSubItem {
   description: string | null;
   amount: number;
   sort_order: number;
+  source_line_item_id: string | null;
+  builder_cost: number | null;
   created_at: string;
   subcontractors: { company_name: string; trade: string | null } | null;
 }

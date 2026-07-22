@@ -6,7 +6,7 @@ import { useToast } from '../components/ui/Toast';
 import { fmt, fmtD } from '../lib/format';
 import { NewTransactionModal } from '../components/inhouse/NewTransactionModal';
 import { ProjectSubcontractorCard } from '../components/inhouse/ProjectSubcontractorCard';
-import type { CostCode, FinancialSummary, Project, ProjectSubItem, Subcontractor, Transaction } from '../types';
+import type { CostCode, EstimateLineItem, FinancialSummary, Project, ProjectSubItem, Subcontractor, Transaction } from '../types';
 
 const TABS = ['Overview', 'Transactions', 'Subcontractors'];
 
@@ -66,6 +66,7 @@ export default function InHouseWorkshop() {
   const [summary, setSummary] = useState<FinancialSummary | null>(null);
   const [transactions, setTransactions] = useState<Transaction[]>([]);
   const [subItems, setSubItems] = useState<ProjectSubItem[]>([]);
+  const [lineItems, setLineItems] = useState<EstimateLineItem[]>([]);
   const [costCodes, setCostCodes] = useState<CostCode[]>([]);
   const [subcontractors, setSubcontractors] = useState<Subcontractor[]>([]);
   const [tab, setTab] = useState('Overview');
@@ -114,11 +115,26 @@ export default function InHouseWorkshop() {
     setSubItems(await api.get<ProjectSubItem[]>(`/projects/${id}/subcontractor-items`).catch(() => []));
   }
 
+  async function loadLineItems() {
+    if (!id) return;
+    try {
+      const estimates = await api.get<{ id: string }[]>(`/estimates?project_id=${id}`);
+      if (!estimates.length) {
+        setLineItems([]);
+        return;
+      }
+      setLineItems(await api.get<EstimateLineItem[]>(`/estimates/${estimates[0].id}/items`));
+    } catch {
+      setLineItems([]);
+    }
+  }
+
   useEffect(() => {
     loadProject();
     loadSummary();
     loadTransactions();
     loadSubItems();
+    loadLineItems();
     api.get<CostCode[]>('/transactions/cost-codes').then(setCostCodes).catch(() => {});
     api.get<Subcontractor[]>('/subcontractors').then(setSubcontractors).catch(() => {});
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -355,6 +371,7 @@ export default function InHouseWorkshop() {
                 projectId={id!}
                 subcontractor={sub}
                 items={items}
+                lineItems={lineItems}
                 paid={paidBySub.get(subId) || 0}
                 onChanged={() => {
                   loadSubItems();
