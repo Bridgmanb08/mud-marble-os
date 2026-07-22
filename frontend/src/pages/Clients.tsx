@@ -43,7 +43,7 @@ export default function Clients() {
     <>
       <div className="ph">
         <div>
-          <h1>Clients</h1>
+          <h1>Client Directory</h1>
           <p>Your client roster and referral network</p>
         </div>
         <button className="btn btn-p btn-sm" onClick={() => setShowNew(true)}>
