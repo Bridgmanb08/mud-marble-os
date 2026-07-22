@@ -22,6 +22,7 @@ import SubIntelligence from './pages/SubIntelligence';
 import Settings from './pages/Settings';
 import Reports from './pages/Reports';
 import Users from './pages/Users';
+import Review from './pages/Review';
 import { AdminRoute } from './components/layout/AdminRoute';
 
 export default function App() {
@@ -60,6 +61,14 @@ export default function App() {
               element={
                 <AdminRoute>
                   <Users />
+                </AdminRoute>
+              }
+            />
+            <Route
+              path="review"
+              element={
+                <AdminRoute>
+                  <Review />
                 </AdminRoute>
               }
             />

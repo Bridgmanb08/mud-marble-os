@@ -14,6 +14,7 @@ import {
   IconChartBar,
   IconReportAnalytics,
   IconShieldLock,
+  IconInbox,
 } from '@tabler/icons-react';
 import { useAuth } from '../../auth/AuthContext';
 
@@ -65,7 +66,10 @@ export function Sidebar() {
         ...navSections,
         {
           label: 'Admin',
-          items: [{ to: '/users', label: 'Users', icon: IconShieldLock }],
+          items: [
+            { to: '/users', label: 'Users', icon: IconShieldLock },
+            { to: '/review', label: 'Review', icon: IconInbox },
+          ],
         },
       ]
     : navSections;

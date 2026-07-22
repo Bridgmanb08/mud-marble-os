@@ -32,6 +32,17 @@ async def _request(method: str, path: str, **kwargs) -> httpx.Response:
     return r
 
 
+async def upload_object(bucket: str, path: str, content: bytes, content_type: str) -> None:
+    headers = {**_headers(), "Content-Type": content_type or "application/octet-stream"}
+    try:
+        async with httpx.AsyncClient(timeout=30) as client:
+            r = await client.post(f"{_storage_base()}/object/{bucket}/{_quote_path(path)}", headers=headers, content=content)
+    except httpx.HTTPError as exc:
+        raise HTTPException(status_code=502, detail=f"Could not reach Supabase Storage: {exc}") from exc
+    if not r.is_success:
+        raise HTTPException(status_code=502, detail=f"Supabase Storage error: {r.text}")
+
+
 async def create_signed_upload_url(bucket: str, path: str) -> str:
     r = await _request("POST", f"/object/upload/sign/{bucket}/{_quote_path(path)}")
     data = r.json()

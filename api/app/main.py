@@ -23,6 +23,7 @@ from .routers import (
     subcontractors,
     tasks,
     transactions,
+    twilio_sms,
     users,
 )
 
@@ -63,3 +64,4 @@ app.include_router(sub_intelligence.router, prefix="/api")
 app.include_router(notifications.router, prefix="/api")
 app.include_router(reports.router, prefix="/api")
 app.include_router(quick_reminders.router, prefix="/api")
+app.include_router(twilio_sms.router, prefix="/api")

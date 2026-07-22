@@ -540,6 +540,18 @@ export interface UserDirectoryEntry {
   name: string;
 }
 
+export interface InboundMedia {
+  id: string;
+  from_phone: string;
+  body: string | null;
+  storage_path: string;
+  mime_type: string | null;
+  file_type: string;
+  status: string;
+  project_id: string | null;
+  created_at: string;
+}
+
 export interface AppNotification {
   id: string;
   type: string;
