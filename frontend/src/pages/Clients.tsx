@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
+import { Link } from 'react-router-dom';
 import { IconPlus, IconUsers, IconGift } from '@tabler/icons-react';
 import { api } from '../api/client';
 import { useToast } from '../components/ui/Toast';
@@ -29,7 +30,10 @@ export default function Clients() {
 
   const advocates = useMemo(() => clients?.filter((c) => c.is_advocate) ?? [], [clients]);
   const repeat = useMemo(() => clients?.filter((c) => c.is_repeat_client) ?? [], [clients]);
-  const giftPending = useMemo(() => clients?.filter((c) => !c.referral_gift_sent && c.referral_name) ?? [], [clients]);
+  const giftPending = useMemo(
+    () => clients?.filter((c) => !c.referral_gift_sent && (c.referred_by_client_id || c.referral_name)) ?? [],
+    [clients]
+  );
 
   const filtered = useMemo(() => {
     if (!clients) return [];
@@ -112,35 +116,38 @@ export default function Clients() {
           <div className="empty-t">No clients</div>
         </div>
       ) : (
-        filtered.map((c) => (
-          <div key={c.id} className="cc">
-            <div className="av">
-              {(c.first_name || '?')[0]}
-              {(c.last_name || '')[0] || ''}
-            </div>
-            <div style={{ flex: 1, minWidth: 0 }}>
-              <div style={{ fontSize: 13, fontWeight: 500 }}>
-                {c.first_name} {c.last_name}
+        filtered.map((c) => {
+          const referredByLabel = c.referred_by ? `${c.referred_by.first_name} ${c.referred_by.last_name || ''}`.trim() : c.referral_name;
+          return (
+            <Link key={c.id} to={`/clients/${c.id}`} className="cc" style={{ textDecoration: 'none', color: 'inherit' }}>
+              <div className="av">
+                {(c.first_name || '?')[0]}
+                {(c.last_name || '')[0] || ''}
               </div>
-              <div style={{ fontSize: 12, color: 'var(--t2)', marginTop: 2 }}>
-                {c.email || ''}
-                {c.email && c.phone ? ' · ' : ''}
-                {c.phone || ''}
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <div style={{ fontSize: 13, fontWeight: 500 }}>
+                  {c.first_name} {c.last_name}
+                </div>
+                <div style={{ fontSize: 12, color: 'var(--t2)', marginTop: 2 }}>
+                  {c.email || ''}
+                  {c.email && c.phone ? ' · ' : ''}
+                  {c.phone || ''}
+                </div>
               </div>
-            </div>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexShrink: 0 }}>
-              {c.referral_name && <span style={{ fontSize: 11, color: 'var(--t3)' }}>Ref: {c.referral_name}</span>}
-              {c.is_advocate && <span className="badge bg-green">Advocate</span>}
-              {c.is_repeat_client && <span className="badge bg-blue">Repeat</span>}
-              {!c.referral_gift_sent && c.referral_name && (
-                <span className="badge bg-amber">
-                  <IconGift size={11} style={{ marginRight: 3 }} /> Gift
-                </span>
-              )}
-              {c.lifetime_value ? <span style={{ fontSize: 12, fontWeight: 500 }}>{fmt(c.lifetime_value)}</span> : null}
-            </div>
-          </div>
-        ))
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexShrink: 0 }}>
+                {referredByLabel && <span style={{ fontSize: 11, color: 'var(--t3)' }}>Ref: {referredByLabel}</span>}
+                {c.is_advocate && <span className="badge bg-green">Advocate</span>}
+                {c.is_repeat_client && <span className="badge bg-blue">Repeat</span>}
+                {!c.referral_gift_sent && referredByLabel && (
+                  <span className="badge bg-amber">
+                    <IconGift size={11} style={{ marginRight: 3 }} /> Gift
+                  </span>
+                )}
+                {c.lifetime_value ? <span style={{ fontSize: 12, fontWeight: 500 }}>{fmt(c.lifetime_value)}</span> : null}
+              </div>
+            </Link>
+          );
+        })
       )}
 
       {showNew && (

@@ -9,6 +9,7 @@ import Leads from './pages/Leads';
 import Projects from './pages/Projects';
 import ProjectDetail from './pages/ProjectDetail';
 import Clients from './pages/Clients';
+import ClientDetail from './pages/ClientDetail';
 import Estimates from './pages/Estimates';
 import EstimateWorksheet from './pages/EstimateWorksheet';
 import Invoices from './pages/Invoices';
@@ -44,6 +45,7 @@ export default function App() {
             <Route path="projects/:id" element={<ProjectDetail />} />
             <Route path="leads" element={<Leads />} />
             <Route path="clients" element={<Clients />} />
+            <Route path="clients/:id" element={<ClientDetail />} />
             <Route path="estimates" element={<Estimates />} />
             <Route path="estimates/:id" element={<EstimateWorksheet />} />
             <Route path="invoices" element={<Invoices />} />
