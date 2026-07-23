@@ -391,6 +391,7 @@ export interface Client {
   phone: string | null;
   email: string | null;
   referral_name: string | null;
+  referred_by_client_id: string | null;
   funding_type: string | null;
   preferred_contact_method: string | null;
   spouse_partner_name: string | null;
@@ -399,8 +400,11 @@ export interface Client {
   is_advocate: boolean;
   is_repeat_client: boolean;
   referral_gift_sent: boolean;
+  referral_gift_description: string | null;
   lifetime_value: number | null;
   created_at: string | null;
+  referred_by: ClientBrief | null;
+  referred: ClientBrief[];
 }
 
 export interface Lead {
