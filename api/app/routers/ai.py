@@ -1,4 +1,6 @@
 import json
+from datetime import datetime, timezone
+from typing import Optional
 
 from anthropic import AsyncAnthropic
 from fastapi import APIRouter, Depends, HTTPException
@@ -53,6 +55,11 @@ If a task is internal/operational and doesn't clearly belong to any listed job, 
 Active projects:
 {project_names}
 
+Also look for the meeting's own date/time and who attended -- Fathom transcripts usually state these \
+near the top (e.g. a header line or the first few lines of dialogue introducing who's present). If the \
+date isn't stated anywhere, use null. If no attendees are named, use an empty list -- never guess or \
+invent a name that isn't in the transcript.
+
 Return ONLY a JSON object with this structure (no markdown, no explanation):
 {{
   "tasks": [
@@ -60,7 +67,9 @@ Return ONLY a JSON object with this structure (no markdown, no explanation):
   ],
   "project_updates": [
     {{"project": "exact project name from the list above", "update": "what was discussed"}}
-  ]
+  ],
+  "meeting_date": "the meeting's date/time exactly as stated in the transcript, or null",
+  "attendees": ["name mentioned as present", "..."]
 }}
 
 Transcript:
@@ -122,7 +131,19 @@ async def parse_transcript(body: ParseTranscriptRequest, _: CurrentUser = Depend
     return ParseTranscriptResponse(
         tasks=[ExtractedTask(**t) for t in parsed.get("tasks", [])],
         project_updates=parsed.get("project_updates", []),
+        meeting_date=parsed.get("meeting_date") or None,
+        attendees=parsed.get("attendees") or [],
     )
+
+
+def _import_note(meeting_date: Optional[str], attendees: list[str]) -> str:
+    imported_at = datetime.now(timezone.utc).strftime("%b %-d, %Y %-I:%M %p UTC")
+    note = f"Imported from Fathom transcript on {imported_at}"
+    if meeting_date:
+        note += f"\nMeeting date: {meeting_date}"
+    if attendees:
+        note += f"\nAttendees: {', '.join(attendees)}"
+    return note
 
 
 @router.post("/import-tasks", response_model=ImportTasksResponse)
@@ -130,6 +151,7 @@ async def import_tasks(body: ImportTasksRequest, _: CurrentUser = Depends(get_cu
     projects = await db_get(
         "projects", "?is_archived=eq.false&status=in.(active,estimating,proposed,pre_construction)&select=id,name"
     )
+    notes = _import_note(body.meeting_date, body.attendees)
 
     imported = 0
     for task in body.tasks:
@@ -152,7 +174,7 @@ async def import_tasks(body: ImportTasksRequest, _: CurrentUser = Depends(get_cu
                 "title": task.title,
                 "assigned_to": task.assigned_to or "shannon",
                 "status": "upcoming",
-                "notes": "Imported from Fathom transcript",
+                "notes": notes,
             },
         )
         imported += 1

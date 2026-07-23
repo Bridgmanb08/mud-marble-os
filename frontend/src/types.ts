@@ -650,6 +650,8 @@ export interface ExtractedProjectUpdate {
 export interface ParseTranscriptResponse {
   tasks: ExtractedTask[];
   project_updates: ExtractedProjectUpdate[];
+  meeting_date: string | null;
+  attendees: string[];
 }
 
 export interface ChatMessage {
