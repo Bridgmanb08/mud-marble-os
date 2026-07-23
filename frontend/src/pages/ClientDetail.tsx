@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
-import { IconArrowLeft, IconGift, IconUsers } from '@tabler/icons-react';
+import { IconArrowLeft, IconGift, IconUsers, IconX } from '@tabler/icons-react';
 import { api, ApiError } from '../api/client';
 import { useToast } from '../components/ui/Toast';
 import { fmt } from '../lib/format';
@@ -25,6 +25,7 @@ export default function ClientDetail() {
   const [spousePartner, setSpousePartner] = useState('');
   const [notes, setNotes] = useState('');
   const [giftDescription, setGiftDescription] = useState('');
+  const [addReferredText, setAddReferredText] = useState('');
 
   async function load() {
     if (!id) return;
@@ -65,6 +66,35 @@ export default function ClientDetail() {
     const trimmed = value.trim();
     if (client && (client[field as keyof Client] || '') === trimmed) return;
     patch({ [field]: trimmed || null });
+  }
+
+  async function addReferred(name: string) {
+    if (!client) return;
+    const trimmed = name.trim();
+    if (!trimmed) return;
+    const match = allClients.find(
+      (c) => c.id !== client.id && `${c.first_name} ${c.last_name || ''}`.trim().toLowerCase() === trimmed.toLowerCase()
+    );
+    if (!match) {
+      toast('No client found with that name -- pick one from the list', true);
+      return;
+    }
+    try {
+      await api.patch(`/clients/${match.id}`, { referred_by_client_id: client.id });
+      setAddReferredText('');
+      load();
+    } catch (e) {
+      toast(e instanceof ApiError ? e.message : 'Failed to link referral', true);
+    }
+  }
+
+  async function removeReferred(referredId: string) {
+    try {
+      await api.patch(`/clients/${referredId}`, { referred_by_client_id: null });
+      load();
+    } catch (e) {
+      toast(e instanceof ApiError ? e.message : 'Failed to remove link', true);
+    }
   }
 
   if (!client) {
@@ -230,22 +260,56 @@ export default function ClientDetail() {
             )}
           </div>
 
-          {client.referred.length > 0 && (
-            <div className="card" style={{ padding: 20 }}>
-              <div className="st" style={{ marginBottom: 14, display: 'flex', alignItems: 'center', gap: 6 }}>
-                <IconUsers size={14} /> Referred by this client ({client.referred.length})
-              </div>
-              {client.referred.map((r) => (
-                <Link
-                  key={r.id}
-                  to={`/clients/${r.id}`}
-                  style={{ display: 'block', fontSize: 13, padding: '6px 0', borderBottom: '1px solid var(--border)', color: 'inherit', textDecoration: 'none' }}
-                >
-                  {r.first_name} {r.last_name || ''}
-                </Link>
-              ))}
+          <div className="card" style={{ padding: 20 }}>
+            <div className="st" style={{ marginBottom: 14, display: 'flex', alignItems: 'center', gap: 6 }}>
+              <IconUsers size={14} /> Clients they referred {client.referred.length > 0 ? `(${client.referred.length})` : ''}
             </div>
-          )}
+            {client.referred.length === 0 ? (
+              <div style={{ fontSize: 13, color: 'var(--t3)', marginBottom: 10 }}>Hasn't referred anyone yet.</div>
+            ) : (
+              client.referred.map((r) => (
+                <div key={r.id} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '6px 0', borderBottom: '1px solid var(--border)' }}>
+                  <Link to={`/clients/${r.id}`} style={{ flex: 1, fontSize: 13, color: 'inherit', textDecoration: 'none' }}>
+                    {r.first_name} {r.last_name || ''}
+                  </Link>
+                  <button
+                    type="button"
+                    className="btn-reset"
+                    onClick={() => removeReferred(r.id)}
+                    title={`Remove ${r.first_name} from this list`}
+                    style={{ display: 'flex', color: 'var(--t3)', cursor: 'pointer' }}
+                  >
+                    <IconX size={13} />
+                  </button>
+                </div>
+              ))
+            )}
+            <div style={{ display: 'flex', gap: 8, marginTop: 10 }}>
+              <input
+                className="fi"
+                list="client-detail-add-referred-options"
+                placeholder="Search existing clients to add…"
+                value={addReferredText}
+                onChange={(e) => setAddReferredText(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') {
+                    e.preventDefault();
+                    addReferred(addReferredText);
+                  }
+                }}
+              />
+              <datalist id="client-detail-add-referred-options">
+                {allClients
+                  .filter((c) => c.id !== client.id && !client.referred.some((r) => r.id === c.id))
+                  .map((c) => (
+                    <option key={c.id} value={`${c.first_name} ${c.last_name || ''}`.trim()} />
+                  ))}
+              </datalist>
+              <button type="button" className="btn btn-sm" onClick={() => addReferred(addReferredText)}>
+                Add
+              </button>
+            </div>
+          </div>
         </div>
       </div>
     </>
