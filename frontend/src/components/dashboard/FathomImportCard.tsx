@@ -41,7 +41,11 @@ export function FathomImportCard() {
     }
     setImporting(true);
     try {
-      const res = await api.post<{ imported: number }>('/ai/import-tasks', { tasks });
+      const res = await api.post<{ imported: number }>('/ai/import-tasks', {
+        tasks,
+        meeting_date: result.meeting_date,
+        attendees: result.attendees,
+      });
       toast(`${res.imported} task${res.imported !== 1 ? 's' : ''} imported to the Task Board`);
       setTranscript('');
       setResult(null);
@@ -83,10 +87,16 @@ export function FathomImportCard() {
 
       {result && (
         <div style={{ background: 'var(--gbg)', borderRadius: 8, padding: 12, marginTop: 10 }}>
-          <div style={{ fontSize: 12, fontWeight: 600, color: 'var(--gtx)', marginBottom: 10 }}>
+          <div style={{ fontSize: 12, fontWeight: 600, color: 'var(--gtx)', marginBottom: 4 }}>
             Found {result.tasks.length} task{result.tasks.length !== 1 ? 's' : ''} + {result.project_updates.length}{' '}
             project update{result.project_updates.length !== 1 ? 's' : ''}
           </div>
+          {(result.meeting_date || result.attendees.length > 0) && (
+            <div style={{ fontSize: 11, color: 'var(--gtx)', opacity: 0.85, marginBottom: 10 }}>
+              {result.meeting_date && <div>Meeting: {result.meeting_date}</div>}
+              {result.attendees.length > 0 && <div>Attendees: {result.attendees.join(', ')}</div>}
+            </div>
+          )}
           {result.tasks.map((t, i) => (
             <label
               key={i}

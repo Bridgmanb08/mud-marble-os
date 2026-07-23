@@ -328,14 +328,16 @@ export function TaskDetailDrawer({ task, allTasks, onClose, onSaved, onDeleted, 
           <label className="fl">Notes</label>
           <textarea className="fi" value={notes} onChange={(e) => setNotes(e.target.value)} />
         </div>
-        <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 13, cursor: 'pointer', marginBottom: 6 }}>
-          <input type="checkbox" checked={isMilestone} onChange={(e) => setIsMilestone(e.target.checked)} /> Milestone
-        </label>
-        <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 13, cursor: 'pointer', marginBottom: 6 }}>
-          <input type="checkbox" checked={isPunchList} onChange={(e) => setIsPunchList(e.target.checked)} /> Punch list item
-        </label>
+        <div style={{ display: 'flex', gap: 20, marginBottom: 4 }}>
+          <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 13, cursor: 'pointer' }}>
+            <input type="checkbox" checked={isMilestone} onChange={(e) => setIsMilestone(e.target.checked)} /> Milestone
+          </label>
+          <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 13, cursor: 'pointer' }}>
+            <input type="checkbox" checked={isPunchList} onChange={(e) => setIsPunchList(e.target.checked)} /> Punch list item
+          </label>
+        </div>
 
-        <div className="fg" style={{ marginTop: 18 }}>
+        <div className="fg" style={{ marginTop: 14 }}>
           <label className="fl">Subtasks {subtasks.length > 0 && `(${subtasks.filter((s) => s.is_complete).length}/${subtasks.length})`}</label>
           {subtasks.map((s) => (
             <div key={s.id} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '4px 0' }}>
@@ -367,7 +369,7 @@ export function TaskDetailDrawer({ task, allTasks, onClose, onSaved, onDeleted, 
           </div>
         </div>
 
-        <div className="fg" style={{ marginTop: 18 }}>
+        <div className="fg" style={{ marginTop: 14 }}>
           <label className="fl">
             Dependencies {blockedByIncomplete && (
               <span style={{ color: 'var(--red)', fontWeight: 500 }}>
@@ -409,7 +411,7 @@ export function TaskDetailDrawer({ task, allTasks, onClose, onSaved, onDeleted, 
           </div>
         </div>
 
-        <div className="fg" style={{ marginTop: 18 }}>
+        <div className="fg" style={{ marginTop: 14 }}>
           <label className="fl">Comments</label>
           <div style={{ marginBottom: 10 }}>
             <MentionTextarea
