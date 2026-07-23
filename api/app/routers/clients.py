@@ -60,7 +60,10 @@ async def create_client(body: ClientCreate, _: CurrentUser = Depends(get_current
 
 @router.patch("/{client_id}", response_model=ClientOut)
 async def update_client(client_id: str, body: ClientUpdate, _: CurrentUser = Depends(get_current_user)):
-    rows = await db_patch("clients", client_id, body.model_dump(exclude_none=True))
+    # exclude_unset (not exclude_none) -- the frontend sends an explicit null to
+    # clear a field (e.g. unlinking a referral, blanking out a note), and that
+    # has to reach the database. exclude_none would silently drop it instead.
+    rows = await db_patch("clients", client_id, body.model_dump(exclude_unset=True))
     updated = (await _attach_referrers(rows))[0]
     referred_rows = await db_get(
         "clients", f"?referred_by_client_id=eq.{client_id}&select=id,first_name,last_name&order=first_name.asc"
