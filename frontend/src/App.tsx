@@ -24,6 +24,7 @@ import Settings from './pages/Settings';
 import Reports from './pages/Reports';
 import Users from './pages/Users';
 import Review from './pages/Review';
+import Messages from './pages/Messages';
 import { AdminRoute } from './components/layout/AdminRoute';
 
 export default function App() {
@@ -71,6 +72,14 @@ export default function App() {
               element={
                 <AdminRoute>
                   <Review />
+                </AdminRoute>
+              }
+            />
+            <Route
+              path="messages"
+              element={
+                <AdminRoute>
+                  <Messages />
                 </AdminRoute>
               }
             />

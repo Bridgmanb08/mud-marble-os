@@ -565,6 +565,34 @@ export interface InboundMedia {
   created_at: string;
 }
 
+export interface MessageThread {
+  phone_number: string;
+  contact_name: string | null;
+  contact_trade: string | null;
+  last_body: string | null;
+  last_direction: 'inbound' | 'outbound';
+  last_created_at: string;
+  message_count: number;
+  pending_media_count: number;
+}
+
+export interface Message {
+  id: string;
+  phone_number: string;
+  direction: 'inbound' | 'outbound';
+  body: string | null;
+  message_sid: string | null;
+  project_id: string | null;
+  project_name: string | null;
+  sent_by: string | null;
+  sent_by_name: string | null;
+  storage_path: string | null;
+  mime_type: string | null;
+  file_type: string | null;
+  error: string | null;
+  created_at: string;
+}
+
 export interface AppNotification {
   id: string;
   type: string;
