@@ -14,6 +14,7 @@ export function NewClientModal({ onClose, onCreated }: NewClientModalProps) {
   const [lastName, setLastName] = useState('');
   const [phone, setPhone] = useState('');
   const [email, setEmail] = useState('');
+  const [address, setAddress] = useState('');
   const [wasReferred, setWasReferred] = useState(false);
   const [referredByClientId, setReferredByClientId] = useState<string | null>(null);
   const [referralName, setReferralName] = useState<string | null>(null);
@@ -40,6 +41,7 @@ export function NewClientModal({ onClose, onCreated }: NewClientModalProps) {
         last_name: lastName.trim() || null,
         phone: phone.trim() || null,
         email: email.trim() || null,
+        address: address.trim() || null,
         referred_by_client_id: wasReferred ? referredByClientId : null,
         referral_name: wasReferred ? referralName : null,
         notes: notes.trim() || null,
@@ -75,6 +77,10 @@ export function NewClientModal({ onClose, onCreated }: NewClientModalProps) {
             <label className="fl">Email</label>
             <input className="fi" value={email} onChange={(e) => setEmail(e.target.value)} />
           </div>
+        </div>
+        <div className="fg">
+          <label className="fl">Address</label>
+          <input className="fi" value={address} onChange={(e) => setAddress(e.target.value)} />
         </div>
         <div className="fg">
           <label className="fl" style={{ display: 'flex', alignItems: 'center', gap: 6, cursor: 'pointer' }}>
