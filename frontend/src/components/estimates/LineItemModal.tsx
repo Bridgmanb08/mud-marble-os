@@ -9,6 +9,8 @@ interface LineItemModalProps {
   estimateId: string;
   item?: EstimateLineItem;
   defaultBucket?: string;
+  defaultGroupName?: string;
+  existingGroups?: string[];
   onClose: () => void;
   onSaved: () => void;
   onDeleted?: () => void;
@@ -31,11 +33,12 @@ function round2(n: number): number {
   return Math.round(n * 100) / 100;
 }
 
-export function LineItemModal({ estimateId, item, defaultBucket, onClose, onSaved, onDeleted }: LineItemModalProps) {
+export function LineItemModal({ estimateId, item, defaultBucket, defaultGroupName, existingGroups, onClose, onSaved, onDeleted }: LineItemModalProps) {
   const [costCodes, setCostCodes] = useState<CostCode[]>([]);
   const [costCodeId, setCostCodeId] = useState(item?.cost_code_id || '');
   const [costCodeQuery, setCostCodeQuery] = useState('');
   const [bucket, setBucket] = useState(item?.bucket || defaultBucket || 'construction');
+  const [groupName, setGroupName] = useState(item?.group_name || defaultGroupName || '');
   const [title, setTitle] = useState(item?.title || '');
   const [quantity, setQuantity] = useState(String(item?.quantity ?? 1));
   const [unitCost, setUnitCost] = useState(String(item?.unit_cost ?? 0));
@@ -146,6 +149,7 @@ export function LineItemModal({ estimateId, item, defaultBucket, onClose, onSave
     const payload = {
       cost_code_id: costCodeId || null,
       bucket,
+      group_name: groupName.trim() || null,
       title: title.trim(),
       quantity: qty,
       unit_cost: cost,
@@ -269,10 +273,25 @@ export function LineItemModal({ estimateId, item, defaultBucket, onClose, onSave
           )}
         </div>
 
-        <div className="fr">
+        <div className="fr3">
           <div className="fg">
             <label className="fl">Item name</label>
             <input className="fi" value={title} onChange={(e) => setTitle(e.target.value)} placeholder="Vanity" />
+          </div>
+          <div className="fg">
+            <label className="fl">Group</label>
+            <input
+              className="fi"
+              list="line-item-group-options"
+              value={groupName}
+              onChange={(e) => setGroupName(e.target.value)}
+              placeholder="e.g. Mechanicals"
+            />
+            <datalist id="line-item-group-options">
+              {(existingGroups || []).map((g) => (
+                <option key={g} value={g} />
+              ))}
+            </datalist>
           </div>
           <div className="fg">
             <label className="fl">Bucket</label>
