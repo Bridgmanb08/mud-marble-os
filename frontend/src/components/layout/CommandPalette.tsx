@@ -105,16 +105,14 @@ export function CommandPalette() {
       { id: 'qa-estimate', group: 'Quick actions', label: 'Start an estimate (pick a job)', icon: IconPlus, action: () => navigate('/projects') },
     ];
 
-    const pageItems: PaletteItem[] = PAGES.filter((p) => p.to !== '/settings' || user?.is_admin).map((p) => ({
+    const pageItems: PaletteItem[] = PAGES.map((p) => ({
       id: `page-${p.to}`,
       group: 'Pages',
       label: p.label,
       icon: p.icon,
       action: () => navigate(p.to),
     }));
-    if (user?.is_admin) {
-      pageItems.push({ id: 'page-settings', group: 'Pages', label: 'Settings', icon: IconSettings, action: () => navigate('/settings') });
-    }
+    pageItems.push({ id: 'page-settings', group: 'Pages', label: 'Settings', icon: IconSettings, action: () => navigate('/settings') });
 
     return [...jobItems, ...quickActions, ...pageItems];
   }, [projects, user, navigate]);

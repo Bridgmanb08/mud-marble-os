@@ -19,6 +19,7 @@ import { useToast } from '../components/ui/Toast';
 import { openDatePicker } from '../lib/datePicker';
 import { fmt, fmtD } from '../lib/format';
 import { LineItemModal } from '../components/estimates/LineItemModal';
+import { RichTextEditor } from '../components/ui/RichTextEditor';
 import type { Estimate, EstimateLineItem } from '../types';
 
 function SortableLineItemRow({
@@ -483,11 +484,11 @@ export default function EstimateWorksheet() {
             </div>
             <div className="fg">
               <label className="fl">Introductory text</label>
-              <textarea className="fi" style={{ minHeight: 80 }} value={introductoryText} onChange={(e) => setIntroductoryText(e.target.value)} />
+              <RichTextEditor value={introductoryText} onChange={setIntroductoryText} minHeight={100} />
             </div>
-            <div className="fg">
+            <div className="fg" style={{ marginBottom: 0 }}>
               <label className="fl">Closing text</label>
-              <textarea className="fi" style={{ minHeight: 200, fontSize: 12 }} value={closingText} onChange={(e) => setClosingText(e.target.value)} />
+              <RichTextEditor value={closingText} onChange={setClosingText} minHeight={220} />
             </div>
           </>
         )}

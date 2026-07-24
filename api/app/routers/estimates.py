@@ -13,6 +13,8 @@ from reportlab.platypus import Paragraph, SimpleDocTemplate, Spacer, Table, Tabl
 
 from ..deps import CurrentUser, get_current_user
 from ..estimate_defaults import DEFAULT_CLOSING_TEXT
+from ..estimate_text_defaults_store import get_or_create_estimate_text_defaults
+from ..rich_text import rich_text_to_pdf_markup
 from ..schemas.estimates import (
     EstimateCreate,
     EstimateOut,
@@ -118,7 +120,10 @@ async def get_estimate(estimate_id: str, _: CurrentUser = Depends(get_current_us
 @router.post("", response_model=EstimateOut)
 async def create_estimate(body: EstimateCreate, _: CurrentUser = Depends(get_current_user)):
     data = body.model_dump(exclude_none=True)
-    data.setdefault("closing_text", DEFAULT_CLOSING_TEXT)
+    if "closing_text" not in data or "introductory_text" not in data:
+        defaults = await get_or_create_estimate_text_defaults()
+        data.setdefault("closing_text", defaults.get("closing_text") or DEFAULT_CLOSING_TEXT)
+        data.setdefault("introductory_text", defaults.get("introductory_text"))
     rows = await db_post("estimates", data)
     estimate = rows[0]
     if body.pm_fee_total > 0:
@@ -306,7 +311,7 @@ async def export_estimate_pdf(estimate_id: str, _: CurrentUser = Depends(get_cur
 
     intro = estimate.get("introductory_text")
     if intro:
-        elements.append(Paragraph(intro.replace("\n", "<br/>"), body))
+        elements.append(Paragraph(rich_text_to_pdf_markup(intro), body))
         elements.append(Spacer(1, 10))
 
     for group_name, items in groups.items():
@@ -350,9 +355,8 @@ async def export_estimate_pdf(estimate_id: str, _: CurrentUser = Depends(get_cur
     elements.append(Spacer(1, 20))
 
     closing = estimate.get("closing_text") or DEFAULT_CLOSING_TEXT
-    for para in closing.split("\n\n"):
-        elements.append(Paragraph(para.replace("\n", "<br/>"), body))
-        elements.append(Spacer(1, 6))
+    elements.append(Paragraph(rich_text_to_pdf_markup(closing), body))
+    elements.append(Spacer(1, 6))
 
     elements.append(Spacer(1, 20))
     elements.append(Paragraph("Signature: _______________________________________", body))

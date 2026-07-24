@@ -31,11 +31,9 @@ export function Topbar() {
         </button>
       </div>
       <div className="topbar-right" style={{ position: 'relative', display: 'flex', alignItems: 'center', gap: 10 }}>
-        {user?.is_admin && (
-          <Link to="/settings" className="btn btn-sm btn-ghost" title="Settings">
-            <IconSettings size={16} />
-          </Link>
-        )}
+        <Link to="/settings" className="btn btn-sm btn-ghost" title="Settings">
+          <IconSettings size={16} />
+        </Link>
         <NotificationBell />
         <button className="btn btn-sm btn-ghost" onClick={() => setMenuOpen((v) => !v)}>
           {user?.name || user?.email}
