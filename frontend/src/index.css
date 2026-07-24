@@ -110,6 +110,16 @@ textarea.fi{resize:vertical;min-height:80px;}
 .fr{display:grid;grid-template-columns:1fr 1fr;gap:12px;}
 .fr3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px;}
 
+.rte{border:1px solid var(--border-md);border-radius:var(--r);background:var(--surface);overflow:hidden;}
+.rte-toolbar{display:flex;align-items:center;flex-wrap:wrap;gap:2px;padding:6px 8px;border-bottom:1px solid var(--border);background:var(--bg);}
+.rte-select{font-size:12px;font-family:var(--font);border:1px solid var(--border-md);border-radius:6px;background:var(--surface);color:var(--text);padding:3px 4px;max-width:110px;}
+.rte-btn{display:flex;align-items:center;justify-content:center;width:26px;height:26px;border:none;background:transparent;color:var(--t2);border-radius:6px;cursor:pointer;}
+.rte-btn:hover{background:var(--border);color:var(--text);}
+.rte-sep{width:1px;align-self:stretch;background:var(--border);margin:2px 4px;}
+.rte-body{padding:10px 12px;font-size:13px;font-family:var(--font);color:var(--text);overflow-y:auto;max-height:420px;}
+.rte-body:focus{outline:none;}
+.rte-body:empty:before{content:attr(data-placeholder);color:var(--t3);}
+
 /* Modals */
 .mo{position:fixed;inset:0;background:rgba(0,0,0,.45);display:flex;align-items:center;justify-content:center;z-index:200;}
 .mb{background:var(--surface);border-radius:var(--rl);border:1px solid var(--border);width:500px;max-height:85vh;overflow-y:auto;padding:24px;}

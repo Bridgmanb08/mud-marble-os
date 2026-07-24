@@ -285,6 +285,13 @@ export interface CostCode {
   default_description: string | null;
 }
 
+export interface EstimateTextDefaults {
+  id: string;
+  introductory_text: string | null;
+  closing_text: string | null;
+  updated_at: string;
+}
+
 export interface ClientBrief {
   id: string;
   first_name: string | null;

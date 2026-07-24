@@ -5,7 +5,8 @@ import { useToast } from '../components/ui/Toast';
 import { useAuth } from '../auth/AuthContext';
 import { Modal } from '../components/ui/Modal';
 import { NewSubcontractorModal } from '../components/subcontractors/NewSubcontractorModal';
-import type { CostCode, Subcontractor } from '../types';
+import { RichTextEditor } from '../components/ui/RichTextEditor';
+import type { CostCode, EstimateTextDefaults, Subcontractor } from '../types';
 
 function CostCodeModal({ onClose, onSaved }: { onClose: () => void; onSaved: () => void }) {
   const [code, setCode] = useState('');
@@ -328,38 +329,108 @@ function SubcontractorsTab() {
   );
 }
 
-export default function Settings() {
-  const { user } = useAuth();
-  const [tab, setTab] = useState<'cost-codes' | 'subcontractors'>('cost-codes');
+function DefaultTextTab() {
+  const toast = useToast();
+  const [defaults, setDefaults] = useState<EstimateTextDefaults | null>(null);
+  const [introText, setIntroText] = useState('');
+  const [closingText, setClosingText] = useState('');
+  const [saving, setSaving] = useState(false);
 
-  if (!user?.is_admin) {
+  async function load() {
+    try {
+      const data = await api.get<EstimateTextDefaults>('/estimate-text-defaults');
+      setDefaults(data);
+      setIntroText(data.introductory_text || '');
+      setClosingText(data.closing_text || '');
+    } catch (e) {
+      toast(e instanceof Error ? e.message : 'Failed to load default text', true);
+    }
+  }
+
+  useEffect(() => {
+    load();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  async function save() {
+    setSaving(true);
+    try {
+      await api.patch('/estimate-text-defaults', { introductory_text: introText, closing_text: closingText });
+      toast('Default text saved');
+      load();
+    } catch (e) {
+      toast(e instanceof ApiError ? e.message : 'Failed to save default text', true);
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  if (!defaults) {
     return (
       <div className="empty">
-        <div className="empty-t">Admins only</div>
-        <div className="empty-s">Ask an admin on your team for access to Settings.</div>
+        <div className="empty-t">Loading…</div>
       </div>
     );
   }
 
   return (
     <>
+      <div className="sh">
+        <div className="st">Default proposal text</div>
+        <button className="btn btn-p btn-sm" onClick={save} disabled={saving}>
+          {saving ? 'Saving…' : 'Save changes'}
+        </button>
+      </div>
+      <div className="empty-s" style={{ marginBottom: 16, marginTop: -8 }}>
+        This is what every new estimate starts with (opening welcome message + closing legal terms). Anyone logged in
+        can edit it here; each estimate can still be tweaked on its own afterward without affecting this default.
+      </div>
+
+      <div className="fg">
+        <label className="fl">Opening / introductory text</label>
+        <RichTextEditor value={introText} onChange={setIntroText} minHeight={120} placeholder="e.g. a welcome message shown at the top of every proposal…" />
+      </div>
+
+      <div className="fg" style={{ marginBottom: 0 }}>
+        <label className="fl">Closing text (legal terms)</label>
+        <RichTextEditor value={closingText} onChange={setClosingText} minHeight={320} />
+      </div>
+    </>
+  );
+}
+
+export default function Settings() {
+  const { user } = useAuth();
+  const [tab, setTab] = useState<'cost-codes' | 'subcontractors' | 'default-text'>(user?.is_admin ? 'cost-codes' : 'default-text');
+
+  return (
+    <>
       <div className="ph">
         <div>
           <h1>Settings</h1>
-          <p>Admin configuration for shared reference data</p>
+          <p>{user?.is_admin ? 'Admin configuration for shared reference data' : 'Shared reference data'}</p>
         </div>
       </div>
 
       <div className="tabs" style={{ marginBottom: 16 }}>
-        <button className={`tab${tab === 'cost-codes' ? ' on' : ''}`} onClick={() => setTab('cost-codes')}>
-          Cost codes
-        </button>
-        <button className={`tab${tab === 'subcontractors' ? ' on' : ''}`} onClick={() => setTab('subcontractors')}>
-          Subcontractors
+        {user?.is_admin && (
+          <>
+            <button className={`tab${tab === 'cost-codes' ? ' on' : ''}`} onClick={() => setTab('cost-codes')}>
+              Cost codes
+            </button>
+            <button className={`tab${tab === 'subcontractors' ? ' on' : ''}`} onClick={() => setTab('subcontractors')}>
+              Subcontractors
+            </button>
+          </>
+        )}
+        <button className={`tab${tab === 'default-text' ? ' on' : ''}`} onClick={() => setTab('default-text')}>
+          Default Text
         </button>
       </div>
 
-      {tab === 'cost-codes' ? <CostCodesTab /> : <SubcontractorsTab />}
+      {tab === 'cost-codes' && user?.is_admin && <CostCodesTab />}
+      {tab === 'subcontractors' && user?.is_admin && <SubcontractorsTab />}
+      {tab === 'default-text' && <DefaultTextTab />}
     </>
   );
 }
