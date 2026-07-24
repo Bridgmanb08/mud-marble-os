@@ -15,6 +15,7 @@ import {
   IconReportAnalytics,
   IconShieldLock,
   IconInbox,
+  IconMessages,
 } from '@tabler/icons-react';
 import { useAuth } from '../../auth/AuthContext';
 
@@ -69,6 +70,7 @@ export function Sidebar() {
           items: [
             { to: '/users', label: 'Users', icon: IconShieldLock },
             { to: '/review', label: 'Review', icon: IconInbox },
+            { to: '/messages', label: 'Messages', icon: IconMessages },
           ],
         },
       ]

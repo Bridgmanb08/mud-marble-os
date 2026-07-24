@@ -15,6 +15,7 @@ class Settings(BaseSettings):
     frontend_origin: str = "http://localhost:5173"
     twilio_account_sid: str = ""
     twilio_auth_token: str = ""
+    twilio_from_number: str = ""
     public_base_url: str = ""
 
 
