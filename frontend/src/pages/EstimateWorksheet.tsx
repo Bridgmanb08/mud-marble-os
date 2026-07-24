@@ -3,7 +3,17 @@ import { useParams, useNavigate } from 'react-router-dom';
 import { DndContext, PointerSensor, useSensor, useSensors, type DragEndEvent } from '@dnd-kit/core';
 import { SortableContext, verticalListSortingStrategy, useSortable, arrayMove } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
-import { IconArrowLeft, IconPlus, IconDownload, IconFileSpreadsheet, IconCopy, IconGripVertical } from '@tabler/icons-react';
+import {
+  IconArrowLeft,
+  IconPlus,
+  IconDownload,
+  IconFileSpreadsheet,
+  IconCopy,
+  IconGripVertical,
+  IconChevronDown,
+  IconChevronRight,
+  IconSearch,
+} from '@tabler/icons-react';
 import { api, ApiError } from '../api/client';
 import { useToast } from '../components/ui/Toast';
 import { openDatePicker } from '../lib/datePicker';
@@ -54,12 +64,109 @@ function SortableLineItemRow({
           </div>
         )}
       </td>
+      <td style={{ fontSize: 12, color: 'var(--t2)', maxWidth: 320 }}>{item.notes_external || '—'}</td>
       <td style={{ textAlign: 'right' }}>{item.quantity}</td>
       <td style={{ textAlign: 'right' }}>{fmt(item.unit_cost)}</td>
       <td style={{ textAlign: 'right' }}>{fmt(item.builder_cost)}</td>
       <td style={{ textAlign: 'right', fontWeight: 500 }}>{fmt(item.owner_price)}</td>
       {hasDays && <td style={{ textAlign: 'right' }}>{item.estimated_days != null ? item.estimated_days : '—'}</td>}
     </tr>
+  );
+}
+
+function GroupCard({
+  groupKey,
+  items: groupItems,
+  hasDays,
+  collapsed,
+  editing,
+  editingValue,
+  itemSensors,
+  onToggleCollapse,
+  onStartRename,
+  onRenameChange,
+  onCommitRename,
+  onAddItem,
+  onItemClick,
+  onReorderItems,
+}: {
+  groupKey: string;
+  items: EstimateLineItem[];
+  hasDays: boolean;
+  collapsed: boolean;
+  editing: boolean;
+  editingValue: string;
+  itemSensors: ReturnType<typeof useSensors>;
+  onToggleCollapse: () => void;
+  onStartRename: () => void;
+  onRenameChange: (value: string) => void;
+  onCommitRename: () => void;
+  onAddItem: () => void;
+  onItemClick: (item: EstimateLineItem) => void;
+  onReorderItems: (event: DragEndEvent) => void;
+}) {
+  const subtotal = groupItems.reduce((s, i) => s + (i.owner_price || 0), 0);
+
+  return (
+    <div className="card" style={{ padding: 16, marginBottom: 12 }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: collapsed ? 0 : 8 }}>
+        <button type="button" className="btn-reset" onClick={onToggleCollapse} style={{ display: 'flex', color: 'var(--t2)' }}>
+          {collapsed ? <IconChevronRight size={16} /> : <IconChevronDown size={16} />}
+        </button>
+        {editing ? (
+          <input
+            className="fi"
+            autoFocus
+            value={editingValue}
+            onChange={(e) => onRenameChange(e.target.value)}
+            onBlur={onCommitRename}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter') {
+                e.preventDefault();
+                (e.target as HTMLInputElement).blur();
+              }
+            }}
+            style={{ maxWidth: 260 }}
+          />
+        ) : (
+          <div className="ibt" style={{ margin: 0, border: 'none', padding: 0, cursor: 'text' }} onClick={onStartRename} title="Click to rename group">
+            {groupKey}
+          </div>
+        )}
+        <div style={{ flex: 1 }} />
+        <div style={{ fontSize: 12, color: 'var(--t2)' }}>
+          {groupItems.length} item{groupItems.length !== 1 ? 's' : ''} · {fmt(subtotal)}
+        </div>
+        <button className="btn btn-ghost btn-sm" onClick={onAddItem}>
+          <IconPlus size={13} /> Add item
+        </button>
+      </div>
+      {!collapsed && (
+        <table className="tbl">
+          <thead>
+            <tr>
+              <th style={{ width: 24 }} />
+              <th>Items</th>
+              <th>Description</th>
+              <th style={{ textAlign: 'right' }}>Qty</th>
+              <th style={{ textAlign: 'right' }}>Unit cost</th>
+              <th style={{ textAlign: 'right' }}>Builder cost</th>
+              <th style={{ textAlign: 'right' }}>Client price</th>
+              {hasDays && <th style={{ textAlign: 'right' }}>Workdays</th>}
+            </tr>
+          </thead>
+          <DndContext sensors={itemSensors} onDragEnd={onReorderItems}>
+            <SortableContext items={groupItems.map((i) => i.id)} strategy={verticalListSortingStrategy}>
+              <tbody>
+                {groupItems.map((item) => (
+                  <SortableLineItemRow key={item.id} item={item} hasDays={hasDays} onClick={() => onItemClick(item)} />
+                ))}
+              </tbody>
+            </SortableContext>
+          </DndContext>
+        </table>
+      )}
+    </div>
   );
 }
 
@@ -96,8 +203,14 @@ export default function EstimateWorksheet() {
   const [savingMeta, setSavingMeta] = useState(false);
   const [showItemModal, setShowItemModal] = useState(false);
   const [editingItem, setEditingItem] = useState<EstimateLineItem | undefined>(undefined);
-  const [newItemDefaults, setNewItemDefaults] = useState<{ bucket: string } | undefined>(undefined);
+  const [newItemDefaults, setNewItemDefaults] = useState<{ bucket: string; groupName?: string } | undefined>(undefined);
   const [duplicating, setDuplicating] = useState(false);
+  const [collapsedGroups, setCollapsedGroups] = useState<Record<string, boolean>>({});
+  const [searchQuery, setSearchQuery] = useState('');
+  const [editingGroupKey, setEditingGroupKey] = useState<string | null>(null);
+  const [editingGroupValue, setEditingGroupValue] = useState('');
+  const [showNewGroupPrompt, setShowNewGroupPrompt] = useState(false);
+  const [newGroupName, setNewGroupName] = useState('');
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 5 } }));
 
   async function load() {
@@ -140,6 +253,24 @@ export default function EstimateWorksheet() {
     if (!groups[key]) groups[key] = [];
     groups[key].push(item);
   }
+  const groupKeys = Object.keys(groups);
+  const existingGroups = Array.from(new Set(items.map((i) => i.group_name).filter((g): g is string => !!g))).sort();
+  const allCollapsed = groupKeys.length > 0 && groupKeys.every((k) => collapsedGroups[k]);
+
+  const query = searchQuery.trim().toLowerCase();
+  const visibleGroups: [string, EstimateLineItem[]][] = groupKeys
+    .map((name): [string, EstimateLineItem[]] => {
+      if (!query) return [name, groups[name]];
+      if (name.toLowerCase().includes(query)) return [name, groups[name]];
+      const filteredItems = groups[name].filter(
+        (it) =>
+          it.title.toLowerCase().includes(query) ||
+          (it.notes_external || '').toLowerCase().includes(query) ||
+          (it.cost_codes ? `${it.cost_codes.code} ${it.cost_codes.name}`.toLowerCase().includes(query) : false)
+      );
+      return [name, filteredItems];
+    })
+    .filter(([, groupItems]) => groupItems.length > 0);
 
   const builderCostTotal = items.reduce((s, i) => s + (i.builder_cost || 0), 0);
   const clientPriceTotal = estimate.grand_total_owner_price || 0;
@@ -199,15 +330,47 @@ export default function EstimateWorksheet() {
     window.open(`/api/estimates/${id}/export/excel`, '_blank');
   }
 
-  function openNewItem(bucket: string) {
+  function openNewItem(bucket: string, groupName?: string) {
     setEditingItem(undefined);
-    setNewItemDefaults({ bucket });
+    setNewItemDefaults({ bucket, groupName });
     setShowItemModal(true);
   }
   function openEditItem(item: EstimateLineItem) {
     setEditingItem(item);
     setNewItemDefaults(undefined);
     setShowItemModal(true);
+  }
+
+  function toggleCollapseAll() {
+    setCollapsedGroups(allCollapsed ? {} : Object.fromEntries(groupKeys.map((k) => [k, true])));
+  }
+  function toggleGroupCollapse(key: string) {
+    setCollapsedGroups((prev) => ({ ...prev, [key]: !prev[key] }));
+  }
+
+  function startRenameGroup(key: string) {
+    setEditingGroupKey(key);
+    setEditingGroupValue(key);
+  }
+  async function commitRenameGroup(oldKey: string, groupItems: EstimateLineItem[]) {
+    const newName = editingGroupValue.trim();
+    setEditingGroupKey(null);
+    if (!id || !newName || newName === oldKey) return;
+    try {
+      await Promise.all(groupItems.map((it) => api.patch(`/estimates/${id}/items/${it.id}`, { group_name: newName })));
+      toast('Group renamed');
+      load();
+    } catch (e) {
+      toast(e instanceof ApiError ? e.message : 'Failed to rename group', true);
+    }
+  }
+
+  function submitNewGroup() {
+    const trimmed = newGroupName.trim();
+    if (!trimmed) return;
+    setShowNewGroupPrompt(false);
+    setNewGroupName('');
+    openNewItem('construction', trimmed);
   }
 
   async function handleReorder(groupName: string, groupItems: EstimateLineItem[], event: DragEndEvent, groups: Record<string, EstimateLineItem[]>) {
@@ -365,48 +528,94 @@ export default function EstimateWorksheet() {
 
       <div className="sh">
         <div className="st">Worksheet</div>
-        <button className="btn btn-p btn-sm" onClick={() => openNewItem('construction')}>
-          <IconPlus size={14} /> Add line item
-        </button>
+        <div style={{ display: 'flex', gap: 8 }}>
+          <button className="btn btn-sm" onClick={() => setShowNewGroupPrompt(true)}>
+            <IconPlus size={14} /> Add group
+          </button>
+          <button className="btn btn-p btn-sm" onClick={() => openNewItem('construction')}>
+            <IconPlus size={14} /> Add line item
+          </button>
+        </div>
       </div>
 
-      {Object.keys(groups).length === 0 ? (
+      {showNewGroupPrompt && (
+        <div className="card" style={{ padding: 12, marginBottom: 12, display: 'flex', gap: 8, alignItems: 'center' }}>
+          <input
+            className="fi"
+            autoFocus
+            placeholder="Group name, e.g. Mechanicals"
+            value={newGroupName}
+            onChange={(e) => setNewGroupName(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter') {
+                e.preventDefault();
+                submitNewGroup();
+              }
+            }}
+          />
+          <button type="button" className="btn btn-p btn-sm" onClick={submitNewGroup}>
+            Create
+          </button>
+          <button
+            type="button"
+            className="btn btn-sm"
+            onClick={() => {
+              setShowNewGroupPrompt(false);
+              setNewGroupName('');
+            }}
+          >
+            Cancel
+          </button>
+        </div>
+      )}
+
+      {groupKeys.length > 0 && (
+        <div className="fr" style={{ marginBottom: 12, alignItems: 'center' }}>
+          <div className="fg" style={{ marginBottom: 0, flex: 1, position: 'relative' }}>
+            <IconSearch size={14} style={{ position: 'absolute', left: 10, top: 10, color: 'var(--t3)' }} />
+            <input
+              className="fi"
+              style={{ paddingLeft: 30 }}
+              placeholder="Jump to line items or groups…"
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+            />
+          </div>
+          <button className="btn btn-sm" onClick={toggleCollapseAll}>
+            {allCollapsed ? 'Expand all' : 'Collapse all'}
+          </button>
+        </div>
+      )}
+
+      {groupKeys.length === 0 ? (
         <div className="empty">
           <div className="empty-t">No line items yet</div>
           <div className="empty-s">Add construction, allowance, and fee line items to build out this proposal.</div>
         </div>
+      ) : visibleGroups.length === 0 ? (
+        <div className="empty">
+          <div className="empty-t">No matches</div>
+          <div className="empty-s">Nothing in this estimate matches "{searchQuery}".</div>
+        </div>
       ) : (
-        Object.entries(groups).map(([groupName, groupItems]) => (
-          <div key={groupName} className="card" style={{ padding: 16, marginBottom: 12 }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
-              <div className="ibt" style={{ margin: 0, border: 'none', padding: 0 }}>{groupName}</div>
-              <button className="btn btn-ghost btn-sm" onClick={() => openNewItem(groupItems[0].bucket)}>
-                <IconPlus size={13} /> Add to group
-              </button>
-            </div>
-            <table className="tbl">
-              <thead>
-                <tr>
-                  <th style={{ width: 24 }} />
-                  <th>Item</th>
-                  <th style={{ textAlign: 'right' }}>Qty</th>
-                  <th style={{ textAlign: 'right' }}>Unit price</th>
-                  <th style={{ textAlign: 'right' }}>Builder cost</th>
-                  <th style={{ textAlign: 'right' }}>Client price</th>
-                  {hasDays && <th style={{ textAlign: 'right' }}>Workdays</th>}
-                </tr>
-              </thead>
-              <DndContext sensors={sensors} onDragEnd={(e) => handleReorder(groupName, groupItems, e, groups)}>
-                <SortableContext items={groupItems.map((i) => i.id)} strategy={verticalListSortingStrategy}>
-                  <tbody>
-                    {groupItems.map((item) => (
-                      <SortableLineItemRow key={item.id} item={item} hasDays={hasDays} onClick={() => openEditItem(item)} />
-                    ))}
-                  </tbody>
-                </SortableContext>
-              </DndContext>
-            </table>
-          </div>
+        visibleGroups.map(([groupName, groupItems]) => (
+          <GroupCard
+            key={groupName}
+            groupKey={groupName}
+            items={groupItems}
+            hasDays={hasDays}
+            collapsed={!query && !!collapsedGroups[groupName]}
+            editing={editingGroupKey === groupName}
+            editingValue={editingGroupValue}
+            itemSensors={sensors}
+            onToggleCollapse={() => toggleGroupCollapse(groupName)}
+            onStartRename={() => startRenameGroup(groupName)}
+            onRenameChange={setEditingGroupValue}
+            onCommitRename={() => commitRenameGroup(groupName, groups[groupName])}
+            onAddItem={() => openNewItem(groupItems[0].bucket, groupName)}
+            onItemClick={openEditItem}
+            onReorderItems={(e) => handleReorder(groupName, groupItems, e, groups)}
+          />
         ))
       )}
 
@@ -415,6 +624,8 @@ export default function EstimateWorksheet() {
           estimateId={id}
           item={editingItem}
           defaultBucket={newItemDefaults?.bucket}
+          defaultGroupName={newItemDefaults?.groupName}
+          existingGroups={existingGroups}
           onClose={() => setShowItemModal(false)}
           onSaved={() => {
             setShowItemModal(false);
