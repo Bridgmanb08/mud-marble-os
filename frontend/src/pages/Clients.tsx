@@ -10,6 +10,7 @@ import { NewClientModal } from '../components/clients/NewClientModal';
 export default function Clients() {
   const [clients, setClients] = useState<Client[] | null>(null);
   const [filter, setFilter] = useState<'all' | 'advocate' | 'repeat' | 'gift'>('all');
+  const [sort, setSort] = useState<'name-asc' | 'name-desc'>('name-asc');
   const [showNew, setShowNew] = useState(false);
   const toast = useToast();
 
@@ -42,6 +43,11 @@ export default function Clients() {
     if (filter === 'gift') return giftPending;
     return clients;
   }, [clients, filter, advocates, repeat, giftPending]);
+
+  const sorted = useMemo(() => {
+    const name = (c: Client) => `${c.first_name} ${c.last_name || ''}`.trim().toLowerCase();
+    return [...filtered].sort((a, b) => (sort === 'name-asc' ? name(a).localeCompare(name(b)) : name(b).localeCompare(name(a))));
+  }, [filtered, sort]);
 
   return (
     <>
@@ -103,6 +109,15 @@ export default function Clients() {
           <button className={`fb${filter === 'gift' ? ' on' : ''}`} onClick={() => setFilter('gift')}>
             Gift pending
           </button>
+          <select
+            className="fi"
+            style={{ width: 'auto', marginLeft: 'auto' }}
+            value={sort}
+            onChange={(e) => setSort(e.target.value as 'name-asc' | 'name-desc')}
+          >
+            <option value="name-asc">Name (A–Z)</option>
+            <option value="name-desc">Name (Z–A)</option>
+          </select>
         </div>
       </div>
 
@@ -110,13 +125,13 @@ export default function Clients() {
         <div className="empty">
           <div className="empty-t">Loading…</div>
         </div>
-      ) : filtered.length === 0 ? (
+      ) : sorted.length === 0 ? (
         <div className="empty">
           <IconUsers size={32} color="var(--t3)" style={{ display: 'block', margin: '0 auto 12px' }} />
           <div className="empty-t">No clients</div>
         </div>
       ) : (
-        filtered.map((c) => {
+        sorted.map((c) => {
           const referredByLabel = c.referred_by ? `${c.referred_by.first_name} ${c.referred_by.last_name || ''}`.trim() : c.referral_name;
           return (
             <Link key={c.id} to={`/clients/${c.id}`} className="cc" style={{ textDecoration: 'none', color: 'inherit' }}>
