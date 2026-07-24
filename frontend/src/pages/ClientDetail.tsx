@@ -68,6 +68,21 @@ export default function ClientDetail() {
     patch({ [field]: trimmed || null });
   }
 
+  function splitName(full: string): { first_name: string; last_name: string | null } {
+    const trimmed = full.trim();
+    const idx = trimmed.indexOf(' ');
+    if (idx === -1) return { first_name: trimmed, last_name: null };
+    return { first_name: trimmed.slice(0, idx), last_name: trimmed.slice(idx + 1) };
+  }
+
+  async function refreshAllClients() {
+    try {
+      setAllClients(await api.get<Client[]>('/clients'));
+    } catch {
+      // non-fatal; datalist just stays stale until next load
+    }
+  }
+
   async function addReferred(name: string) {
     if (!client) return;
     const trimmed = name.trim();
@@ -75,14 +90,22 @@ export default function ClientDetail() {
     const match = allClients.find(
       (c) => c.id !== client.id && `${c.first_name} ${c.last_name || ''}`.trim().toLowerCase() === trimmed.toLowerCase()
     );
-    if (!match) {
-      toast('No client found with that name -- pick one from the list', true);
-      return;
-    }
+    const clientLabel = `${client.first_name} ${client.last_name || ''}`.trim();
     try {
-      await api.patch(`/clients/${match.id}`, { referred_by_client_id: client.id });
+      if (match) {
+        await api.patch(`/clients/${match.id}`, { referred_by_client_id: client.id });
+      } else {
+        const { first_name, last_name } = splitName(trimmed);
+        await api.post('/clients', {
+          first_name,
+          last_name,
+          referred_by_client_id: client.id,
+          notes: `Added automatically on ${new Date().toLocaleDateString()} as referred by ${clientLabel}.`,
+        });
+      }
       setAddReferredText('');
       load();
+      refreshAllClients();
     } catch (e) {
       toast(e instanceof ApiError ? e.message : 'Failed to link referral', true);
     }
@@ -94,6 +117,24 @@ export default function ClientDetail() {
       load();
     } catch (e) {
       toast(e instanceof ApiError ? e.message : 'Failed to remove link', true);
+    }
+  }
+
+  async function createReferrer(name: string) {
+    if (!client) return;
+    const clientLabel = `${client.first_name} ${client.last_name || ''}`.trim();
+    const { first_name, last_name } = splitName(name);
+    try {
+      const created = await api.post<Client>('/clients', {
+        first_name,
+        last_name,
+        notes: `Added automatically on ${new Date().toLocaleDateString()} as the referrer of ${clientLabel}.`,
+      });
+      await patch({ referred_by_client_id: created.id, referral_name: null });
+      setEditingReferral(false);
+      refreshAllClients();
+    } catch (e) {
+      toast(e instanceof ApiError ? e.message : 'Failed to create referrer', true);
     }
   }
 
@@ -224,6 +265,7 @@ export default function ClientDetail() {
                     patch({ referred_by_client_id: next.referredByClientId, referral_name: next.referralName });
                     setEditingReferral(false);
                   }}
+                  onCreateNew={createReferrer}
                 />
               ) : (
                 <div style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 13 }}>
@@ -288,7 +330,7 @@ export default function ClientDetail() {
               <input
                 className="fi"
                 list="client-detail-add-referred-options"
-                placeholder="Search existing clients to add…"
+                placeholder="Search existing clients or type a new name to add…"
                 value={addReferredText}
                 onChange={(e) => setAddReferredText(e.target.value)}
                 onKeyDown={(e) => {
