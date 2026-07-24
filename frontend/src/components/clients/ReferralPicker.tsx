@@ -6,6 +6,10 @@ interface ReferralPickerProps {
   referredByClientId: string | null;
   referralName: string | null;
   onChange: (next: { referredByClientId: string | null; referralName: string | null }) => void;
+  /** When provided, typed text that doesn't match an existing client is handed here
+   *  instead of falling back to a free-text referral_name -- used to create a real
+   *  client record on the fly (see ClientDetail's createReferrer). */
+  onCreateNew?: (name: string) => void;
   excludeId?: string;
   listId: string;
 }
@@ -14,7 +18,7 @@ function fullName(c: Client | { first_name: string; last_name: string | null }) 
   return `${c.first_name} ${c.last_name || ''}`.trim();
 }
 
-export function ReferralPicker({ clients, referredByClientId, referralName, onChange, excludeId, listId }: ReferralPickerProps) {
+export function ReferralPicker({ clients, referredByClientId, referralName, onChange, onCreateNew, excludeId, listId }: ReferralPickerProps) {
   const linked = referredByClientId ? clients.find((c) => c.id === referredByClientId) : undefined;
   const [text, setText] = useState(linked ? fullName(linked) : referralName || '');
 
@@ -32,6 +36,8 @@ export function ReferralPicker({ clients, referredByClientId, referralName, onCh
     const match = clients.find((c) => c.id !== excludeId && fullName(c).toLowerCase() === trimmed.toLowerCase());
     if (match) {
       onChange({ referredByClientId: match.id, referralName: null });
+    } else if (onCreateNew) {
+      onCreateNew(trimmed);
     } else {
       onChange({ referredByClientId: null, referralName: trimmed });
     }
