@@ -390,6 +390,7 @@ export interface Client {
   last_name: string | null;
   phone: string | null;
   email: string | null;
+  address: string | null;
   referral_name: string | null;
   referred_by_client_id: string | null;
   funding_type: string | null;

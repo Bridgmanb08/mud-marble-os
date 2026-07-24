@@ -14,6 +14,7 @@ class ClientCreate(BaseModel):
     last_name: Optional[str] = None
     phone: Optional[str] = None
     email: Optional[str] = None
+    address: Optional[str] = None
     referral_name: Optional[str] = None
     referred_by_client_id: Optional[str] = None
     funding_type: Optional[str] = None
@@ -28,6 +29,7 @@ class ClientUpdate(BaseModel):
     last_name: Optional[str] = None
     phone: Optional[str] = None
     email: Optional[str] = None
+    address: Optional[str] = None
     referral_name: Optional[str] = None
     referred_by_client_id: Optional[str] = None
     is_advocate: Optional[bool] = None

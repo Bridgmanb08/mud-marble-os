@@ -20,6 +20,7 @@ export default function ClientDetail() {
   const [lastName, setLastName] = useState('');
   const [phone, setPhone] = useState('');
   const [email, setEmail] = useState('');
+  const [address, setAddress] = useState('');
   const [fundingType, setFundingType] = useState('');
   const [preferredContact, setPreferredContact] = useState('');
   const [spousePartner, setSpousePartner] = useState('');
@@ -36,6 +37,7 @@ export default function ClientDetail() {
       setLastName(data.last_name || '');
       setPhone(data.phone || '');
       setEmail(data.email || '');
+      setAddress(data.address || '');
       setFundingType(data.funding_type || '');
       setPreferredContact(data.preferred_contact_method || '');
       setSpousePartner(data.spouse_partner_name || '');
@@ -207,6 +209,10 @@ export default function ClientDetail() {
               <label className="fl">Email</label>
               <input className="fi" value={email} onChange={(e) => setEmail(e.target.value)} onBlur={(e) => saveField('email', e.target.value)} />
             </div>
+          </div>
+          <div className="fg">
+            <label className="fl">Address</label>
+            <input className="fi" value={address} onChange={(e) => setAddress(e.target.value)} onBlur={(e) => saveField('address', e.target.value)} />
           </div>
           <div className="fr">
             <div className="fg">
