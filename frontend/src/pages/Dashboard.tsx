@@ -16,6 +16,7 @@ import { WidgetShell } from '../components/dashboard/WidgetShell';
 import { WIDGET_REGISTRY } from '../components/dashboard/widgetRegistry';
 import { AddWidgetModal } from '../components/dashboard/AddWidgetModal';
 import { CustomWidgetRenderer } from '../components/dashboard/widgets/CustomWidget';
+import { Skeleton } from '../components/ui/Skeleton';
 import type { DashboardSummary, DashboardLayout, UserSummary, WidgetItem, CustomWidget, WidgetId } from '../types';
 
 export default function Dashboard() {
@@ -141,8 +142,14 @@ export default function Dashboard() {
       </div>
 
       {!data || !widgets ? (
-        <div className="empty">
-          <div className="empty-t">Loading…</div>
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
+          {Array.from({ length: 4 }).map((_, i) => (
+            <div key={i} className="card" style={{ padding: 18 }}>
+              <Skeleton width={100} height={12} style={{ marginBottom: 14 }} />
+              <Skeleton height={32} style={{ marginBottom: 8 }} />
+              <Skeleton height={32} />
+            </div>
+          ))}
         </div>
       ) : (
         <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>

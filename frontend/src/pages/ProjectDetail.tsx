@@ -4,7 +4,8 @@ import { IconArrowLeft, IconPlus, IconCalendar, IconList } from '@tabler/icons-r
 import { api } from '../api/client';
 import { useToast } from '../components/ui/Toast';
 import { fmt, fmtD } from '../lib/format';
-import type { ChangeOrder, Estimate, Invoice, Project, ProjectNote, Subcontractor, Task } from '../types';
+import { useReferenceData } from '../reference-data/ReferenceDataContext';
+import type { ChangeOrder, Estimate, Invoice, Project, ProjectNote, Task } from '../types';
 import { NewNoteModal } from '../components/projects/NewNoteModal';
 import { NewChangeOrderModal } from '../components/change-orders/NewChangeOrderModal';
 import { NewInvoiceModal } from '../components/invoices/NewInvoiceModal';
@@ -58,7 +59,8 @@ export default function ProjectDetail() {
   const [detailTask, setDetailTask] = useState<Task | undefined>(undefined);
   const [startingEstimate, setStartingEstimate] = useState(false);
   const [scheduleView, setScheduleView] = useState<'calendar' | 'list'>('calendar');
-  const [subcontractors, setSubcontractors] = useState<Subcontractor[]>([]);
+  const { subcontractors: subcontractorsData } = useReferenceData();
+  const subcontractors = subcontractorsData ?? [];
   const [subFilter, setSubFilter] = useState('');
 
   async function loadNotes() {
@@ -101,7 +103,6 @@ export default function ProjectDetail() {
     loadChangeOrders();
     loadInvoices();
     loadTasks();
-    api.get<Subcontractor[]>('/subcontractors').then(setSubcontractors).catch(() => {});
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [id]);
 

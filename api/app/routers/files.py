@@ -6,7 +6,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from ..deps import CurrentUser, get_current_user
 from ..schemas.files import DownloadUrlResponse, FileCreate, FileOut, UploadUrlRequest, UploadUrlResponse
 from ..storage_client import create_signed_download_url, create_signed_upload_url, remove_objects
-from ..supabase_client import db_delete, db_get, db_post
+from ..supabase_client import db_delete, db_get, db_post, db_post_many
 
 router = APIRouter(tags=["files"])
 
@@ -59,8 +59,10 @@ async def create_file(
         },
     )
     file_row = rows[0]
-    for task_id in body.task_ids:
-        await db_post("file_task_links", {"file_id": file_row["id"], "task_id": task_id})
+    if body.task_ids:
+        await db_post_many(
+            "file_task_links", [{"file_id": file_row["id"], "task_id": task_id} for task_id in body.task_ids]
+        )
     enriched = await _enrich([file_row])
     return enriched[0]
 

@@ -2,7 +2,8 @@ import { useEffect, useState, type FormEvent } from 'react';
 import { api, ApiError } from '../../api/client';
 import { Modal } from '../ui/Modal';
 import { openDatePicker } from '../../lib/datePicker';
-import type { CostCode, Project, Subcontractor, Transaction } from '../../types';
+import { useReferenceData } from '../../reference-data/ReferenceDataContext';
+import type { Project, Transaction } from '../../types';
 
 interface NewTransactionModalProps {
   onClose: () => void;
@@ -14,8 +15,9 @@ interface NewTransactionModalProps {
 
 export function NewTransactionModal({ onClose, onCreated, transaction, defaultProjectId, lockProject }: NewTransactionModalProps) {
   const [projects, setProjects] = useState<Project[]>([]);
-  const [costCodes, setCostCodes] = useState<CostCode[]>([]);
-  const [subcontractors, setSubcontractors] = useState<Subcontractor[]>([]);
+  const { costCodes: costCodesData, subcontractors: subcontractorsData } = useReferenceData();
+  const costCodes = costCodesData ?? [];
+  const subcontractors = subcontractorsData ?? [];
   const [projectId, setProjectId] = useState(transaction?.project_id || defaultProjectId || '');
   const [date, setDate] = useState(transaction?.transaction_date?.slice(0, 10) || new Date().toISOString().split('T')[0]);
   const [vendor, setVendor] = useState(transaction?.vendor || '');
@@ -33,8 +35,6 @@ export function NewTransactionModal({ onClose, onCreated, transaction, defaultPr
 
   useEffect(() => {
     api.get<Project[]>('/projects').then(setProjects).catch(() => {});
-    api.get<CostCode[]>('/transactions/cost-codes').then(setCostCodes).catch(() => {});
-    api.get<Subcontractor[]>('/subcontractors').then(setSubcontractors).catch(() => {});
   }, []);
 
   async function handleSubmit(e: FormEvent) {

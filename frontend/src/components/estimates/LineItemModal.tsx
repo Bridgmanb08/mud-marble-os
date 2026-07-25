@@ -3,7 +3,8 @@ import { IconSearch, IconChevronDown, IconChevronUp } from '@tabler/icons-react'
 import { api, ApiError } from '../../api/client';
 import { Modal } from '../ui/Modal';
 import { fmt } from '../../lib/format';
-import type { CostCode, EstimateLineItem, LineItemReference } from '../../types';
+import { useReferenceData } from '../../reference-data/ReferenceDataContext';
+import type { EstimateLineItem, LineItemReference } from '../../types';
 
 interface LineItemModalProps {
   estimateId: string;
@@ -34,7 +35,8 @@ function round2(n: number): number {
 }
 
 export function LineItemModal({ estimateId, item, defaultBucket, defaultGroupName, existingGroups, onClose, onSaved, onDeleted }: LineItemModalProps) {
-  const [costCodes, setCostCodes] = useState<CostCode[]>([]);
+  const { costCodes: costCodesData } = useReferenceData();
+  const costCodes = costCodesData ?? [];
   const [costCodeId, setCostCodeId] = useState(item?.cost_code_id || '');
   const [costCodeQuery, setCostCodeQuery] = useState('');
   const [bucket, setBucket] = useState(item?.bucket || defaultBucket || 'construction');
@@ -76,10 +78,6 @@ export function LineItemModal({ estimateId, item, defaultBucket, defaultGroupNam
   const [refLoading, setRefLoading] = useState(false);
   const [refSearched, setRefSearched] = useState(false);
   const [expandedRefId, setExpandedRefId] = useState<string | null>(null);
-
-  useEffect(() => {
-    api.get<CostCode[]>('/transactions/cost-codes').then(setCostCodes).catch(() => {});
-  }, []);
 
   useEffect(() => {
     if (showReference && costCodeId) {

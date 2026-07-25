@@ -2,6 +2,7 @@ import { useEffect, useRef, useState, type FormEvent } from 'react';
 import { IconSend, IconPhoto, IconVideo, IconFileTypePdf, IconFile, IconMessages, IconAlertCircle, IconPencil } from '@tabler/icons-react';
 import { api, ApiError } from '../api/client';
 import { useToast } from '../components/ui/Toast';
+import { useReferenceData } from '../reference-data/ReferenceDataContext';
 import type { Message, MessageThread, InboundMedia, Project, Subcontractor } from '../types';
 
 const DELIVERY_LABELS: Record<string, string> = {
@@ -249,7 +250,8 @@ export default function Messages() {
   const [selectedPhone, setSelectedPhone] = useState<string | null>(null);
   const [thread, setThread] = useState<Message[] | null>(null);
   const [projects, setProjects] = useState<Project[]>([]);
-  const [subcontractors, setSubcontractors] = useState<Subcontractor[]>([]);
+  const { subcontractors: subcontractorsData } = useReferenceData();
+  const subcontractors = subcontractorsData ?? [];
   const [editingContact, setEditingContact] = useState(false);
   const [draft, setDraft] = useState('');
   const [sending, setSending] = useState(false);
@@ -276,7 +278,6 @@ export default function Messages() {
   useEffect(() => {
     loadThreads();
     api.get<Project[]>('/projects').then(setProjects).catch(() => {});
-    api.get<Subcontractor[]>('/subcontractors').then(setSubcontractors).catch(() => {});
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 

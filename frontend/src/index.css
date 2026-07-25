@@ -55,6 +55,10 @@ body{font-family:var(--font);background:var(--bg);color:var(--text);font-size:14
 .dot{width:8px;height:8px;border-radius:50%;display:inline-block;flex-shrink:0;}
 .dot-g{background:var(--green);}.dot-a{background:var(--amber);}.dot-r{background:var(--red);}
 
+/* Skeleton loading */
+.skeleton{background:linear-gradient(90deg,var(--border) 25%,var(--bg) 50%,var(--border) 75%);background-size:200% 100%;animation:skeleton-shimmer 1.4s infinite;border-radius:var(--r);}
+@keyframes skeleton-shimmer{0%{background-position:200% 0;}100%{background-position:-200% 0;}}
+
 /* Cards & metrics */
 .card{background:var(--surface);border:1px solid var(--border);border-radius:var(--rl);}
 .metrics{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px;margin-bottom:20px;}
