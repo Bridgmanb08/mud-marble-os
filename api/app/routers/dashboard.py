@@ -1,7 +1,7 @@
 import asyncio
 import json
 from collections import defaultdict
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from typing import Optional
 
 from anthropic import AsyncAnthropic
@@ -27,12 +27,20 @@ from ..schemas.dashboard import (
     ARAgingDetail,
     CashPosition,
     ChangeOrderAction,
+    ChangeOrderStats,
     ClientCommunicationEntry,
     ContractorMilestone,
     DashboardSummary,
     DesignProjectCard,
+    EstimateWinRate,
+    JobsOverdueToClose,
+    LeadPipeline,
+    LeadPipelineStage,
+    OverdueJobEntry,
     ProjectProfitability,
     QBOSyncStatus,
+    SubcontractorRisk,
+    TeamWorkloadEntry,
     UpcomingTask,
 )
 from ..schemas.layout import LayoutOut, LayoutUpdate, WidgetItem
@@ -91,6 +99,8 @@ async def get_dashboard(_: CurrentUser = Depends(get_current_user)):
         client_comm_notes,
         transactions,
         estimates,
+        leads,
+        subcontractors,
     ) = await asyncio.gather(
         db_get("projects", "?is_archived=eq.false&select=*,clients(first_name,last_name)"),
         db_get(
@@ -114,7 +124,13 @@ async def get_dashboard(_: CurrentUser = Depends(get_current_user)):
             "transactions",
             "?select=amount,transaction_type,vendor,quickbooks_synced,transaction_date,project_id",
         ),
-        db_get("estimates", "?select=project_id,version,grand_total_owner_price,status&order=version.desc"),
+        db_get(
+            "estimates",
+            "?select=project_id,version,status,grand_total_owner_price,construction_total_owner_price,"
+            "allowance_total,pm_fee_total&order=version.desc",
+        ),
+        db_get("leads", "?select=status,estimated_revenue_min,estimated_revenue_max"),
+        db_get("subcontractors", "?select=is_active,insurance_expiry,w9_on_file"),
     )
 
     active = [p for p in projects if p.get("status") == "active"]
@@ -233,10 +249,12 @@ async def get_dashboard(_: CurrentUser = Depends(get_current_user)):
 
     # -- project profitability (latest estimate per project vs actual spend) --
     latest_estimate_by_project: dict[str, float] = {}
+    latest_estimate_full_by_project: dict[str, dict] = {}
     for e in estimates:
         pid = e.get("project_id")
         if pid and pid not in latest_estimate_by_project:
             latest_estimate_by_project[pid] = e.get("grand_total_owner_price") or 0
+            latest_estimate_full_by_project[pid] = e
 
     spend_by_project: dict[str, float] = defaultdict(float)
     for t in transactions:
@@ -322,6 +340,137 @@ async def get_dashboard(_: CurrentUser = Depends(get_current_user)):
             )
         )
 
+    # -- team workload: incomplete/completed-this-week/overdue per assignee --
+    week_start = now - timedelta(days=7)
+    workload: dict[str, dict] = defaultdict(lambda: {"incomplete": 0, "completed_week": 0, "overdue": 0})
+    for t in schedule_items:
+        names = t.get("assignees") or ([t["assigned_to"]] if t.get("assigned_to") else [])
+        if not names:
+            names = ["Unassigned"]
+        status = t.get("status")
+        end = _parse_dt(t.get("scheduled_end"))
+        is_overdue = status != "complete" and end is not None and end < now
+        completed_at = _parse_dt(t.get("completed_at"))
+        completed_this_week = status == "complete" and completed_at is not None and completed_at >= week_start
+        for name in names:
+            if status != "complete":
+                workload[name]["incomplete"] += 1
+                if is_overdue:
+                    workload[name]["overdue"] += 1
+            if completed_this_week:
+                workload[name]["completed_week"] += 1
+    team_workload = [
+        TeamWorkloadEntry(
+            name=name,
+            incomplete_count=v["incomplete"],
+            completed_this_week=v["completed_week"],
+            overdue_count=v["overdue"],
+        )
+        for name, v in workload.items()
+        if v["incomplete"] or v["completed_week"]
+    ]
+    team_workload.sort(key=lambda e: e.incomplete_count, reverse=True)
+
+    # -- jobs overdue to close: active/punch_list projects past their estimated
+    # completion date, with the potential revenue still tied up in them --
+    overdue_jobs = []
+    jobs_total_revenue = 0.0
+    jobs_construction_total = 0.0
+    jobs_allowance_total = 0.0
+    jobs_pm_fee_total = 0.0
+    for p in projects:
+        if p.get("status") not in ("active", "punch_list"):
+            continue
+        end = _parse_dt(p.get("estimated_completion"))
+        if not end or end >= now:
+            continue
+        est = latest_estimate_full_by_project.get(p["id"]) or {}
+        revenue = est.get("grand_total_owner_price") or 0
+        overdue_jobs.append(
+            OverdueJobEntry(
+                project_id=p["id"],
+                project_name=p["name"],
+                status=p["status"],
+                estimated_completion=p.get("estimated_completion"),
+                days_overdue=(now - end).days,
+                potential_revenue=revenue,
+            )
+        )
+        jobs_total_revenue += revenue
+        jobs_construction_total += est.get("construction_total_owner_price") or 0
+        jobs_allowance_total += est.get("allowance_total") or 0
+        jobs_pm_fee_total += est.get("pm_fee_total") or 0
+    overdue_jobs.sort(key=lambda j: j.days_overdue, reverse=True)
+    jobs_overdue_to_close = JobsOverdueToClose(
+        jobs=overdue_jobs,
+        total_potential_revenue=jobs_total_revenue,
+        construction_total=jobs_construction_total,
+        allowance_total=jobs_allowance_total,
+        pm_fee_total=jobs_pm_fee_total,
+    )
+
+    # -- lead pipeline: open leads by stage + revenue potential --
+    OPEN_LEAD_STATUSES = ("new", "contacted", "qualified")
+    lead_stage_totals: dict[str, list] = defaultdict(lambda: [0, 0.0, 0.0])
+    for lead in leads:
+        status = lead.get("status") or "new"
+        lead_stage_totals[status][0] += 1
+        lead_stage_totals[status][1] += lead.get("estimated_revenue_min") or 0
+        lead_stage_totals[status][2] += lead.get("estimated_revenue_max") or 0
+    lead_stages = [
+        LeadPipelineStage(status=s, count=v[0], potential_revenue_min=v[1], potential_revenue_max=v[2])
+        for s, v in lead_stage_totals.items()
+    ]
+    lead_stages.sort(key=lambda s: s.count, reverse=True)
+    lead_pipeline = LeadPipeline(
+        stages=lead_stages,
+        total_open_count=sum(v[0] for s, v in lead_stage_totals.items() if s in OPEN_LEAD_STATUSES),
+        total_potential_revenue_min=sum(v[1] for s, v in lead_stage_totals.items() if s in OPEN_LEAD_STATUSES),
+        total_potential_revenue_max=sum(v[2] for s, v in lead_stage_totals.items() if s in OPEN_LEAD_STATUSES),
+    )
+
+    # -- subcontractor risk: compliance gaps across the active roster --
+    active_subs = [s for s in subcontractors if s.get("is_active", True)]
+    thirty_days = now + timedelta(days=30)
+    subcontractor_risk = SubcontractorRisk(
+        total_active=len(active_subs),
+        missing_w9=len([s for s in active_subs if not s.get("w9_on_file")]),
+        insurance_expired=len(
+            [s for s in active_subs if (d := _parse_dt(s.get("insurance_expiry"))) and d < now]
+        ),
+        insurance_expiring_soon=len(
+            [s for s in active_subs if (d := _parse_dt(s.get("insurance_expiry"))) and now <= d < thirty_days]
+        ),
+    )
+
+    # -- change order win rate + revenue impact --
+    co_approved = [c for c in change_orders if c.get("status") == "approved"]
+    co_rejected = [c for c in change_orders if c.get("status") == "rejected"]
+    co_pending = [c for c in change_orders if c.get("status") in ("pending", "sent")]
+    co_decided = len(co_approved) + len(co_rejected)
+    change_order_stats = ChangeOrderStats(
+        approved_count=len(co_approved),
+        rejected_count=len(co_rejected),
+        pending_count=len(co_pending),
+        win_rate_pct=round(len(co_approved) / co_decided * 100) if co_decided else 0,
+        approved_revenue_total=sum(c.get("owner_price") or 0 for c in co_approved),
+    )
+
+    # -- estimate win rate + open pipeline value --
+    est_approved = [e for e in estimates if e.get("status") == "approved"]
+    est_rejected = [e for e in estimates if e.get("status") == "rejected"]
+    est_sent = [e for e in estimates if e.get("status") != "draft"]
+    est_decided = len(est_approved) + len(est_rejected)
+    estimate_win_rate = EstimateWinRate(
+        sent_count=len(est_sent),
+        approved_count=len(est_approved),
+        rejected_count=len(est_rejected),
+        win_rate_pct=round(len(est_approved) / est_decided * 100) if est_decided else 0,
+        pipeline_value=sum(
+            e.get("grand_total_owner_price") or 0 for e in estimates if e.get("status") == "sent_to_client"
+        ),
+    )
+
     return DashboardSummary(
         active_project_count=len(active),
         total_contract_value=total_contract_value,
@@ -372,6 +521,12 @@ async def get_dashboard(_: CurrentUser = Depends(get_current_user)):
         cash_position=cash_position,
         alex_cost=alex_cost,
         design_projects=design_projects,
+        team_workload=team_workload,
+        jobs_overdue_to_close=jobs_overdue_to_close,
+        lead_pipeline=lead_pipeline,
+        subcontractor_risk=subcontractor_risk,
+        change_order_stats=change_order_stats,
+        estimate_win_rate=estimate_win_rate,
     )
 
 

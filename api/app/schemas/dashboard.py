@@ -102,6 +102,67 @@ class DesignProjectCard(BaseModel):
     at_risk: bool = False
 
 
+class TeamWorkloadEntry(BaseModel):
+    name: str
+    incomplete_count: int
+    completed_this_week: int
+    overdue_count: int
+
+
+class OverdueJobEntry(BaseModel):
+    project_id: str
+    project_name: str
+    status: str
+    estimated_completion: Optional[str] = None
+    days_overdue: int
+    potential_revenue: float
+
+
+class JobsOverdueToClose(BaseModel):
+    jobs: list[OverdueJobEntry]
+    total_potential_revenue: float
+    construction_total: float
+    allowance_total: float
+    pm_fee_total: float
+
+
+class LeadPipelineStage(BaseModel):
+    status: str
+    count: int
+    potential_revenue_min: float
+    potential_revenue_max: float
+
+
+class LeadPipeline(BaseModel):
+    stages: list[LeadPipelineStage]
+    total_open_count: int
+    total_potential_revenue_min: float
+    total_potential_revenue_max: float
+
+
+class SubcontractorRisk(BaseModel):
+    total_active: int
+    missing_w9: int
+    insurance_expired: int
+    insurance_expiring_soon: int
+
+
+class ChangeOrderStats(BaseModel):
+    approved_count: int
+    rejected_count: int
+    pending_count: int
+    win_rate_pct: int
+    approved_revenue_total: float
+
+
+class EstimateWinRate(BaseModel):
+    sent_count: int
+    approved_count: int
+    rejected_count: int
+    win_rate_pct: int
+    pipeline_value: float
+
+
 class DashboardSummary(BaseModel):
     active_project_count: int
     total_contract_value: float
@@ -123,3 +184,9 @@ class DashboardSummary(BaseModel):
     cash_position: CashPosition
     alex_cost: AlexCostTracker
     design_projects: list[DesignProjectCard]
+    team_workload: list[TeamWorkloadEntry]
+    jobs_overdue_to_close: JobsOverdueToClose
+    lead_pipeline: LeadPipeline
+    subcontractor_risk: SubcontractorRisk
+    change_order_stats: ChangeOrderStats
+    estimate_win_rate: EstimateWinRate

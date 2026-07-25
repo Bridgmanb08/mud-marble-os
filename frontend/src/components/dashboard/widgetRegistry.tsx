@@ -15,6 +15,14 @@ import {
   AlexCostWidget,
 } from './widgets/FinanceWidgets';
 import { DesignProjectsWidget } from './widgets/DesignWidgets';
+import {
+  TeamWorkloadWidget,
+  JobsOverdueToCloseWidget,
+  LeadPipelineWidget,
+  SubcontractorRiskWidget,
+  ChangeOrderStatsWidget,
+  EstimateWinRateWidget,
+} from './widgets/CEOWidgets';
 import { FathomImportCard } from './FathomImportCard';
 
 interface WidgetDef {
@@ -42,4 +50,10 @@ export const WIDGET_REGISTRY: Record<WidgetId, WidgetDef> = {
   cash_position: { title: 'Cash position', Component: CashPositionWidget },
   alex_cost: { title: "Alex's cost tracker", Component: AlexCostWidget },
   design_projects: { title: 'Active projects', Component: DesignProjectsWidget, wide: true },
+  team_workload: { title: 'Team workload', Component: TeamWorkloadWidget, wide: true },
+  jobs_overdue_to_close: { title: 'Jobs overdue to close', Component: JobsOverdueToCloseWidget },
+  lead_pipeline: { title: 'Lead pipeline', Component: LeadPipelineWidget },
+  subcontractor_risk: { title: 'Subcontractor risk', Component: SubcontractorRiskWidget },
+  change_order_stats: { title: 'Change order win rate', Component: ChangeOrderStatsWidget },
+  estimate_win_rate: { title: 'Estimate win rate', Component: EstimateWinRateWidget },
 };

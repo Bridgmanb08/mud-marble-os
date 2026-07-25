@@ -176,6 +176,7 @@ async def bulk_update_tasks(body: BulkUpdateRequest, _: CurrentUser = Depends(ge
     updates: dict = {}
     if body.status is not None:
         updates["status"] = body.status
+        updates["completed_at"] = datetime.now(timezone.utc).isoformat() if body.status == "complete" else None
     if body.assigned_to is not None:
         updates["assigned_to"] = body.assigned_to
         updates["assignees"] = [body.assigned_to] if body.assigned_to else []
@@ -345,6 +346,10 @@ async def update_task(task_id: str, body: TaskUpdate, _: CurrentUser = Depends(g
     updates = body.model_dump(exclude_none=True, exclude={"expected_version"})
     if "assignees" in updates:
         updates["assigned_to"] = updates["assignees"][0] if updates["assignees"] else None
+    if target_status == "complete" and current[0]["status"] != "complete":
+        updates["completed_at"] = datetime.now(timezone.utc).isoformat()
+    elif target_status != "complete" and current[0]["status"] == "complete":
+        updates["completed_at"] = None
     updates["version"] = current[0]["version"] + 1
     await db_patch("schedule_items", task_id, updates)
     full = await db_get("schedule_items", f"?id=eq.{task_id}&select=*,projects(name),subcontractors(company_name,trade)")
