@@ -292,6 +292,13 @@ export interface CostCode {
   default_description: string | null;
 }
 
+export interface PersonTag {
+  id: string;
+  label: string;
+  color: string;
+  created_at: string;
+}
+
 export interface EstimateTextDefaults {
   id: string;
   introductory_text: string | null;

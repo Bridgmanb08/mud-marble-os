@@ -6,8 +6,9 @@ import { useAuth } from '../auth/AuthContext';
 import { Modal } from '../components/ui/Modal';
 import { NewSubcontractorModal } from '../components/subcontractors/NewSubcontractorModal';
 import { RichTextEditor } from '../components/ui/RichTextEditor';
+import { TagChip } from '../components/tags/TagChip';
 import { useReferenceData } from '../reference-data/ReferenceDataContext';
-import type { CostCode, EstimateTextDefaults, Subcontractor } from '../types';
+import type { CostCode, EstimateTextDefaults, PersonTag, Subcontractor } from '../types';
 
 function CostCodeModal({ onClose, onSaved }: { onClose: () => void; onSaved: () => void }) {
   const [code, setCode] = useState('');
@@ -390,9 +391,219 @@ function DefaultTextTab() {
   );
 }
 
+function PersonTagModal({ onClose, onSaved }: { onClose: () => void; onSaved: () => void }) {
+  const [label, setLabel] = useState('');
+  const [color, setColor] = useState('#7B4B34');
+  const [error, setError] = useState('');
+  const [saving, setSaving] = useState(false);
+
+  async function handleSubmit(e: FormEvent) {
+    e.preventDefault();
+    if (!label.trim()) {
+      setError('Label is required.');
+      return;
+    }
+    setSaving(true);
+    setError('');
+    try {
+      await api.post('/person-tags', { label: label.trim(), color });
+      onSaved();
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : 'Failed to create tag');
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  return (
+    <Modal title="Add tag" onClose={onClose}>
+      <form onSubmit={handleSubmit}>
+        {error && <div className="merr">{error}</div>}
+        <div className="fr">
+          <div className="fg">
+            <label className="fl">Label</label>
+            <input className="fi" value={label} onChange={(e) => setLabel(e.target.value)} placeholder="VIP" />
+          </div>
+          <div className="fg">
+            <label className="fl">Color</label>
+            <input
+              type="color"
+              value={color}
+              onChange={(e) => setColor(e.target.value)}
+              style={{ width: '100%', height: 34, padding: 2, border: '1px solid var(--border-md)', borderRadius: 'var(--r)' }}
+            />
+          </div>
+        </div>
+        <div className="ma">
+          <button type="button" className="btn" onClick={onClose}>
+            Cancel
+          </button>
+          <button type="submit" className="btn btn-p" disabled={saving}>
+            {saving ? 'Saving…' : 'Add tag'}
+          </button>
+        </div>
+      </form>
+    </Modal>
+  );
+}
+
+function EditPersonTagModal({ tag, onClose, onSaved }: { tag: PersonTag; onClose: () => void; onSaved: () => void }) {
+  const [label, setLabel] = useState(tag.label);
+  const [color, setColor] = useState(tag.color);
+  const [error, setError] = useState('');
+  const [saving, setSaving] = useState(false);
+
+  async function handleSubmit(e: FormEvent) {
+    e.preventDefault();
+    if (!label.trim()) {
+      setError('Label is required.');
+      return;
+    }
+    setSaving(true);
+    setError('');
+    try {
+      await api.patch(`/person-tags/${tag.id}`, { label: label.trim(), color });
+      onSaved();
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : 'Failed to save tag');
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  async function handleDelete() {
+    setSaving(true);
+    try {
+      await api.delete(`/person-tags/${tag.id}`);
+      onSaved();
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : 'Failed to delete tag');
+      setSaving(false);
+    }
+  }
+
+  return (
+    <Modal title="Edit tag" onClose={onClose}>
+      <form onSubmit={handleSubmit}>
+        {error && <div className="merr">{error}</div>}
+        <div className="fr">
+          <div className="fg">
+            <label className="fl">Label</label>
+            <input className="fi" value={label} onChange={(e) => setLabel(e.target.value)} />
+          </div>
+          <div className="fg">
+            <label className="fl">Color</label>
+            <input
+              type="color"
+              value={color}
+              onChange={(e) => setColor(e.target.value)}
+              style={{ width: '100%', height: 34, padding: 2, border: '1px solid var(--border-md)', borderRadius: 'var(--r)' }}
+            />
+          </div>
+        </div>
+        <div className="ma">
+          <button type="button" className="btn" style={{ color: 'var(--red)' }} onClick={handleDelete} disabled={saving}>
+            Delete
+          </button>
+          <div style={{ flex: 1 }} />
+          <button type="button" className="btn" onClick={onClose}>
+            Cancel
+          </button>
+          <button type="submit" className="btn btn-p" disabled={saving}>
+            {saving ? 'Saving…' : 'Save changes'}
+          </button>
+        </div>
+      </form>
+    </Modal>
+  );
+}
+
+function PersonTagsTab() {
+  const toast = useToast();
+  const [tags, setTags] = useState<PersonTag[] | null>(null);
+  const [showNew, setShowNew] = useState(false);
+  const [editing, setEditing] = useState<PersonTag | undefined>(undefined);
+
+  async function load() {
+    try {
+      setTags(await api.get<PersonTag[]>('/person-tags'));
+    } catch (e) {
+      toast(e instanceof Error ? e.message : 'Failed to load tags', true);
+      setTags([]);
+    }
+  }
+
+  useEffect(() => {
+    load();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  return (
+    <>
+      <div className="sh">
+        <div className="st">Person tags {tags ? `(${tags.length})` : ''}</div>
+        <button className="btn btn-p btn-sm" onClick={() => setShowNew(true)}>
+          <IconPlus size={14} /> Add tag
+        </button>
+      </div>
+      <p style={{ fontSize: 12, color: 'var(--t2)', marginBottom: 14 }}>
+        Tags are shared across clients, subcontractors, and leads — attach them from a client's or subcontractor's
+        page.
+      </p>
+
+      {tags === null ? (
+        <div className="empty">
+          <div className="empty-t">Loading…</div>
+        </div>
+      ) : tags.length === 0 ? (
+        <div className="empty-s">No tags yet.</div>
+      ) : (
+        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
+          {tags.map((t) => (
+            <button
+              key={t.id}
+              type="button"
+              className="btn-reset"
+              onClick={() => setEditing(t)}
+              style={{ cursor: 'pointer' }}
+            >
+              <TagChip tag={t} />
+            </button>
+          ))}
+        </div>
+      )}
+
+      {showNew && (
+        <PersonTagModal
+          onClose={() => setShowNew(false)}
+          onSaved={() => {
+            setShowNew(false);
+            toast('Tag added');
+            load();
+          }}
+        />
+      )}
+
+      {editing && (
+        <EditPersonTagModal
+          tag={editing}
+          onClose={() => setEditing(undefined)}
+          onSaved={() => {
+            setEditing(undefined);
+            toast('Tag saved');
+            load();
+          }}
+        />
+      )}
+    </>
+  );
+}
+
 export default function Settings() {
   const { user } = useAuth();
-  const [tab, setTab] = useState<'cost-codes' | 'subcontractors' | 'default-text'>(user?.is_admin ? 'cost-codes' : 'default-text');
+  const [tab, setTab] = useState<'cost-codes' | 'subcontractors' | 'person-tags' | 'default-text'>(
+    user?.is_admin ? 'cost-codes' : 'default-text'
+  );
 
   return (
     <>
@@ -412,6 +623,9 @@ export default function Settings() {
             <button className={`tab${tab === 'subcontractors' ? ' on' : ''}`} onClick={() => setTab('subcontractors')}>
               Subcontractors
             </button>
+            <button className={`tab${tab === 'person-tags' ? ' on' : ''}`} onClick={() => setTab('person-tags')}>
+              Person tags
+            </button>
           </>
         )}
         <button className={`tab${tab === 'default-text' ? ' on' : ''}`} onClick={() => setTab('default-text')}>
@@ -421,6 +635,7 @@ export default function Settings() {
 
       {tab === 'cost-codes' && user?.is_admin && <CostCodesTab />}
       {tab === 'subcontractors' && user?.is_admin && <SubcontractorsTab />}
+      {tab === 'person-tags' && user?.is_admin && <PersonTagsTab />}
       {tab === 'default-text' && <DefaultTextTab />}
     </>
   );

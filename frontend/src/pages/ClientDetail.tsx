@@ -5,7 +5,8 @@ import { api, ApiError } from '../api/client';
 import { useToast } from '../components/ui/Toast';
 import { fmt } from '../lib/format';
 import { ReferralPicker } from '../components/clients/ReferralPicker';
-import type { Client } from '../types';
+import { EntityTagList } from '../components/tags/EntityTagList';
+import type { Client, PersonTag } from '../types';
 
 export default function ClientDetail() {
   const { id } = useParams<{ id: string }>();
@@ -14,6 +15,7 @@ export default function ClientDetail() {
 
   const [client, setClient] = useState<Client | null>(null);
   const [allClients, setAllClients] = useState<Client[]>([]);
+  const [allTags, setAllTags] = useState<PersonTag[]>([]);
   const [editingReferral, setEditingReferral] = useState(false);
 
   const [firstName, setFirstName] = useState('');
@@ -51,6 +53,7 @@ export default function ClientDetail() {
   useEffect(() => {
     load();
     api.get<Client[]>('/clients').then(setAllClients).catch(() => {});
+    api.get<PersonTag[]>('/person-tags').then(setAllTags).catch(() => {});
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [id]);
 
@@ -183,6 +186,10 @@ export default function ClientDetail() {
             </div>
           </div>
         ) : null}
+      </div>
+
+      <div className="card" style={{ padding: 14, marginBottom: 16 }}>
+        <EntityTagList entityType="client" entityId={client.id} allTags={allTags} />
       </div>
 
       <div className="fr" style={{ alignItems: 'start' }}>
