@@ -2,6 +2,8 @@ from typing import Optional
 
 from pydantic import BaseModel
 
+from .sms_contacts import SmsContactBrief
+
 
 class SubcontractorCreate(BaseModel):
     company_name: str
@@ -48,3 +50,4 @@ class SubcontractorOut(BaseModel):
     notes: Optional[str] = None
     is_active: bool = True
     created_at: str
+    sms_contacts: list[SmsContactBrief] = []

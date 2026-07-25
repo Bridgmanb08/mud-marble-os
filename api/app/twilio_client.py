@@ -1,6 +1,7 @@
 import base64
 import hashlib
 import hmac
+from typing import Optional
 from xml.sax.saxutils import escape
 
 import httpx
@@ -29,8 +30,16 @@ async def fetch_media(media_url: str) -> bytes:
         return r.content
 
 
+def status_callback_url() -> Optional[str]:
+    if not settings.public_base_url:
+        return None
+    return f"{settings.public_base_url.rstrip('/')}/api/twilio/status"
+
+
 def twiml_reply(message: str) -> str:
-    return f'<?xml version="1.0" encoding="UTF-8"?><Response><Message>{escape(message)}</Message></Response>'
+    callback = status_callback_url()
+    status_attr = f' statusCallback="{escape(callback)}"' if callback else ""
+    return f'<?xml version="1.0" encoding="UTF-8"?><Response><Message{status_attr}>{escape(message)}</Message></Response>'
 
 
 async def send_sms(to: str, body: str) -> str:
@@ -38,11 +47,15 @@ async def send_sms(to: str, body: str) -> str:
     if not settings.twilio_account_sid or not settings.twilio_auth_token or not settings.twilio_from_number:
         raise HTTPException(status_code=503, detail="Twilio isn't fully configured (missing account SID, auth token, or from-number)")
     url = f"https://api.twilio.com/2010-04-01/Accounts/{settings.twilio_account_sid}/Messages.json"
+    data = {"To": to, "From": settings.twilio_from_number, "Body": body}
+    callback = status_callback_url()
+    if callback:
+        data["StatusCallback"] = callback
     async with httpx.AsyncClient(timeout=15) as client:
         r = await client.post(
             url,
             auth=(settings.twilio_account_sid, settings.twilio_auth_token),
-            data={"To": to, "From": settings.twilio_from_number, "Body": body},
+            data=data,
         )
     if not r.is_success:
         raise HTTPException(status_code=502, detail=f"Twilio send failed: {r.text}")

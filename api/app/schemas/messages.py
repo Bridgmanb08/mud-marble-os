@@ -7,6 +7,9 @@ class MessageThreadOut(BaseModel):
     phone_number: str
     contact_name: Optional[str] = None
     contact_trade: Optional[str] = None
+    contact_id: Optional[str] = None
+    linked_subcontractor_id: Optional[str] = None
+    linked_project_id: Optional[str] = None
     last_body: Optional[str] = None
     last_direction: str
     last_created_at: str
@@ -20,6 +23,8 @@ class MessageOut(BaseModel):
     direction: str
     body: Optional[str] = None
     message_sid: Optional[str] = None
+    status: Optional[str] = None
+    error_code: Optional[str] = None
     project_id: Optional[str] = None
     project_name: Optional[str] = None
     sent_by: Optional[str] = None

@@ -131,6 +131,11 @@ export default function Subcontractors() {
               </div>
               <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexShrink: 0 }}>
                 {s.phone && <span style={{ fontSize: 12, color: 'var(--t2)' }}>{s.phone}</span>}
+                {s.sms_contacts.length > 0 && (
+                  <span className="badge bg-blue">
+                    Texts as {s.sms_contacts.map((c) => c.name || c.phone_number).join(', ')}
+                  </span>
+                )}
                 {s.w9_on_file ? <span className="badge bg-green">W9 ✓</span> : <span className="badge bg-amber">W9 needed</span>}
                 {s.insurance_expiry && (
                   <span style={{ fontSize: 11, color: expired ? 'var(--red)' : expiring ? 'var(--atx)' : 'var(--t3)' }}>

@@ -21,7 +21,7 @@ router = APIRouter(prefix="/projects", tags=["projects"])
 async def list_projects(
     include_archived: bool = False, _: CurrentUser = Depends(get_current_user)
 ):
-    query = "?order=created_at.desc&select=*,clients(id,first_name,last_name)"
+    query = "?order=created_at.desc&select=*,clients(id,first_name,last_name),sms_contacts(id,phone_number,name)"
     if not include_archived:
         query += "&is_archived=eq.false"
     return await db_get("projects", query)
@@ -30,13 +30,13 @@ async def list_projects(
 @router.post("", response_model=ProjectOut)
 async def create_project(body: ProjectCreate, _: CurrentUser = Depends(get_current_user)):
     rows = await db_post("projects", body.model_dump(exclude_none=True))
-    full = await db_get("projects", f"?id=eq.{rows[0]['id']}&select=*,clients(id,first_name,last_name)")
+    full = await db_get("projects", f"?id=eq.{rows[0]['id']}&select=*,clients(id,first_name,last_name),sms_contacts(id,phone_number,name)")
     return full[0]
 
 
 @router.get("/{project_id}", response_model=ProjectOut)
 async def get_project(project_id: str, _: CurrentUser = Depends(get_current_user)):
-    rows = await db_get("projects", f"?id=eq.{project_id}&select=*,clients(id,first_name,last_name)")
+    rows = await db_get("projects", f"?id=eq.{project_id}&select=*,clients(id,first_name,last_name),sms_contacts(id,phone_number,name)")
     if not rows:
         raise HTTPException(status_code=404, detail="Project not found")
     return rows[0]
@@ -45,7 +45,7 @@ async def get_project(project_id: str, _: CurrentUser = Depends(get_current_user
 @router.patch("/{project_id}", response_model=ProjectOut)
 async def update_project(project_id: str, body: ProjectUpdate, _: CurrentUser = Depends(get_current_user)):
     await db_patch("projects", project_id, body.model_dump(exclude_none=True))
-    full = await db_get("projects", f"?id=eq.{project_id}&select=*,clients(id,first_name,last_name)")
+    full = await db_get("projects", f"?id=eq.{project_id}&select=*,clients(id,first_name,last_name),sms_contacts(id,phone_number,name)")
     return full[0]
 
 

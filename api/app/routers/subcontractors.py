@@ -9,7 +9,7 @@ router = APIRouter(prefix="/subcontractors", tags=["subcontractors"])
 
 @router.get("", response_model=list[SubcontractorOut])
 async def list_subcontractors(_: CurrentUser = Depends(get_current_user)):
-    return await db_get("subcontractors", "?order=company_name.asc")
+    return await db_get("subcontractors", "?order=company_name.asc&select=*,sms_contacts(id,phone_number,name)")
 
 
 @router.post("", response_model=SubcontractorOut)
