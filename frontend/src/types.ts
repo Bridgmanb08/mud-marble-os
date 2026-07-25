@@ -528,6 +528,52 @@ export interface DashboardSummary {
     task_completion_pct: number | null;
     at_risk: boolean;
   }[];
+  team_workload: {
+    name: string;
+    incomplete_count: number;
+    completed_this_week: number;
+    overdue_count: number;
+  }[];
+  jobs_overdue_to_close: {
+    jobs: {
+      project_id: string;
+      project_name: string;
+      status: string;
+      estimated_completion: string | null;
+      days_overdue: number;
+      potential_revenue: number;
+    }[];
+    total_potential_revenue: number;
+    construction_total: number;
+    allowance_total: number;
+    pm_fee_total: number;
+  };
+  lead_pipeline: {
+    stages: { status: string; count: number; potential_revenue_min: number; potential_revenue_max: number }[];
+    total_open_count: number;
+    total_potential_revenue_min: number;
+    total_potential_revenue_max: number;
+  };
+  subcontractor_risk: {
+    total_active: number;
+    missing_w9: number;
+    insurance_expired: number;
+    insurance_expiring_soon: number;
+  };
+  change_order_stats: {
+    approved_count: number;
+    rejected_count: number;
+    pending_count: number;
+    win_rate_pct: number;
+    approved_revenue_total: number;
+  };
+  estimate_win_rate: {
+    sent_count: number;
+    approved_count: number;
+    rejected_count: number;
+    win_rate_pct: number;
+    pipeline_value: number;
+  };
 }
 
 export type WidgetId =
@@ -544,7 +590,13 @@ export type WidgetId =
   | 'qbo_sync'
   | 'cash_position'
   | 'alex_cost'
-  | 'design_projects';
+  | 'design_projects'
+  | 'team_workload'
+  | 'jobs_overdue_to_close'
+  | 'lead_pipeline'
+  | 'subcontractor_risk'
+  | 'change_order_stats'
+  | 'estimate_win_rate';
 
 export interface WidgetItem {
   id: WidgetId | string;
