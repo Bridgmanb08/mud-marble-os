@@ -8,8 +8,8 @@ from ..schemas.files import DownloadUrlResponse
 from ..schemas.messages import MessageOut, MessageThreadOut, SendMessageRequest
 from ..schemas.sms_contacts import SmsContactOut, SmsContactUpsert
 from ..storage_client import create_signed_download_url
-from ..supabase_client import db_get, db_patch_query, db_post
-from ..twilio_client import send_sms
+from ..supabase_client import db_get, db_patch, db_patch_query, db_post
+from ..twilio_client import fetch_message, send_sms
 
 router = APIRouter(prefix="/messages", tags=["messages"])
 
@@ -126,6 +126,29 @@ async def send_message(phone: str, body: SendMessageRequest, user: CurrentUser =
     )
     full = await db_get(
         "sms_messages", f"?id=eq.{rows[0]['id']}&select=*,projects(name),app_users(name)"
+    )
+    return _to_message_out(full[0])
+
+
+@router.post("/{message_id}/refresh-status", response_model=MessageOut)
+async def refresh_message_status(message_id: str, _: CurrentUser = Depends(require_admin)):
+    """Pulls the message's current state straight from Twilio's API instead of waiting
+    on (or trusting) an async status callback -- useful when a callback is slow, lost,
+    or the message looks stuck (e.g. never advances past "queued")."""
+    rows = await db_get("sms_messages", f"?id=eq.{message_id}")
+    if not rows:
+        raise HTTPException(status_code=404, detail="Not found")
+    row = rows[0]
+    if not row.get("message_sid"):
+        raise HTTPException(status_code=400, detail="No Twilio message SID recorded for this message yet")
+    twilio_data = await fetch_message(row["message_sid"])
+    await db_patch(
+        "sms_messages",
+        message_id,
+        {"status": twilio_data.get("status"), "error_code": twilio_data.get("error_code")},
+    )
+    full = await db_get(
+        "sms_messages", f"?id=eq.{message_id}&select=*,projects(name),app_users(name)"
     )
     return _to_message_out(full[0])
 

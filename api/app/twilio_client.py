@@ -42,6 +42,19 @@ def twiml_reply(message: str) -> str:
     return f'<?xml version="1.0" encoding="UTF-8"?><Response><Message{status_attr}>{escape(message)}</Message></Response>'
 
 
+async def fetch_message(message_sid: str) -> dict:
+    """Pulls the current ground-truth state of a message straight from Twilio's API,
+    instead of waiting on (or trusting) an async status callback."""
+    if not settings.twilio_account_sid or not settings.twilio_auth_token:
+        raise HTTPException(status_code=503, detail="Twilio isn't fully configured (missing account SID or auth token)")
+    url = f"https://api.twilio.com/2010-04-01/Accounts/{settings.twilio_account_sid}/Messages/{message_sid}.json"
+    async with httpx.AsyncClient(timeout=15) as client:
+        r = await client.get(url, auth=(settings.twilio_account_sid, settings.twilio_auth_token))
+    if not r.is_success:
+        raise HTTPException(status_code=502, detail=f"Twilio lookup failed: {r.text}")
+    return r.json()
+
+
 async def send_sms(to: str, body: str) -> str:
     """Sends a proactive (non-reply) SMS via Twilio's REST API. Returns the MessageSid."""
     if not settings.twilio_account_sid or not settings.twilio_auth_token or not settings.twilio_from_number:
