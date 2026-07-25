@@ -5,7 +5,8 @@ import { Modal } from '../ui/Modal';
 import { NewSubcontractorModal } from '../subcontractors/NewSubcontractorModal';
 import { MultiAssigneeInput } from './MultiAssigneeInput';
 import { openDatePicker } from '../../lib/datePicker';
-import type { CostCode, Project, Subcontractor, UserDirectoryEntry } from '../../types';
+import { useReferenceData } from '../../reference-data/ReferenceDataContext';
+import type { Project, UserDirectoryEntry } from '../../types';
 
 interface NewTaskModalProps {
   onClose: () => void;
@@ -17,8 +18,9 @@ interface NewTaskModalProps {
 export function NewTaskModal({ onClose, onSaved, defaultStatus, defaultProjectId }: NewTaskModalProps) {
   const [projects, setProjects] = useState<Project[]>([]);
   const [directory, setDirectory] = useState<UserDirectoryEntry[]>([]);
-  const [costCodes, setCostCodes] = useState<CostCode[]>([]);
-  const [subcontractors, setSubcontractors] = useState<Subcontractor[]>([]);
+  const { costCodes: costCodesData, subcontractors: subcontractorsData, refreshSubcontractors } = useReferenceData();
+  const costCodes = costCodesData ?? [];
+  const subcontractors = subcontractorsData ?? [];
   const [projectId, setProjectId] = useState(defaultProjectId || '');
   const [title, setTitle] = useState('');
   const [assignees, setAssignees] = useState<string[]>([]);
@@ -38,8 +40,6 @@ export function NewTaskModal({ onClose, onSaved, defaultStatus, defaultProjectId
   useEffect(() => {
     api.get<Project[]>('/projects').then(setProjects).catch(() => {});
     api.get<UserDirectoryEntry[]>('/users/directory').then(setDirectory).catch(() => {});
-    api.get<CostCode[]>('/transactions/cost-codes').then(setCostCodes).catch(() => {});
-    api.get<Subcontractor[]>('/subcontractors').then(setSubcontractors).catch(() => {});
   }, []);
 
   async function handleSubmit(e: FormEvent) {
@@ -186,7 +186,7 @@ export function NewTaskModal({ onClose, onSaved, defaultStatus, defaultProjectId
           onClose={() => setShowNewSub(false)}
           onSaved={(sub) => {
             setShowNewSub(false);
-            setSubcontractors((prev) => [...prev, sub].sort((a, b) => a.company_name.localeCompare(b.company_name)));
+            refreshSubcontractors();
             setSubcontractorId(sub.id);
           }}
         />

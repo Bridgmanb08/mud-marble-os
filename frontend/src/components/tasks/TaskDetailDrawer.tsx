@@ -8,7 +8,8 @@ import { TaskFilesSection } from './TaskFilesSection';
 import { NewSubcontractorModal } from '../subcontractors/NewSubcontractorModal';
 import { MultiAssigneeInput } from './MultiAssigneeInput';
 import { openDatePicker } from '../../lib/datePicker';
-import type { CostCode, Project, Subcontractor, Task, TaskComment, TaskDependency, TaskSubtask, UserDirectoryEntry } from '../../types';
+import { useReferenceData } from '../../reference-data/ReferenceDataContext';
+import type { Project, Task, TaskComment, TaskDependency, TaskSubtask, UserDirectoryEntry } from '../../types';
 
 interface TaskDetailDrawerProps {
   task: Task;
@@ -23,8 +24,9 @@ export function TaskDetailDrawer({ task, allTasks, onClose, onSaved, onDeleted, 
   const toast = useToast();
   const [projects, setProjects] = useState<Project[]>([]);
   const [directory, setDirectory] = useState<UserDirectoryEntry[]>([]);
-  const [costCodes, setCostCodes] = useState<CostCode[]>([]);
-  const [subcontractors, setSubcontractors] = useState<Subcontractor[]>([]);
+  const { costCodes: costCodesData, subcontractors: subcontractorsData, refreshSubcontractors } = useReferenceData();
+  const costCodes = costCodesData ?? [];
+  const subcontractors = subcontractorsData ?? [];
   const [title, setTitle] = useState(task.title);
   const [projectId, setProjectId] = useState(task.project_id || '');
   const [assignees, setAssignees] = useState<string[]>(task.assignees || []);
@@ -58,8 +60,6 @@ export function TaskDetailDrawer({ task, allTasks, onClose, onSaved, onDeleted, 
   useEffect(() => {
     api.get<Project[]>('/projects').then(setProjects).catch(() => {});
     api.get<UserDirectoryEntry[]>('/users/directory').then(setDirectory).catch(() => {});
-    api.get<CostCode[]>('/transactions/cost-codes').then(setCostCodes).catch(() => {});
-    api.get<Subcontractor[]>('/subcontractors').then(setSubcontractors).catch(() => {});
     loadSubtasks();
     loadDependencies();
     loadComments();
@@ -457,7 +457,7 @@ export function TaskDetailDrawer({ task, allTasks, onClose, onSaved, onDeleted, 
           onClose={() => setShowNewSub(false)}
           onSaved={(sub) => {
             setShowNewSub(false);
-            setSubcontractors((prev) => [...prev, sub].sort((a, b) => a.company_name.localeCompare(b.company_name)));
+            refreshSubcontractors();
             handleSubcontractorChange(sub.id);
           }}
         />

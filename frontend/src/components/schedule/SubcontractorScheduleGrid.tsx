@@ -1,7 +1,7 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useMemo, useState } from 'react';
 import { IconAlertTriangle, IconChevronLeft, IconChevronRight } from '@tabler/icons-react';
-import { api } from '../../api/client';
-import type { Subcontractor, Task } from '../../types';
+import { useReferenceData } from '../../reference-data/ReferenceDataContext';
+import type { Task } from '../../types';
 
 const WEEKS_SHOWN = 6;
 
@@ -32,12 +32,9 @@ interface SubcontractorScheduleGridProps {
 }
 
 export function SubcontractorScheduleGrid({ tasks, onOpenTask }: SubcontractorScheduleGridProps) {
-  const [subs, setSubs] = useState<Subcontractor[]>([]);
+  const { subcontractors } = useReferenceData();
+  const subs = subcontractors ?? [];
   const [cursor, setCursor] = useState(() => startOfWeek(new Date()));
-
-  useEffect(() => {
-    api.get<Subcontractor[]>('/subcontractors').then(setSubs).catch(() => {});
-  }, []);
 
   const weeks = useMemo(() => {
     const out: Date[] = [];

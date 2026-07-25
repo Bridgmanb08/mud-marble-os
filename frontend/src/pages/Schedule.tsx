@@ -4,7 +4,8 @@ import { api } from '../api/client';
 import { useToast } from '../components/ui/Toast';
 import { fmtD } from '../lib/format';
 import { colorForProject } from '../lib/jobColors';
-import type { Project, Subcontractor, Task } from '../types';
+import { useReferenceData } from '../reference-data/ReferenceDataContext';
+import type { Project, Task } from '../types';
 import { TaskDetailDrawer } from '../components/tasks/TaskDetailDrawer';
 import { SubcontractorScheduleGrid } from '../components/schedule/SubcontractorScheduleGrid';
 import { WeekScrollCalendar } from '../components/schedule/WeekScrollCalendar';
@@ -13,7 +14,8 @@ import { MasterJobFilter } from '../components/schedule/MasterJobFilter';
 export default function Schedule() {
   const [tasks, setTasks] = useState<Task[] | null>(null);
   const [projects, setProjects] = useState<Project[]>([]);
-  const [subcontractors, setSubcontractors] = useState<Subcontractor[]>([]);
+  const { subcontractors: subcontractorsData } = useReferenceData();
+  const subcontractors = subcontractorsData ?? [];
   const [selectedProjectIds, setSelectedProjectIds] = useState<Set<string> | null>(null);
   const [subFilter, setSubFilter] = useState('');
   const [view, setView] = useState<'calendar' | 'list' | 'subs'>('calendar');
@@ -38,7 +40,6 @@ export default function Schedule() {
         setSelectedProjectIds((prev) => prev ?? new Set(rows.map((p) => p.id)));
       })
       .catch(() => {});
-    api.get<Subcontractor[]>('/subcontractors').then(setSubcontractors).catch(() => {});
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 

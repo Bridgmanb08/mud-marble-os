@@ -24,7 +24,7 @@ from ..schemas.estimates import (
     LineItemReference,
     LineItemUpdate,
 )
-from ..supabase_client import db_delete, db_get, db_patch, db_post
+from ..supabase_client import db_delete, db_get, db_patch, db_post, db_post_many
 
 router = APIRouter(prefix="/estimates", tags=["estimates"])
 
@@ -187,28 +187,31 @@ async def duplicate_estimate(estimate_id: str, _: CurrentUser = Depends(get_curr
     )[0]
 
     items = await db_get("estimate_line_items", f"?estimate_id=eq.{estimate_id}&order=sort_order.asc")
-    for item in items:
-        await db_post(
+    if items:
+        await db_post_many(
             "estimate_line_items",
-            {
-                "estimate_id": new_estimate["id"],
-                "cost_code_id": item.get("cost_code_id"),
-                "group_name": item.get("group_name"),
-                "bucket": item.get("bucket"),
-                "title": item.get("title"),
-                "description": item.get("description"),
-                "quantity": item.get("quantity"),
-                "unit": item.get("unit"),
-                "unit_cost": item.get("unit_cost"),
-                "cost_type": item.get("cost_type"),
-                "builder_cost": item.get("builder_cost"),
-                "markup_type": item.get("markup_type"),
-                "markup_value": item.get("markup_value"),
-                "owner_price": item.get("owner_price"),
-                "notes_internal": item.get("notes_internal"),
-                "notes_external": item.get("notes_external"),
-                "sort_order": item.get("sort_order"),
-            },
+            [
+                {
+                    "estimate_id": new_estimate["id"],
+                    "cost_code_id": item.get("cost_code_id"),
+                    "group_name": item.get("group_name"),
+                    "bucket": item.get("bucket"),
+                    "title": item.get("title"),
+                    "description": item.get("description"),
+                    "quantity": item.get("quantity"),
+                    "unit": item.get("unit"),
+                    "unit_cost": item.get("unit_cost"),
+                    "cost_type": item.get("cost_type"),
+                    "builder_cost": item.get("builder_cost"),
+                    "markup_type": item.get("markup_type"),
+                    "markup_value": item.get("markup_value"),
+                    "owner_price": item.get("owner_price"),
+                    "notes_internal": item.get("notes_internal"),
+                    "notes_external": item.get("notes_external"),
+                    "sort_order": item.get("sort_order"),
+                }
+                for item in items
+            ],
         )
     await _recalc_estimate_totals(new_estimate["id"])
     full = await db_get("estimates", f"?id=eq.{new_estimate['id']}&select=*,projects(name)")

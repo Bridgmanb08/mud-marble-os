@@ -1,90 +1,105 @@
+import { lazy, Suspense } from 'react';
 import { Routes, Route } from 'react-router-dom';
 import { AuthProvider } from './auth/AuthContext';
 import { ToastProvider } from './components/ui/Toast';
 import { AppLayout } from './components/layout/AppLayout';
 import { ProtectedRoute } from './components/layout/ProtectedRoute';
-import Login from './pages/Login';
-import Dashboard from './pages/Dashboard';
-import Leads from './pages/Leads';
-import Projects from './pages/Projects';
-import ProjectDetail from './pages/ProjectDetail';
-import Clients from './pages/Clients';
-import ClientDetail from './pages/ClientDetail';
-import Estimates from './pages/Estimates';
-import EstimateWorksheet from './pages/EstimateWorksheet';
-import Invoices from './pages/Invoices';
-import ChangeOrders from './pages/ChangeOrders';
-import InHouse from './pages/InHouse';
-import InHouseWorkshop from './pages/InHouseWorkshop';
-import Tasks from './pages/Tasks';
-import Schedule from './pages/Schedule';
-import Subcontractors from './pages/Subcontractors';
-import SubIntelligence from './pages/SubIntelligence';
-import Settings from './pages/Settings';
-import Reports from './pages/Reports';
-import Users from './pages/Users';
-import Review from './pages/Review';
-import Messages from './pages/Messages';
+import { ReferenceDataProvider } from './reference-data/ReferenceDataContext';
 import { AdminRoute } from './components/layout/AdminRoute';
+
+const Login = lazy(() => import('./pages/Login'));
+const Dashboard = lazy(() => import('./pages/Dashboard'));
+const Leads = lazy(() => import('./pages/Leads'));
+const Projects = lazy(() => import('./pages/Projects'));
+const ProjectDetail = lazy(() => import('./pages/ProjectDetail'));
+const Clients = lazy(() => import('./pages/Clients'));
+const ClientDetail = lazy(() => import('./pages/ClientDetail'));
+const Estimates = lazy(() => import('./pages/Estimates'));
+const EstimateWorksheet = lazy(() => import('./pages/EstimateWorksheet'));
+const Invoices = lazy(() => import('./pages/Invoices'));
+const ChangeOrders = lazy(() => import('./pages/ChangeOrders'));
+const InHouse = lazy(() => import('./pages/InHouse'));
+const InHouseWorkshop = lazy(() => import('./pages/InHouseWorkshop'));
+const Tasks = lazy(() => import('./pages/Tasks'));
+const Schedule = lazy(() => import('./pages/Schedule'));
+const Subcontractors = lazy(() => import('./pages/Subcontractors'));
+const SubIntelligence = lazy(() => import('./pages/SubIntelligence'));
+const Settings = lazy(() => import('./pages/Settings'));
+const Reports = lazy(() => import('./pages/Reports'));
+const Users = lazy(() => import('./pages/Users'));
+const Review = lazy(() => import('./pages/Review'));
+const Messages = lazy(() => import('./pages/Messages'));
+
+function PageLoader() {
+  return (
+    <div className="empty" style={{ margin: '60px auto' }}>
+      <div className="empty-t">Loading…</div>
+    </div>
+  );
+}
 
 export default function App() {
   return (
     <AuthProvider>
       <ToastProvider>
-        <Routes>
-          <Route path="/login" element={<Login />} />
-          <Route
-            path="/"
-            element={
-              <ProtectedRoute>
-                <AppLayout />
-              </ProtectedRoute>
-            }
-          >
-            <Route index element={<Dashboard />} />
-            <Route path="projects" element={<Projects />} />
-            <Route path="projects/:id" element={<ProjectDetail />} />
-            <Route path="leads" element={<Leads />} />
-            <Route path="clients" element={<Clients />} />
-            <Route path="clients/:id" element={<ClientDetail />} />
-            <Route path="estimates" element={<Estimates />} />
-            <Route path="estimates/:id" element={<EstimateWorksheet />} />
-            <Route path="invoices" element={<Invoices />} />
-            <Route path="change-orders" element={<ChangeOrders />} />
-            <Route path="inhouse" element={<InHouse />} />
-            <Route path="inhouse/:id" element={<InHouseWorkshop />} />
-            <Route path="tasks" element={<Tasks />} />
-            <Route path="schedule" element={<Schedule />} />
-            <Route path="subcontractors" element={<Subcontractors />} />
-            <Route path="sub-intelligence" element={<SubIntelligence />} />
-            <Route path="settings" element={<Settings />} />
-            <Route path="reports" element={<Reports />} />
+        <Suspense fallback={<PageLoader />}>
+          <Routes>
+            <Route path="/login" element={<Login />} />
             <Route
-              path="users"
+              path="/"
               element={
-                <AdminRoute>
-                  <Users />
-                </AdminRoute>
+                <ProtectedRoute>
+                  <ReferenceDataProvider>
+                    <AppLayout />
+                  </ReferenceDataProvider>
+                </ProtectedRoute>
               }
-            />
-            <Route
-              path="review"
-              element={
-                <AdminRoute>
-                  <Review />
-                </AdminRoute>
-              }
-            />
-            <Route
-              path="messages"
-              element={
-                <AdminRoute>
-                  <Messages />
-                </AdminRoute>
-              }
-            />
-          </Route>
-        </Routes>
+            >
+              <Route index element={<Dashboard />} />
+              <Route path="projects" element={<Projects />} />
+              <Route path="projects/:id" element={<ProjectDetail />} />
+              <Route path="leads" element={<Leads />} />
+              <Route path="clients" element={<Clients />} />
+              <Route path="clients/:id" element={<ClientDetail />} />
+              <Route path="estimates" element={<Estimates />} />
+              <Route path="estimates/:id" element={<EstimateWorksheet />} />
+              <Route path="invoices" element={<Invoices />} />
+              <Route path="change-orders" element={<ChangeOrders />} />
+              <Route path="inhouse" element={<InHouse />} />
+              <Route path="inhouse/:id" element={<InHouseWorkshop />} />
+              <Route path="tasks" element={<Tasks />} />
+              <Route path="schedule" element={<Schedule />} />
+              <Route path="subcontractors" element={<Subcontractors />} />
+              <Route path="sub-intelligence" element={<SubIntelligence />} />
+              <Route path="settings" element={<Settings />} />
+              <Route path="reports" element={<Reports />} />
+              <Route
+                path="users"
+                element={
+                  <AdminRoute>
+                    <Users />
+                  </AdminRoute>
+                }
+              />
+              <Route
+                path="review"
+                element={
+                  <AdminRoute>
+                    <Review />
+                  </AdminRoute>
+                }
+              />
+              <Route
+                path="messages"
+                element={
+                  <AdminRoute>
+                    <Messages />
+                  </AdminRoute>
+                }
+              />
+            </Route>
+          </Routes>
+        </Suspense>
       </ToastProvider>
     </AuthProvider>
   );
