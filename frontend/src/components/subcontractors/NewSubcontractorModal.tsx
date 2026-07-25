@@ -1,9 +1,10 @@
-import { useState, type FormEvent } from 'react';
+import { useEffect, useState, type FormEvent } from 'react';
 import { api, ApiError } from '../../api/client';
 import { Modal } from '../ui/Modal';
 import { openDatePicker } from '../../lib/datePicker';
 import { SubcontractorFilesSection } from './SubcontractorFilesSection';
-import type { Subcontractor } from '../../types';
+import { EntityTagList } from '../tags/EntityTagList';
+import type { PersonTag, Subcontractor } from '../../types';
 
 interface NewSubcontractorModalProps {
   onClose: () => void;
@@ -25,6 +26,11 @@ export function NewSubcontractorModal({ onClose, onSaved, sub }: NewSubcontracto
   const [notes, setNotes] = useState(sub?.notes || '');
   const [error, setError] = useState('');
   const [saving, setSaving] = useState(false);
+  const [allTags, setAllTags] = useState<PersonTag[]>([]);
+
+  useEffect(() => {
+    api.get<PersonTag[]>('/person-tags').then(setAllTags).catch(() => {});
+  }, []);
 
   async function handleSubmit(e: FormEvent) {
     e.preventDefault();
@@ -113,6 +119,13 @@ export function NewSubcontractorModal({ onClose, onSaved, sub }: NewSubcontracto
             <input type="checkbox" checked={w9OnFile} onChange={(e) => setW9OnFile(e.target.checked)} /> W9 on file
           </label>
         </div>
+
+        {sub && (
+          <div className="fg">
+            <label className="fl">Tags</label>
+            <EntityTagList entityType="subcontractor" entityId={sub.id} allTags={allTags} />
+          </div>
+        )}
 
         {sub && <SubcontractorFilesSection subcontractorId={sub.id} />}
 

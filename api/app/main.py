@@ -16,6 +16,7 @@ from .routers import (
     leads,
     messages,
     notifications,
+    person_tags,
     project_subcontractor_items,
     projects,
     quick_reminders,
@@ -69,3 +70,4 @@ app.include_router(messages.router, prefix="/api")
 app.include_router(reports.router, prefix="/api")
 app.include_router(quick_reminders.router, prefix="/api")
 app.include_router(twilio_sms.router, prefix="/api")
+app.include_router(person_tags.router, prefix="/api")
