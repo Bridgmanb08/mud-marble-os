@@ -29,7 +29,7 @@ export default function Login() {
     <div className="login-wrap">
       <form className="login-card" onSubmit={handleSubmit}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 24 }}>
-          <div className="logo-mark">M&amp;M</div>
+          <img src="/logo.png" alt="Mud & Marble" className="logo-mark" />
           <div>
             <div style={{ fontSize: 14, fontWeight: 600 }}>Mud &amp; Marble</div>
             <div style={{ fontSize: 12, color: 'var(--t2)' }}>OS</div>

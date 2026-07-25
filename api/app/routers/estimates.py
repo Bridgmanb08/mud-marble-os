@@ -9,8 +9,9 @@ from reportlab.lib import colors
 from reportlab.lib.pagesizes import letter
 from reportlab.lib.styles import ParagraphStyle, getSampleStyleSheet
 from reportlab.lib.units import inch
-from reportlab.platypus import Paragraph, SimpleDocTemplate, Spacer, Table, TableStyle
+from reportlab.platypus import Image, Paragraph, SimpleDocTemplate, Spacer, Table, TableStyle
 
+from .. import branding
 from ..deps import CurrentUser, get_current_user
 from ..estimate_defaults import DEFAULT_CLOSING_TEXT
 from ..estimate_text_defaults_store import get_or_create_estimate_text_defaults
@@ -299,8 +300,23 @@ async def export_estimate_pdf(estimate_id: str, _: CurrentUser = Depends(get_cur
     body = ParagraphStyle("body", parent=styles["Normal"], fontSize=9.5, leading=13)
     small = ParagraphStyle("small", parent=styles["Normal"], fontSize=8.5, textColor=colors.grey)
 
+    letterhead = Table(
+        [[Image(branding.LOGO_PATH, width=0.5 * inch, height=0.5 * inch), Paragraph("Mud &amp; Marble", h1)]],
+        colWidths=[0.6 * inch, None],
+    )
+    letterhead.setStyle(
+        TableStyle(
+            [
+                ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
+                ("LEFTPADDING", (0, 0), (-1, -1), 0),
+                ("TOPPADDING", (0, 0), (-1, -1), 0),
+                ("BOTTOMPADDING", (0, 0), (-1, -1), 0),
+            ]
+        )
+    )
+
     elements = [
-        Paragraph("Mud &amp; Marble", h1),
+        letterhead,
         Paragraph(
             estimate.get("title") or f"Proposal for {client_name or project_name}",
             ParagraphStyle("subtitle", parent=styles["Normal"], fontSize=12, spaceAfter=4),
@@ -337,8 +353,8 @@ async def export_estimate_pdf(estimate_id: str, _: CurrentUser = Depends(get_cur
             TableStyle(
                 [
                     ("FONTSIZE", (0, 0), (-1, -1), 8.5),
-                    ("BACKGROUND", (0, 0), (-1, 0), colors.whitesmoke),
-                    ("LINEBELOW", (0, 0), (-1, 0), 0.75, colors.grey),
+                    ("BACKGROUND", (0, 0), (-1, 0), branding.BRAND_CREAM),
+                    ("LINEBELOW", (0, 0), (-1, 0), 0.75, branding.BRAND_BROWN),
                     ("LINEBELOW", (0, 1), (-1, -1), 0.25, colors.lightgrey),
                     ("VALIGN", (0, 0), (-1, -1), "TOP"),
                     ("TOPPADDING", (0, 0), (-1, -1), 4),
