@@ -2,6 +2,8 @@ from typing import Optional
 
 from pydantic import BaseModel
 
+from .sms_contacts import SmsContactBrief
+
 
 class ProjectCreate(BaseModel):
     name: str
@@ -68,6 +70,7 @@ class ProjectOut(BaseModel):
     pending_invoices_manual: Optional[float] = None
     created_at: str
     clients: Optional[ClientBrief] = None
+    sms_contacts: list[SmsContactBrief] = []
 
 
 class FinancialSummaryOut(BaseModel):

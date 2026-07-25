@@ -207,6 +207,25 @@ export default function ProjectDetail() {
                 <span className="ik">Contract value</span>
                 <span className="iv">{fmt(project.contract_value)}</span>
               </div>
+              {project.sms_contacts.length > 0 && (
+                <div className="ir">
+                  <span className="ik">Texting contacts</span>
+                  <span className="iv">
+                    <button
+                      type="button"
+                      className="btn-reset"
+                      style={{ display: 'flex', flexWrap: 'wrap', gap: 6, cursor: 'pointer' }}
+                      onClick={() => navigate('/messages')}
+                    >
+                      {project.sms_contacts.map((c) => (
+                        <span key={c.id} className="badge bg-blue">
+                          {c.name || c.phone_number}
+                        </span>
+                      ))}
+                    </button>
+                  </span>
+                </div>
+              )}
             </div>
             <div>
               <div className="ibt">Internal notes</div>

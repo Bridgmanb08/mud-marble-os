@@ -1,8 +1,17 @@
 import { useEffect, useRef, useState, type FormEvent } from 'react';
-import { IconSend, IconPhoto, IconVideo, IconFileTypePdf, IconFile, IconMessages, IconAlertCircle } from '@tabler/icons-react';
+import { IconSend, IconPhoto, IconVideo, IconFileTypePdf, IconFile, IconMessages, IconAlertCircle, IconPencil } from '@tabler/icons-react';
 import { api, ApiError } from '../api/client';
 import { useToast } from '../components/ui/Toast';
-import type { Message, MessageThread, InboundMedia, Project } from '../types';
+import type { Message, MessageThread, InboundMedia, Project, Subcontractor } from '../types';
+
+const DELIVERY_LABELS: Record<string, string> = {
+  queued: 'Queued',
+  sending: 'Sending',
+  sent: 'Sent',
+  delivered: 'Delivered',
+  undelivered: 'Undelivered',
+  failed: 'Failed',
+};
 
 function FileIcon({ type }: { type: string | null }) {
   if (type === 'photo') return <IconPhoto size={20} />;
@@ -74,10 +83,19 @@ function MessageBubble({ message }: { message: Message }) {
             <IconAlertCircle size={12} /> {message.error}
           </div>
         )}
+        {outbound && (message.status === 'undelivered' || message.status === 'failed') && (
+          <div style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: 11, marginTop: 6, color: '#fff' }}>
+            <IconAlertCircle size={12} /> {DELIVERY_LABELS[message.status] || message.status}
+            {message.error_code ? ` (error ${message.error_code})` : ''}
+          </div>
+        )}
         <div style={{ fontSize: 10, marginTop: 4, opacity: 0.7 }}>
           {fmtTime(message.created_at)}
           {message.project_name ? ` · ${message.project_name}` : ''}
           {outbound && message.sent_by_name ? ` · ${message.sent_by_name}` : ''}
+          {outbound && message.status && message.status !== 'undelivered' && message.status !== 'failed'
+            ? ` · ${DELIVERY_LABELS[message.status] || message.status}`
+            : ''}
         </div>
       </div>
     </div>
@@ -148,11 +166,91 @@ function PendingMedia({ phone, projects, onAssigned }: { phone: string; projects
   );
 }
 
+function ContactEditor({
+  thread,
+  subcontractors,
+  projects,
+  onClose,
+  onSaved,
+}: {
+  thread: MessageThread;
+  subcontractors: Subcontractor[];
+  projects: Project[];
+  onClose: () => void;
+  onSaved: () => void;
+}) {
+  const [name, setName] = useState(thread.contact_name || '');
+  const [subcontractorId, setSubcontractorId] = useState(thread.linked_subcontractor_id || '');
+  const [projectId, setProjectId] = useState(thread.linked_project_id || '');
+  const [saving, setSaving] = useState(false);
+  const toast = useToast();
+
+  async function handleSave() {
+    setSaving(true);
+    try {
+      await api.put(`/messages/threads/${encodeURIComponent(thread.phone_number)}/contact`, {
+        name: name.trim() || null,
+        subcontractor_id: subcontractorId || null,
+        project_id: projectId || null,
+      });
+      toast('Contact updated');
+      onSaved();
+    } catch (e) {
+      toast(e instanceof ApiError ? e.message : 'Failed to save contact', true);
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  return (
+    <div className="card" style={{ padding: 12, marginBottom: 10, background: 'var(--bg)' }}>
+      <div className="fr">
+        <div className="fg">
+          <label className="fl">Contact name</label>
+          <input className="fi" value={name} onChange={(e) => setName(e.target.value)} placeholder={thread.phone_number} />
+        </div>
+        <div className="fg">
+          <label className="fl">Link to subcontractor</label>
+          <select className="fi" value={subcontractorId} onChange={(e) => setSubcontractorId(e.target.value)}>
+            <option value="">None</option>
+            {subcontractors.map((s) => (
+              <option key={s.id} value={s.id}>
+                {s.company_name}
+              </option>
+            ))}
+          </select>
+        </div>
+        <div className="fg">
+          <label className="fl">Link to project</label>
+          <select className="fi" value={projectId} onChange={(e) => setProjectId(e.target.value)}>
+            <option value="">None</option>
+            {projects.map((p) => (
+              <option key={p.id} value={p.id}>
+                {p.name}
+              </option>
+            ))}
+          </select>
+        </div>
+      </div>
+      <div className="ma">
+        <button type="button" className="btn btn-sm" onClick={onClose}>
+          Cancel
+        </button>
+        <button type="button" className="btn btn-p btn-sm" onClick={handleSave} disabled={saving}>
+          {saving ? 'Saving…' : 'Save'}
+        </button>
+      </div>
+    </div>
+  );
+}
+
 export default function Messages() {
   const [threads, setThreads] = useState<MessageThread[] | null>(null);
   const [selectedPhone, setSelectedPhone] = useState<string | null>(null);
   const [thread, setThread] = useState<Message[] | null>(null);
   const [projects, setProjects] = useState<Project[]>([]);
+  const [subcontractors, setSubcontractors] = useState<Subcontractor[]>([]);
+  const [editingContact, setEditingContact] = useState(false);
   const [draft, setDraft] = useState('');
   const [sending, setSending] = useState(false);
   const toast = useToast();
@@ -178,11 +276,13 @@ export default function Messages() {
   useEffect(() => {
     loadThreads();
     api.get<Project[]>('/projects').then(setProjects).catch(() => {});
+    api.get<Subcontractor[]>('/subcontractors').then(setSubcontractors).catch(() => {});
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   useEffect(() => {
     if (selectedPhone) loadThread(selectedPhone);
+    setEditingContact(false);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedPhone]);
 
@@ -256,11 +356,16 @@ export default function Messages() {
                   {t.last_direction === 'outbound' ? 'You: ' : ''}
                   {t.last_body || '—'}
                 </div>
-                {t.pending_media_count > 0 && (
-                  <span className="badge bg-amber" style={{ marginTop: 6, display: 'inline-block' }}>
-                    {t.pending_media_count} to file
-                  </span>
-                )}
+                <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginTop: 6 }}>
+                  {t.pending_media_count > 0 && (
+                    <span className="badge bg-amber">{t.pending_media_count} to file</span>
+                  )}
+                  {t.linked_project_id && (
+                    <span className="badge bg-blue">
+                      {projects.find((p) => p.id === t.linked_project_id)?.name.split('|')[0].trim() || 'Project linked'}
+                    </span>
+                  )}
+                </div>
               </div>
             ))
           )}
@@ -273,10 +378,46 @@ export default function Messages() {
             </div>
           ) : (
             <>
-              <div style={{ fontWeight: 600, fontSize: 14, marginBottom: 10, paddingBottom: 10, borderBottom: '1px solid var(--border)' }}>
-                {threads?.find((t) => t.phone_number === selectedPhone)?.contact_name || selectedPhone}
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10, paddingBottom: 10, borderBottom: '1px solid var(--border)' }}>
+                <div>
+                  <div style={{ fontWeight: 600, fontSize: 14 }}>
+                    {threads?.find((t) => t.phone_number === selectedPhone)?.contact_name || selectedPhone}
+                  </div>
+                  {threads?.find((t) => t.phone_number === selectedPhone)?.contact_name && (
+                    <div style={{ fontSize: 11, color: 'var(--t3)' }}>{selectedPhone}</div>
+                  )}
+                </div>
+                <button type="button" className="btn btn-sm" onClick={() => setEditingContact((v) => !v)}>
+                  <IconPencil size={13} /> {editingContact ? 'Close' : 'Edit contact'}
+                </button>
               </div>
               <div style={{ flex: 1, overflowY: 'auto', paddingRight: 4 }}>
+                {editingContact && (
+                  <ContactEditor
+                    thread={
+                      threads?.find((t) => t.phone_number === selectedPhone) || {
+                        phone_number: selectedPhone,
+                        contact_name: null,
+                        contact_trade: null,
+                        contact_id: null,
+                        linked_subcontractor_id: null,
+                        linked_project_id: null,
+                        last_body: null,
+                        last_direction: 'inbound',
+                        last_created_at: '',
+                        message_count: 0,
+                        pending_media_count: 0,
+                      }
+                    }
+                    subcontractors={subcontractors}
+                    projects={projects}
+                    onClose={() => setEditingContact(false)}
+                    onSaved={() => {
+                      setEditingContact(false);
+                      loadThreads();
+                    }}
+                  />
+                )}
                 <PendingMedia phone={selectedPhone} projects={projects} onAssigned={loadThreads} />
                 {thread === null ? (
                   <div className="empty-s">Loading…</div>

@@ -260,3 +260,49 @@ async def dismiss_inbound_media(item_id: str, _: CurrentUser = Depends(require_a
         raise HTTPException(status_code=404, detail="Not found")
     await db_patch("inbound_media", item_id, {"status": "resolved"})
     return {"ok": True}
+
+
+async def _record_status(message_sid: str, status: str, error_code: Optional[str], to_phone: str) -> None:
+    if message_sid:
+        existing = await db_get("sms_messages", f"?message_sid=eq.{message_sid}&limit=1")
+        if existing:
+            await db_patch("sms_messages", existing[0]["id"], {"status": status, "error_code": error_code})
+            return
+    # TwiML auto-replies don't have a MessageSid yet at log time (Twilio assigns it
+    # after processing our TwiML), so correlate this callback to the most recent
+    # not-yet-tracked outbound row for the same phone number instead.
+    phone_q = urllib.parse.quote(to_phone, safe="")
+    candidates = await db_get(
+        "sms_messages",
+        f"?phone_number=eq.{phone_q}&direction=eq.outbound&message_sid=is.null&status=is.null&order=created_at.desc&limit=1",
+    )
+    if candidates:
+        await db_patch(
+            "sms_messages",
+            candidates[0]["id"],
+            {"message_sid": message_sid or None, "status": status, "error_code": error_code},
+        )
+
+
+@router.post("/twilio/status")
+async def twilio_status_webhook(request: Request):
+    form = await request.form()
+    params = {k: str(v) for k, v in form.items()}
+
+    signature = request.headers.get("X-Twilio-Signature", "")
+    url = f"{settings.public_base_url.rstrip('/')}/api/twilio/status" if settings.public_base_url else str(request.url)
+    if settings.twilio_auth_token and not verify_signature(url, params, signature):
+        logger.warning("Rejected Twilio status callback: signature mismatch")
+        raise HTTPException(status_code=403, detail="Invalid Twilio signature")
+
+    message_sid = params.get("MessageSid", "")
+    message_status = params.get("MessageStatus", "")
+    error_code = params.get("ErrorCode") or None
+    to_phone = params.get("To", "")
+    print(f"[twilio_status] sid={message_sid} status={message_status} error={error_code} to={to_phone}")
+
+    try:
+        await _record_status(message_sid, message_status, error_code, to_phone)
+    except Exception:
+        logger.exception("Failed to record Twilio status callback (sid=%s)", message_sid)
+    return Response(status_code=204)

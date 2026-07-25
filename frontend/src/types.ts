@@ -100,6 +100,13 @@ export interface Subcontractor {
   notes: string | null;
   is_active: boolean;
   created_at: string;
+  sms_contacts: SmsContactBrief[];
+}
+
+export interface SmsContactBrief {
+  id: string;
+  phone_number: string;
+  name: string | null;
 }
 
 export interface ChangeOrderTypeBreakdown {
@@ -320,6 +327,7 @@ export interface Project {
   pending_invoices_manual: number | null;
   created_at: string;
   clients: ClientBrief | null;
+  sms_contacts: SmsContactBrief[];
 }
 
 export interface FinancialSummary {
@@ -569,6 +577,9 @@ export interface MessageThread {
   phone_number: string;
   contact_name: string | null;
   contact_trade: string | null;
+  contact_id: string | null;
+  linked_subcontractor_id: string | null;
+  linked_project_id: string | null;
   last_body: string | null;
   last_direction: 'inbound' | 'outbound';
   last_created_at: string;
@@ -582,6 +593,8 @@ export interface Message {
   direction: 'inbound' | 'outbound';
   body: string | null;
   message_sid: string | null;
+  status: string | null;
+  error_code: string | null;
   project_id: string | null;
   project_name: string | null;
   sent_by: string | null;
