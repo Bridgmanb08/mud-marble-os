@@ -6,6 +6,7 @@ import { useToast } from '../components/ui/Toast';
 import { fmt } from '../lib/format';
 import type { Project } from '../types';
 import { NewProjectModal } from '../components/projects/NewProjectModal';
+import { Skeleton } from '../components/ui/Skeleton';
 
 const STATUS_BADGE: Record<string, string> = {
   active: 'bg-green',
@@ -96,9 +97,14 @@ export default function Projects() {
       </div>
 
       {projects === null ? (
-        <div className="empty">
-          <div className="empty-t">Loading…</div>
-        </div>
+        Array.from({ length: 5 }).map((_, i) => (
+          <div key={i} className="pc">
+            <div className="pi">
+              <Skeleton width={180} height={13} style={{ marginBottom: 6 }} />
+              <Skeleton width={120} height={12} />
+            </div>
+          </div>
+        ))
       ) : filtered.length === 0 ? (
         <div className="empty">
           <IconBuilding size={32} color="var(--t3)" style={{ display: 'block', margin: '0 auto 12px' }} />

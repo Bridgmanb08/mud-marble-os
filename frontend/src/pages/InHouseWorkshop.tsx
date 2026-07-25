@@ -6,7 +6,8 @@ import { useToast } from '../components/ui/Toast';
 import { fmt, fmtD } from '../lib/format';
 import { NewTransactionModal } from '../components/inhouse/NewTransactionModal';
 import { ProjectSubcontractorCard } from '../components/inhouse/ProjectSubcontractorCard';
-import type { CostCode, EstimateLineItem, FinancialSummary, Project, ProjectSubItem, Subcontractor, Transaction } from '../types';
+import { useReferenceData } from '../reference-data/ReferenceDataContext';
+import type { CostCode, EstimateLineItem, FinancialSummary, Project, ProjectSubItem, Transaction } from '../types';
 
 const TABS = ['Overview', 'Transactions', 'Subcontractors'];
 
@@ -67,8 +68,9 @@ export default function InHouseWorkshop() {
   const [transactions, setTransactions] = useState<Transaction[]>([]);
   const [subItems, setSubItems] = useState<ProjectSubItem[]>([]);
   const [lineItems, setLineItems] = useState<EstimateLineItem[]>([]);
-  const [costCodes, setCostCodes] = useState<CostCode[]>([]);
-  const [subcontractors, setSubcontractors] = useState<Subcontractor[]>([]);
+  const { costCodes: costCodesData, subcontractors: subcontractorsData } = useReferenceData();
+  const costCodes = costCodesData ?? [];
+  const subcontractors = subcontractorsData ?? [];
   const [tab, setTab] = useState('Overview');
 
   const [checkingBalance, setCheckingBalance] = useState('');
@@ -135,8 +137,6 @@ export default function InHouseWorkshop() {
     loadTransactions();
     loadSubItems();
     loadLineItems();
-    api.get<CostCode[]>('/transactions/cost-codes').then(setCostCodes).catch(() => {});
-    api.get<Subcontractor[]>('/subcontractors').then(setSubcontractors).catch(() => {});
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [id]);
 

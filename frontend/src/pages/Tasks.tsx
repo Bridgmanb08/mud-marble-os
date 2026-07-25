@@ -5,6 +5,7 @@ import { api } from '../api/client';
 import { useAuth } from '../auth/AuthContext';
 import { useToast } from '../components/ui/Toast';
 import { Modal } from '../components/ui/Modal';
+import { Skeleton } from '../components/ui/Skeleton';
 import type { BoardView, Task } from '../types';
 import { KanbanBoard } from '../components/tasks/KanbanBoard';
 import { TableView, type TaskGroupBy } from '../components/tasks/TableView';
@@ -304,8 +305,14 @@ export default function Tasks() {
           </div>
 
           {tasks === null ? (
-            <div className="empty">
-              <div className="empty-t">Loading…</div>
+            <div className="card" style={{ padding: 4 }}>
+              {Array.from({ length: 6 }).map((_, i) => (
+                <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '12px 14px', borderBottom: i < 5 ? '1px solid var(--border)' : undefined }}>
+                  <Skeleton width={16} height={16} style={{ borderRadius: '50%', flexShrink: 0 }} />
+                  <Skeleton width="40%" height={13} />
+                  <Skeleton width={70} height={12} style={{ marginLeft: 'auto' }} />
+                </div>
+              ))}
             </div>
           ) : view === 'kanban' ? (
             <KanbanBoard tasks={filtered} onTaskClick={openEdit} onAddTask={openNew} onChanged={load} filtersActive={filtersActive} />

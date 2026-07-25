@@ -217,18 +217,18 @@ export default function EstimateWorksheet() {
   async function load() {
     if (!id) return;
     try {
-      const est = await api.get<Estimate>(`/estimates/${id}`);
+      const [est, itemRows] = await Promise.all([
+        api.get<Estimate>(`/estimates/${id}`),
+        api.get<EstimateLineItem[]>(`/estimates/${id}/items`),
+      ]);
       setEstimate(est);
       setTitle(est.title || '');
       setApprovalDeadline(est.approval_deadline?.slice(0, 10) || '');
       setNotesInternal(est.notes_internal || '');
       setIntroductoryText(est.introductory_text || '');
       setClosingText(est.closing_text || '');
-      const [itemRows, siblingRows] = await Promise.all([
-        api.get<EstimateLineItem[]>(`/estimates/${id}/items`),
-        api.get<Estimate[]>(`/estimates?project_id=${est.project_id}`),
-      ]);
       setItems(itemRows);
+      const siblingRows = await api.get<Estimate[]>(`/estimates?project_id=${est.project_id}`);
       setSiblings(siblingRows);
     } catch (e) {
       toast(e instanceof Error ? e.message : 'Failed to load estimate', true);

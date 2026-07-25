@@ -1,7 +1,11 @@
+from typing import Optional
+
 import httpx
 from fastapi import HTTPException
 
 from .config import settings
+
+_client: Optional[httpx.AsyncClient] = None
 
 
 def _headers() -> dict:
@@ -17,10 +21,21 @@ def _base_url() -> str:
     return f"{settings.supabase_url}/rest/v1"
 
 
+def _get_client() -> httpx.AsyncClient:
+    """Reuses a single AsyncClient across requests within a warm serverless
+    container instead of paying fresh-connection overhead on every call --
+    falls back to creating a new one if the previous one got closed out from
+    under us (e.g. an event-loop change across invocations)."""
+    global _client
+    if _client is None or _client.is_closed:
+        _client = httpx.AsyncClient(timeout=15)
+    return _client
+
+
 async def _request(method: str, url: str, **kwargs) -> httpx.Response:
     try:
-        async with httpx.AsyncClient(timeout=15) as client:
-            r = await client.request(method, url, headers=_headers(), **kwargs)
+        client = _get_client()
+        r = await client.request(method, url, headers=_headers(), **kwargs)
     except httpx.HTTPError as exc:
         raise HTTPException(status_code=502, detail=f"Could not reach Supabase: {exc}") from exc
     if not r.is_success:
@@ -34,6 +49,12 @@ async def db_get(table: str, query: str = "") -> list[dict]:
 
 
 async def db_post(table: str, data: dict) -> list[dict]:
+    r = await _request("POST", f"{_base_url()}/{table}", json=data)
+    return r.json()
+
+
+async def db_post_many(table: str, data: list[dict]) -> list[dict]:
+    """Inserts multiple rows in a single request instead of one POST per row."""
     r = await _request("POST", f"{_base_url()}/{table}", json=data)
     return r.json()
 

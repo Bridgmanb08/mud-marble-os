@@ -7,6 +7,7 @@ import { Modal } from '../components/ui/Modal';
 import { NewSubcontractorModal } from '../components/subcontractors/NewSubcontractorModal';
 import { RichTextEditor } from '../components/ui/RichTextEditor';
 import { TagChip } from '../components/tags/TagChip';
+import { useReferenceData } from '../reference-data/ReferenceDataContext';
 import type { CostCode, EstimateTextDefaults, PersonTag, Subcontractor } from '../types';
 
 function CostCodeModal({ onClose, onSaved }: { onClose: () => void; onSaved: () => void }) {
@@ -137,6 +138,7 @@ function EditCostCodeModal({ costCode, onClose, onSaved }: { costCode: CostCode;
 
 function CostCodesTab() {
   const toast = useToast();
+  const { refreshCostCodes } = useReferenceData();
   const [costCodes, setCostCodes] = useState<CostCode[] | null>(null);
   const [showNew, setShowNew] = useState(false);
   const [editing, setEditing] = useState<CostCode | undefined>(undefined);
@@ -160,6 +162,7 @@ function CostCodesTab() {
       await api.patch(`/cost-codes/${cc.id}`, { is_active: !cc.is_active });
       toast(cc.is_active ? 'Cost code deactivated' : 'Cost code reactivated');
       load();
+      refreshCostCodes();
     } catch (e) {
       toast(e instanceof Error ? e.message : 'Failed to update cost code', true);
     }
@@ -224,6 +227,7 @@ function CostCodesTab() {
             setShowNew(false);
             toast('Cost code added');
             load();
+            refreshCostCodes();
           }}
         />
       )}
@@ -236,6 +240,7 @@ function CostCodesTab() {
             setEditing(undefined);
             toast('Cost code updated');
             load();
+            refreshCostCodes();
           }}
         />
       )}
@@ -245,23 +250,9 @@ function CostCodesTab() {
 
 function SubcontractorsTab() {
   const toast = useToast();
-  const [subs, setSubs] = useState<Subcontractor[] | null>(null);
+  const { subcontractors: subs, refreshSubcontractors } = useReferenceData();
   const [showNew, setShowNew] = useState(false);
   const [editing, setEditing] = useState<Subcontractor | undefined>(undefined);
-
-  async function load() {
-    try {
-      setSubs(await api.get<Subcontractor[]>('/subcontractors'));
-    } catch (e) {
-      toast(e instanceof Error ? e.message : 'Failed to load subcontractors', true);
-      setSubs([]);
-    }
-  }
-
-  useEffect(() => {
-    load();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
 
   return (
     <>
@@ -310,7 +301,7 @@ function SubcontractorsTab() {
           onSaved={() => {
             setShowNew(false);
             toast('Sub added');
-            load();
+            refreshSubcontractors();
           }}
         />
       )}
@@ -322,7 +313,7 @@ function SubcontractorsTab() {
           onSaved={() => {
             setEditing(undefined);
             toast('Sub updated');
-            load();
+            refreshSubcontractors();
           }}
         />
       )}

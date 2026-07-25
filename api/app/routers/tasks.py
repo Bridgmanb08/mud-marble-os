@@ -1,3 +1,4 @@
+import asyncio
 from collections import defaultdict
 from datetime import datetime, timezone
 from typing import Optional
@@ -26,7 +27,7 @@ from ..schemas.tasks import (
     TaskOut,
     TaskUpdate,
 )
-from ..supabase_client import db_delete, db_get, db_patch, db_post
+from ..supabase_client import db_delete, db_get, db_patch, db_patch_query, db_post
 
 router = APIRouter(prefix="/tasks", tags=["tasks"])
 
@@ -143,11 +144,13 @@ async def reorder_tasks(body: ReorderRequest, _: CurrentUser = Depends(get_curre
             detail="The board changed elsewhere before your drag finished — reloading to show the latest order.",
         )
 
-    for item in body.items:
+    async def _apply(item):
         updates: dict = {"status": item.status, "position": item.position}
         if item.id in current_versions:
             updates["version"] = current_versions[item.id] + 1
         await db_patch("schedule_items", item.id, updates)
+
+    await asyncio.gather(*[_apply(item) for item in body.items])
     return {"ok": True}
 
 
@@ -162,8 +165,9 @@ async def reorder_priority(body: PriorityReorderRequest, _: CurrentUser = Depend
     with no status coupling and no version-conflict check (low-stakes ordering, not
     board structure).
     """
-    for item in body.items:
-        await db_patch("schedule_items", item.id, {"manual_position": item.manual_position})
+    await asyncio.gather(
+        *[db_patch("schedule_items", item.id, {"manual_position": item.manual_position}) for item in body.items]
+    )
     return {"ok": True}
 
 
@@ -177,8 +181,8 @@ async def bulk_update_tasks(body: BulkUpdateRequest, _: CurrentUser = Depends(ge
         updates["assignees"] = [body.assigned_to] if body.assigned_to else []
     if not updates:
         raise HTTPException(status_code=400, detail="No fields to update")
-    for task_id in body.ids:
-        await db_patch("schedule_items", task_id, updates)
+    id_filter = ",".join(body.ids)
+    await db_patch_query("schedule_items", f"?id=in.({id_filter})", updates)
     return {"ok": True, "updated": len(body.ids)}
 
 

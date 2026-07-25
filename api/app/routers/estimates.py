@@ -9,8 +9,9 @@ from reportlab.lib import colors
 from reportlab.lib.pagesizes import letter
 from reportlab.lib.styles import ParagraphStyle, getSampleStyleSheet
 from reportlab.lib.units import inch
-from reportlab.platypus import Paragraph, SimpleDocTemplate, Spacer, Table, TableStyle
+from reportlab.platypus import Image, Paragraph, SimpleDocTemplate, Spacer, Table, TableStyle
 
+from .. import branding
 from ..deps import CurrentUser, get_current_user
 from ..estimate_defaults import DEFAULT_CLOSING_TEXT
 from ..estimate_text_defaults_store import get_or_create_estimate_text_defaults
@@ -24,7 +25,7 @@ from ..schemas.estimates import (
     LineItemReference,
     LineItemUpdate,
 )
-from ..supabase_client import db_delete, db_get, db_patch, db_post
+from ..supabase_client import db_delete, db_get, db_patch, db_post, db_post_many
 
 router = APIRouter(prefix="/estimates", tags=["estimates"])
 
@@ -187,28 +188,31 @@ async def duplicate_estimate(estimate_id: str, _: CurrentUser = Depends(get_curr
     )[0]
 
     items = await db_get("estimate_line_items", f"?estimate_id=eq.{estimate_id}&order=sort_order.asc")
-    for item in items:
-        await db_post(
+    if items:
+        await db_post_many(
             "estimate_line_items",
-            {
-                "estimate_id": new_estimate["id"],
-                "cost_code_id": item.get("cost_code_id"),
-                "group_name": item.get("group_name"),
-                "bucket": item.get("bucket"),
-                "title": item.get("title"),
-                "description": item.get("description"),
-                "quantity": item.get("quantity"),
-                "unit": item.get("unit"),
-                "unit_cost": item.get("unit_cost"),
-                "cost_type": item.get("cost_type"),
-                "builder_cost": item.get("builder_cost"),
-                "markup_type": item.get("markup_type"),
-                "markup_value": item.get("markup_value"),
-                "owner_price": item.get("owner_price"),
-                "notes_internal": item.get("notes_internal"),
-                "notes_external": item.get("notes_external"),
-                "sort_order": item.get("sort_order"),
-            },
+            [
+                {
+                    "estimate_id": new_estimate["id"],
+                    "cost_code_id": item.get("cost_code_id"),
+                    "group_name": item.get("group_name"),
+                    "bucket": item.get("bucket"),
+                    "title": item.get("title"),
+                    "description": item.get("description"),
+                    "quantity": item.get("quantity"),
+                    "unit": item.get("unit"),
+                    "unit_cost": item.get("unit_cost"),
+                    "cost_type": item.get("cost_type"),
+                    "builder_cost": item.get("builder_cost"),
+                    "markup_type": item.get("markup_type"),
+                    "markup_value": item.get("markup_value"),
+                    "owner_price": item.get("owner_price"),
+                    "notes_internal": item.get("notes_internal"),
+                    "notes_external": item.get("notes_external"),
+                    "sort_order": item.get("sort_order"),
+                }
+                for item in items
+            ],
         )
     await _recalc_estimate_totals(new_estimate["id"])
     full = await db_get("estimates", f"?id=eq.{new_estimate['id']}&select=*,projects(name)")
@@ -299,8 +303,23 @@ async def export_estimate_pdf(estimate_id: str, _: CurrentUser = Depends(get_cur
     body = ParagraphStyle("body", parent=styles["Normal"], fontSize=9.5, leading=13)
     small = ParagraphStyle("small", parent=styles["Normal"], fontSize=8.5, textColor=colors.grey)
 
+    letterhead = Table(
+        [[Image(branding.LOGO_PATH, width=0.5 * inch, height=0.5 * inch), Paragraph("Mud &amp; Marble", h1)]],
+        colWidths=[0.6 * inch, None],
+    )
+    letterhead.setStyle(
+        TableStyle(
+            [
+                ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
+                ("LEFTPADDING", (0, 0), (-1, -1), 0),
+                ("TOPPADDING", (0, 0), (-1, -1), 0),
+                ("BOTTOMPADDING", (0, 0), (-1, -1), 0),
+            ]
+        )
+    )
+
     elements = [
-        Paragraph("Mud &amp; Marble", h1),
+        letterhead,
         Paragraph(
             estimate.get("title") or f"Proposal for {client_name or project_name}",
             ParagraphStyle("subtitle", parent=styles["Normal"], fontSize=12, spaceAfter=4),
@@ -337,8 +356,8 @@ async def export_estimate_pdf(estimate_id: str, _: CurrentUser = Depends(get_cur
             TableStyle(
                 [
                     ("FONTSIZE", (0, 0), (-1, -1), 8.5),
-                    ("BACKGROUND", (0, 0), (-1, 0), colors.whitesmoke),
-                    ("LINEBELOW", (0, 0), (-1, 0), 0.75, colors.grey),
+                    ("BACKGROUND", (0, 0), (-1, 0), branding.BRAND_CREAM),
+                    ("LINEBELOW", (0, 0), (-1, 0), 0.75, branding.BRAND_BROWN),
                     ("LINEBELOW", (0, 1), (-1, -1), 0.25, colors.lightgrey),
                     ("VALIGN", (0, 0), (-1, -1), "TOP"),
                     ("TOPPADDING", (0, 0), (-1, -1), 4),

@@ -1,33 +1,19 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useMemo, useState } from 'react';
 import { IconPlus, IconTools, IconAlertTriangle } from '@tabler/icons-react';
-import { api } from '../api/client';
 import { useToast } from '../components/ui/Toast';
 import { fmtD } from '../lib/format';
 import type { Subcontractor } from '../types';
 import { NewSubcontractorModal } from '../components/subcontractors/NewSubcontractorModal';
+import { useReferenceData } from '../reference-data/ReferenceDataContext';
 
 const THIRTY_DAYS_MS = 30 * 86400000;
 
 export default function Subcontractors() {
-  const [subs, setSubs] = useState<Subcontractor[] | null>(null);
+  const { subcontractors: subs, refreshSubcontractors } = useReferenceData();
   const [filter, setFilter] = useState<'all' | 'preferred' | 'w9'>('all');
   const [showNew, setShowNew] = useState(false);
   const [editingSub, setEditingSub] = useState<Subcontractor | undefined>(undefined);
   const toast = useToast();
-
-  async function load() {
-    try {
-      setSubs(await api.get<Subcontractor[]>('/subcontractors'));
-    } catch (e) {
-      toast(e instanceof Error ? e.message : 'Failed to load subcontractors', true);
-      setSubs([]);
-    }
-  }
-
-  useEffect(() => {
-    load();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
 
   const preferred = useMemo(() => subs?.filter((s) => s.preferred) ?? [], [subs]);
   const w9Missing = useMemo(() => subs?.filter((s) => !s.w9_on_file) ?? [], [subs]);
@@ -154,7 +140,7 @@ export default function Subcontractors() {
           onSaved={() => {
             setShowNew(false);
             toast('Sub added');
-            load();
+            refreshSubcontractors();
           }}
         />
       )}
@@ -166,7 +152,7 @@ export default function Subcontractors() {
           onSaved={() => {
             setEditingSub(undefined);
             toast('Sub updated');
-            load();
+            refreshSubcontractors();
           }}
         />
       )}
