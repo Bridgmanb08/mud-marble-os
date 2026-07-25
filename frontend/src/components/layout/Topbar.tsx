@@ -13,7 +13,7 @@ export function Topbar() {
     <div className="topbar">
       <div style={{ display: 'flex', alignItems: 'center', gap: 20 }}>
         <div className="logo">
-          <div className="logo-mark">M&amp;M</div>
+          <img src="/logo.png" alt="Mud & Marble" className="logo-mark" />
           <span className="logo-name">Mud &amp; Marble</span>
           <span className="logo-sub">OS</span>
         </div>
