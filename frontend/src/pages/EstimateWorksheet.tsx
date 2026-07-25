@@ -465,34 +465,36 @@ export default function EstimateWorksheet() {
           <label className="fl">Title</label>
           <input className="fi" value={title} onChange={(e) => setTitle(e.target.value)} placeholder={`Proposal for ${estimate.projects?.name || 'project'}`} />
         </div>
-        <div className="fr">
-          <div className="fg">
-            <label className="fl">Approval deadline</label>
-            <input className="fi" type="date" value={approvalDeadline} onClick={openDatePicker} onChange={(e) => setApprovalDeadline(e.target.value)} />
-          </div>
-          <div style={{ display: 'flex', alignItems: 'flex-end', paddingBottom: 14 }}>
-            <button type="button" className="btn btn-ghost btn-sm" onClick={() => setShowMore((v) => !v)}>
-              {showMore ? 'Hide' : 'Show'} more details
-            </button>
-          </div>
+        <div className="fg">
+          <label className="fl">Approval deadline</label>
+          <input
+            className="fi"
+            type="date"
+            value={approvalDeadline}
+            onClick={openDatePicker}
+            onChange={(e) => setApprovalDeadline(e.target.value)}
+            style={{ maxWidth: 220 }}
+          />
         </div>
+        <div className="fg">
+          <label className="fl">Introductory text</label>
+          <RichTextEditor value={introductoryText} onChange={setIntroductoryText} minHeight={100} />
+        </div>
+        <div className="fg">
+          <label className="fl">Closing text</label>
+          <RichTextEditor value={closingText} onChange={setClosingText} minHeight={220} />
+        </div>
+
+        <button type="button" className="btn btn-ghost btn-sm" style={{ marginBottom: 14 }} onClick={() => setShowMore((v) => !v)}>
+          {showMore ? 'Hide' : 'Show'} internal notes
+        </button>
         {showMore && (
-          <>
-            <div className="fg">
-              <label className="fl">Internal notes</label>
-              <textarea className="fi" value={notesInternal} onChange={(e) => setNotesInternal(e.target.value)} />
-            </div>
-            <div className="fg">
-              <label className="fl">Introductory text</label>
-              <RichTextEditor value={introductoryText} onChange={setIntroductoryText} minHeight={100} />
-            </div>
-            <div className="fg" style={{ marginBottom: 0 }}>
-              <label className="fl">Closing text</label>
-              <RichTextEditor value={closingText} onChange={setClosingText} minHeight={220} />
-            </div>
-          </>
+          <div className="fg" style={{ marginBottom: 0 }}>
+            <label className="fl">Internal notes</label>
+            <textarea className="fi" value={notesInternal} onChange={(e) => setNotesInternal(e.target.value)} />
+          </div>
         )}
-        <div className="ma" style={{ marginTop: showMore ? 14 : 0 }}>
+        <div className="ma" style={{ marginTop: 14 }}>
           <button type="button" className="btn btn-p btn-sm" onClick={saveMeta} disabled={savingMeta}>
             {savingMeta ? 'Saving…' : 'Save details'}
           </button>
