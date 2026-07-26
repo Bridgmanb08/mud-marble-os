@@ -457,9 +457,14 @@ async def get_dashboard(_: CurrentUser = Depends(get_current_user)):
     )
 
     # -- estimate win rate + open pipeline value --
-    est_approved = [e for e in estimates if e.get("status") == "approved"]
-    est_rejected = [e for e in estimates if e.get("status") == "rejected"]
-    est_sent = [e for e in estimates if e.get("status") != "draft"]
+    # Use only the latest version per project: duplicate_estimate() never changes
+    # an old version's status, so a rejected v1 followed by an approved v2 (the
+    # normal "client rejected, we revised, they approved" flow) would otherwise
+    # count as both a loss and a win for the same project.
+    latest_estimates = list(latest_estimate_full_by_project.values())
+    est_approved = [e for e in latest_estimates if e.get("status") == "approved"]
+    est_rejected = [e for e in latest_estimates if e.get("status") == "rejected"]
+    est_sent = [e for e in latest_estimates if e.get("status") != "draft"]
     est_decided = len(est_approved) + len(est_rejected)
     estimate_win_rate = EstimateWinRate(
         sent_count=len(est_sent),
@@ -467,7 +472,7 @@ async def get_dashboard(_: CurrentUser = Depends(get_current_user)):
         rejected_count=len(est_rejected),
         win_rate_pct=round(len(est_approved) / est_decided * 100) if est_decided else 0,
         pipeline_value=sum(
-            e.get("grand_total_owner_price") or 0 for e in estimates if e.get("status") == "sent_to_client"
+            e.get("grand_total_owner_price") or 0 for e in latest_estimates if e.get("status") == "sent_to_client"
         ),
     )
 

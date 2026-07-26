@@ -176,14 +176,38 @@ async def bulk_update_tasks(body: BulkUpdateRequest, _: CurrentUser = Depends(ge
     updates: dict = {}
     if body.status is not None:
         updates["status"] = body.status
-        updates["completed_at"] = datetime.now(timezone.utc).isoformat() if body.status == "complete" else None
     if body.assigned_to is not None:
         updates["assigned_to"] = body.assigned_to
         updates["assignees"] = [body.assigned_to] if body.assigned_to else []
     if not updates:
         raise HTTPException(status_code=400, detail="No fields to update")
+
     id_filter = ",".join(body.ids)
-    await db_patch_query("schedule_items", f"?id=in.({id_filter})", updates)
+    if body.status is None:
+        await db_patch_query("schedule_items", f"?id=in.({id_filter})", updates)
+        return {"ok": True, "updated": len(body.ids)}
+
+    # completed_at should only change for tasks actually transitioning into/out
+    # of "complete" -- a bulk selection can mix already-complete tasks with
+    # incomplete ones, and re-stamping the already-complete ones would silently
+    # reset when they "completed" for reporting purposes.
+    current = await db_get("schedule_items", f"?id=in.({id_filter})&select=id,status")
+    current_status = {r["id"]: r["status"] for r in current}
+    now_iso = datetime.now(timezone.utc).isoformat()
+    if body.status == "complete":
+        to_stamp = [tid for tid in body.ids if current_status.get(tid) != "complete"]
+        untouched = [tid for tid in body.ids if tid not in to_stamp]
+        if to_stamp:
+            await db_patch_query("schedule_items", f"?id=in.({','.join(to_stamp)})", {**updates, "completed_at": now_iso})
+        if untouched:
+            await db_patch_query("schedule_items", f"?id=in.({','.join(untouched)})", updates)
+    else:
+        to_clear = [tid for tid in body.ids if current_status.get(tid) == "complete"]
+        untouched = [tid for tid in body.ids if tid not in to_clear]
+        if to_clear:
+            await db_patch_query("schedule_items", f"?id=in.({','.join(to_clear)})", {**updates, "completed_at": None})
+        if untouched:
+            await db_patch_query("schedule_items", f"?id=in.({','.join(untouched)})", updates)
     return {"ok": True, "updated": len(body.ids)}
 
 
