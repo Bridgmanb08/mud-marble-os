@@ -19,6 +19,7 @@ import { useToast } from '../components/ui/Toast';
 import { openDatePicker } from '../lib/datePicker';
 import { fmt, fmtD } from '../lib/format';
 import { LineItemModal } from '../components/estimates/LineItemModal';
+import { EstimateCopilotPanel } from '../components/estimates/EstimateCopilotPanel';
 import { RichTextEditor } from '../components/ui/RichTextEditor';
 import type { Estimate, EstimateLineItem } from '../types';
 
@@ -412,6 +413,8 @@ export default function EstimateWorksheet() {
         <IconArrowLeft size={14} /> Back
       </button>
 
+      <div style={{ display: 'flex', gap: 16, alignItems: 'flex-start' }}>
+      <div style={{ flex: 1, minWidth: 0 }}>
       <div className="ph">
         <div>
           <h1>{estimate.projects?.name?.replace(/\|.*/, '').trim() || 'Estimate'}</h1>
@@ -642,6 +645,10 @@ export default function EstimateWorksheet() {
           }}
         />
       )}
+      </div>
+
+      {id && <EstimateCopilotPanel estimateId={id} existingGroups={existingGroups} onItemAdded={load} />}
+      </div>
     </>
   );
 }

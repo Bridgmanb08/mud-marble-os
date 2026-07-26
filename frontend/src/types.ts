@@ -211,6 +211,27 @@ export interface EstimateLineItem {
   cost_codes: { code: string; name: string } | null;
 }
 
+export interface EstimateSuggestion {
+  kind: 'gap' | 'transcript_item';
+  title: string;
+  cost_code_id: string | null;
+  suggested_group_name: string | null;
+  rationale: string;
+  quantity: number | null;
+  unit: string | null;
+  source_quote: string | null;
+}
+
+export interface GapCheckResponse {
+  suggestions: EstimateSuggestion[];
+  dropped: string[];
+}
+
+export interface TranscriptExtractResponse {
+  suggestions: EstimateSuggestion[];
+  dropped: string[];
+}
+
 export interface LineItemReference {
   id: string;
   estimate_id: string;

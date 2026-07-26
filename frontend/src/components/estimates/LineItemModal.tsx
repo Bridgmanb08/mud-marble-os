@@ -11,6 +11,9 @@ interface LineItemModalProps {
   item?: EstimateLineItem;
   defaultBucket?: string;
   defaultGroupName?: string;
+  defaultTitle?: string;
+  defaultCostCodeId?: string;
+  defaultNotesExternal?: string;
   existingGroups?: string[];
   onClose: () => void;
   onSaved: () => void;
@@ -34,14 +37,26 @@ function round2(n: number): number {
   return Math.round(n * 100) / 100;
 }
 
-export function LineItemModal({ estimateId, item, defaultBucket, defaultGroupName, existingGroups, onClose, onSaved, onDeleted }: LineItemModalProps) {
+export function LineItemModal({
+  estimateId,
+  item,
+  defaultBucket,
+  defaultGroupName,
+  defaultTitle,
+  defaultCostCodeId,
+  defaultNotesExternal,
+  existingGroups,
+  onClose,
+  onSaved,
+  onDeleted,
+}: LineItemModalProps) {
   const { costCodes: costCodesData } = useReferenceData();
   const costCodes = costCodesData ?? [];
-  const [costCodeId, setCostCodeId] = useState(item?.cost_code_id || '');
+  const [costCodeId, setCostCodeId] = useState(item?.cost_code_id || defaultCostCodeId || '');
   const [costCodeQuery, setCostCodeQuery] = useState('');
   const [bucket, setBucket] = useState(item?.bucket || defaultBucket || 'construction');
   const [groupName, setGroupName] = useState(item?.group_name || defaultGroupName || '');
-  const [title, setTitle] = useState(item?.title || '');
+  const [title, setTitle] = useState(item?.title || defaultTitle || '');
   const [quantity, setQuantity] = useState(String(item?.quantity ?? 1));
   const [unitCost, setUnitCost] = useState(String(item?.unit_cost ?? 0));
   const [costType, setCostType] = useState(item?.cost_type || 'none');
@@ -49,13 +64,14 @@ export function LineItemModal({ estimateId, item, defaultBucket, defaultGroupNam
   const [markupValue, setMarkupValue] = useState(String(item?.markup_value ?? 0));
   const [estimatedDays, setEstimatedDays] = useState(item?.estimated_days != null ? String(item.estimated_days) : '');
   const [notesInternal, setNotesInternal] = useState(item?.notes_internal || '');
-  const [notesExternal, setNotesExternal] = useState(item?.notes_external || '');
+  const [notesExternal, setNotesExternal] = useState(item?.notes_external || defaultNotesExternal || '');
   const [error, setError] = useState('');
   const [saving, setSaving] = useState(false);
 
   useEffect(() => {
-    if (item?.cost_code_id && costCodes.length) {
-      const found = costCodes.find((c) => c.id === item.cost_code_id);
+    const idToResolve = item?.cost_code_id || defaultCostCodeId;
+    if (idToResolve && costCodes.length) {
+      const found = costCodes.find((c) => c.id === idToResolve);
       if (found) setCostCodeQuery(`${found.code} - ${found.name}`);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
