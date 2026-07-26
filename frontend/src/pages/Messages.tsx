@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState, type FormEvent } from 'react';
-import { IconSend, IconPhoto, IconVideo, IconFileTypePdf, IconFile, IconMessages, IconAlertCircle, IconPencil } from '@tabler/icons-react';
+import { IconSend, IconPhoto, IconVideo, IconFileTypePdf, IconFile, IconMessages, IconAlertCircle, IconPencil, IconRefresh } from '@tabler/icons-react';
 import { api, ApiError } from '../api/client';
 import { useToast } from '../components/ui/Toast';
 import { useReferenceData } from '../reference-data/ReferenceDataContext';
@@ -63,8 +63,9 @@ function MessageMedia({ message }: { message: Message }) {
   );
 }
 
-function MessageBubble({ message }: { message: Message }) {
+function MessageBubble({ message, onRefreshStatus }: { message: Message; onRefreshStatus: (id: string) => void }) {
   const outbound = message.direction === 'outbound';
+  const terminal = message.status === 'delivered' || message.status === 'undelivered' || message.status === 'failed';
   return (
     <div style={{ display: 'flex', justifyContent: outbound ? 'flex-end' : 'flex-start', marginBottom: 10 }}>
       <div
@@ -90,13 +91,24 @@ function MessageBubble({ message }: { message: Message }) {
             {message.error_code ? ` (error ${message.error_code})` : ''}
           </div>
         )}
-        <div style={{ fontSize: 10, marginTop: 4, opacity: 0.7 }}>
-          {fmtTime(message.created_at)}
-          {message.project_name ? ` · ${message.project_name}` : ''}
-          {outbound && message.sent_by_name ? ` · ${message.sent_by_name}` : ''}
-          {outbound && message.status && message.status !== 'undelivered' && message.status !== 'failed'
-            ? ` · ${DELIVERY_LABELS[message.status] || message.status}`
-            : ''}
+        <div style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: 10, marginTop: 4, opacity: 0.7 }}>
+          <span>
+            {fmtTime(message.created_at)}
+            {message.project_name ? ` · ${message.project_name}` : ''}
+            {outbound && message.sent_by_name ? ` · ${message.sent_by_name}` : ''}
+            {outbound && message.status ? ` · ${DELIVERY_LABELS[message.status] || message.status}` : ''}
+          </span>
+          {outbound && message.message_sid && !terminal && (
+            <button
+              type="button"
+              className="btn-reset"
+              title="Check latest status from Twilio"
+              style={{ cursor: 'pointer', display: 'flex', color: 'inherit' }}
+              onClick={() => onRefreshStatus(message.id)}
+            >
+              <IconRefresh size={11} />
+            </button>
+          )}
         </div>
       </div>
     </div>
@@ -275,6 +287,15 @@ export default function Messages() {
     }
   }
 
+  async function handleRefreshStatus(messageId: string) {
+    try {
+      const updated = await api.post<Message>(`/messages/${messageId}/refresh-status`);
+      setThread((prev) => (prev ? prev.map((m) => (m.id === messageId ? updated : m)) : prev));
+    } catch (e) {
+      toast(e instanceof ApiError ? e.message : 'Failed to check status', true);
+    }
+  }
+
   useEffect(() => {
     loadThreads();
     api.get<Project[]>('/projects').then(setProjects).catch(() => {});
@@ -423,7 +444,7 @@ export default function Messages() {
                 {thread === null ? (
                   <div className="empty-s">Loading…</div>
                 ) : (
-                  thread.map((m) => <MessageBubble key={m.id} message={m} />)
+                  thread.map((m) => <MessageBubble key={m.id} message={m} onRefreshStatus={handleRefreshStatus} />)
                 )}
                 <div ref={bottomRef} />
               </div>
