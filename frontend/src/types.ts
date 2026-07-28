@@ -211,6 +211,38 @@ export interface EstimateLineItem {
   cost_codes: { code: string; name: string } | null;
 }
 
+export interface EstimateTemplate {
+  id: string;
+  name: string;
+  category: string | null;
+  description: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface EstimateTemplateItem {
+  id: string;
+  template_id: string;
+  cost_code_id: string | null;
+  group_name: string | null;
+  bucket: string;
+  title: string;
+  description: string | null;
+  quantity: number;
+  unit: string | null;
+  unit_cost: number;
+  cost_type: string;
+  builder_cost: number;
+  markup_type: string;
+  markup_value: number;
+  owner_price: number;
+  estimated_days: number | null;
+  notes_internal: string | null;
+  notes_external: string | null;
+  sort_order: number;
+  cost_codes: { code: string; name: string } | null;
+}
+
 export interface EstimateSuggestion {
   kind: 'gap' | 'transcript_item';
   title: string;

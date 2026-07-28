@@ -40,6 +40,13 @@ export default function Estimates() {
         </div>
       </div>
 
+      <div className="tabs" style={{ marginBottom: 16 }}>
+        <button className="tab on">All Estimates</button>
+        <button className="tab" onClick={() => navigate('/estimates/templates')}>
+          Templates
+        </button>
+      </div>
+
       <div className="metrics">
         <div className="metric">
           <div className="m-label">Draft</div>

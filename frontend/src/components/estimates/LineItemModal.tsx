@@ -4,11 +4,12 @@ import { api, ApiError } from '../../api/client';
 import { Modal } from '../ui/Modal';
 import { fmt } from '../../lib/format';
 import { useReferenceData } from '../../reference-data/ReferenceDataContext';
-import type { EstimateLineItem, LineItemReference } from '../../types';
+import type { EstimateLineItem, EstimateTemplateItem, LineItemReference } from '../../types';
 
 interface LineItemModalProps {
-  estimateId: string;
-  item?: EstimateLineItem;
+  estimateId?: string;
+  templateId?: string;
+  item?: EstimateLineItem | EstimateTemplateItem;
   defaultBucket?: string;
   defaultGroupName?: string;
   defaultTitle?: string;
@@ -39,6 +40,7 @@ function round2(n: number): number {
 
 export function LineItemModal({
   estimateId,
+  templateId,
   item,
   defaultBucket,
   defaultGroupName,
@@ -50,6 +52,7 @@ export function LineItemModal({
   onSaved,
   onDeleted,
 }: LineItemModalProps) {
+  const basePath = templateId ? `/estimate-templates/${templateId}` : `/estimates/${estimateId}`;
   const { costCodes: costCodesData } = useReferenceData();
   const costCodes = costCodesData ?? [];
   const [costCodeId, setCostCodeId] = useState(item?.cost_code_id || defaultCostCodeId || '');
@@ -110,7 +113,7 @@ export function LineItemModal({
       const params = new URLSearchParams();
       if (costCodeId) params.set('cost_code_id', costCodeId);
       if (refQuery.trim()) params.set('q', refQuery.trim());
-      params.set('exclude_estimate_id', estimateId);
+      if (estimateId) params.set('exclude_estimate_id', estimateId);
       const results = await api.get<LineItemReference[]>(`/estimates/line-items/search?${params.toString()}`);
       setRefResults(results);
     } catch {
@@ -176,9 +179,9 @@ export function LineItemModal({
     };
     try {
       if (item) {
-        await api.patch(`/estimates/${estimateId}/items/${item.id}`, payload);
+        await api.patch(`${basePath}/items/${item.id}`, payload);
       } else {
-        await api.post(`/estimates/${estimateId}/items`, payload);
+        await api.post(`${basePath}/items`, payload);
       }
       onSaved();
     } catch (err) {
@@ -190,7 +193,7 @@ export function LineItemModal({
 
   async function handleDelete() {
     if (!item || !confirm('Delete this line item?')) return;
-    await api.delete(`/estimates/${estimateId}/items/${item.id}`);
+    await api.delete(`${basePath}/items/${item.id}`);
     onDeleted?.();
   }
 

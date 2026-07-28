@@ -10,6 +10,7 @@ from .routers import (
     cost_codes,
     dashboard,
     estimate_copilot,
+    estimate_templates,
     estimate_text_defaults,
     estimates,
     files,
@@ -59,6 +60,7 @@ app.include_router(cost_codes.router, prefix="/api")
 app.include_router(estimates.router, prefix="/api")
 app.include_router(estimate_text_defaults.router, prefix="/api")
 app.include_router(estimate_copilot.router, prefix="/api")
+app.include_router(estimate_templates.router, prefix="/api")
 app.include_router(files.router, prefix="/api")
 app.include_router(invoices.router, prefix="/api")
 app.include_router(change_orders.router, prefix="/api")
