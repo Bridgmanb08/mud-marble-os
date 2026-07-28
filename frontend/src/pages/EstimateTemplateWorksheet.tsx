@@ -2,59 +2,32 @@ import { useEffect, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { PointerSensor, useSensor, useSensors, type DragEndEvent } from '@dnd-kit/core';
 import { arrayMove } from '@dnd-kit/sortable';
-import {
-  IconArrowLeft,
-  IconPlus,
-  IconDownload,
-  IconFileSpreadsheet,
-  IconCopy,
-  IconSearch,
-} from '@tabler/icons-react';
+import { IconArrowLeft, IconPlus, IconSearch, IconRocket } from '@tabler/icons-react';
 import { api, ApiError } from '../api/client';
 import { useToast } from '../components/ui/Toast';
-import { openDatePicker } from '../lib/datePicker';
-import { fmt, fmtD } from '../lib/format';
+import { fmt } from '../lib/format';
 import { LineItemModal } from '../components/estimates/LineItemModal';
-import { EstimateCopilotPanel } from '../components/estimates/EstimateCopilotPanel';
 import { LineItemGroupCard } from '../components/estimates/LineItemGroupCard';
-import { RichTextEditor } from '../components/ui/RichTextEditor';
-import type { Estimate, EstimateLineItem } from '../types';
-
-const STATUS_OPTIONS = [
-  { value: 'draft', label: 'Draft' },
-  { value: 'sent_to_client', label: 'Sent to client' },
-  { value: 'approved', label: 'Approved' },
-  { value: 'rejected', label: 'Rejected' },
-];
-
-const STATUS_BADGE: Record<string, string> = {
-  draft: 'bg-gray',
-  sent_to_client: 'bg-blue',
-  approved: 'bg-green',
-  rejected: 'bg-red',
-};
+import { ApplyTemplateModal } from '../components/estimates/ApplyTemplateModal';
+import type { EstimateTemplate, EstimateTemplateItem } from '../types';
 
 const BUCKET_LABEL: Record<string, string> = { pm_fee: 'PM Fee', construction: 'Construction', allowance: 'Allowance' };
 
-export default function EstimateWorksheet() {
+export default function EstimateTemplateWorksheet() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const toast = useToast();
 
-  const [estimate, setEstimate] = useState<Estimate | null>(null);
-  const [items, setItems] = useState<EstimateLineItem[]>([]);
-  const [siblings, setSiblings] = useState<Estimate[]>([]);
-  const [showMore, setShowMore] = useState(false);
-  const [title, setTitle] = useState('');
-  const [approvalDeadline, setApprovalDeadline] = useState('');
-  const [notesInternal, setNotesInternal] = useState('');
-  const [introductoryText, setIntroductoryText] = useState('');
-  const [closingText, setClosingText] = useState('');
+  const [template, setTemplate] = useState<EstimateTemplate | null>(null);
+  const [items, setItems] = useState<EstimateTemplateItem[]>([]);
+  const [name, setName] = useState('');
+  const [category, setCategory] = useState('');
+  const [description, setDescription] = useState('');
   const [savingMeta, setSavingMeta] = useState(false);
   const [showItemModal, setShowItemModal] = useState(false);
-  const [editingItem, setEditingItem] = useState<EstimateLineItem | undefined>(undefined);
+  const [editingItem, setEditingItem] = useState<EstimateTemplateItem | undefined>(undefined);
   const [newItemDefaults, setNewItemDefaults] = useState<{ bucket: string; groupName?: string } | undefined>(undefined);
-  const [duplicating, setDuplicating] = useState(false);
+  const [showApply, setShowApply] = useState(false);
   const [collapsedGroups, setCollapsedGroups] = useState<Record<string, boolean>>({});
   const [searchQuery, setSearchQuery] = useState('');
   const [editingGroupKey, setEditingGroupKey] = useState<string | null>(null);
@@ -66,21 +39,17 @@ export default function EstimateWorksheet() {
   async function load() {
     if (!id) return;
     try {
-      const [est, itemRows] = await Promise.all([
-        api.get<Estimate>(`/estimates/${id}`),
-        api.get<EstimateLineItem[]>(`/estimates/${id}/items`),
+      const [tpl, itemRows] = await Promise.all([
+        api.get<EstimateTemplate>(`/estimate-templates/${id}`),
+        api.get<EstimateTemplateItem[]>(`/estimate-templates/${id}/items`),
       ]);
-      setEstimate(est);
-      setTitle(est.title || '');
-      setApprovalDeadline(est.approval_deadline?.slice(0, 10) || '');
-      setNotesInternal(est.notes_internal || '');
-      setIntroductoryText(est.introductory_text || '');
-      setClosingText(est.closing_text || '');
+      setTemplate(tpl);
+      setName(tpl.name);
+      setCategory(tpl.category || '');
+      setDescription(tpl.description || '');
       setItems(itemRows);
-      const siblingRows = await api.get<Estimate[]>(`/estimates?project_id=${est.project_id}`);
-      setSiblings(siblingRows);
     } catch (e) {
-      toast(e instanceof Error ? e.message : 'Failed to load estimate', true);
+      toast(e instanceof Error ? e.message : 'Failed to load template', true);
     }
   }
 
@@ -89,7 +58,7 @@ export default function EstimateWorksheet() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [id]);
 
-  if (!estimate) {
+  if (!template) {
     return (
       <div className="empty">
         <div className="empty-t">Loading…</div>
@@ -97,7 +66,7 @@ export default function EstimateWorksheet() {
     );
   }
 
-  const groups: Record<string, EstimateLineItem[]> = {};
+  const groups: Record<string, EstimateTemplateItem[]> = {};
   for (const item of items) {
     const key = item.group_name || BUCKET_LABEL[item.bucket] || 'Ungrouped';
     if (!groups[key]) groups[key] = [];
@@ -108,8 +77,8 @@ export default function EstimateWorksheet() {
   const allCollapsed = groupKeys.length > 0 && groupKeys.every((k) => collapsedGroups[k]);
 
   const query = searchQuery.trim().toLowerCase();
-  const visibleGroups: [string, EstimateLineItem[]][] = groupKeys
-    .map((name): [string, EstimateLineItem[]] => {
+  const visibleGroups: [string, EstimateTemplateItem[]][] = groupKeys
+    .map((name): [string, EstimateTemplateItem[]] => {
       if (!query) return [name, groups[name]];
       if (name.toLowerCase().includes(query)) return [name, groups[name]];
       const filteredItems = groups[name].filter(
@@ -123,21 +92,18 @@ export default function EstimateWorksheet() {
     .filter(([, groupItems]) => groupItems.length > 0);
 
   const builderCostTotal = items.reduce((s, i) => s + (i.builder_cost || 0), 0);
-  const clientPriceTotal = estimate.grand_total_owner_price || 0;
+  const clientPriceTotal = items.reduce((s, i) => s + (i.owner_price || 0), 0);
   const profitTotal = clientPriceTotal - builderCostTotal;
-  const daysTotal = items.reduce((s, i) => s + (i.estimated_days || 0), 0);
   const hasDays = items.some((i) => i.estimated_days != null);
 
   async function saveMeta() {
     if (!id) return;
     setSavingMeta(true);
     try {
-      await api.patch(`/estimates/${id}`, {
-        title: title.trim() || null,
-        approval_deadline: approvalDeadline || null,
-        notes_internal: notesInternal.trim() || null,
-        introductory_text: introductoryText.trim() || null,
-        closing_text: closingText.trim() || null,
+      await api.patch(`/estimate-templates/${id}`, {
+        name: name.trim() || template!.name,
+        category: category.trim() || null,
+        description: description.trim() || null,
       });
       toast('Saved');
       load();
@@ -148,44 +114,12 @@ export default function EstimateWorksheet() {
     }
   }
 
-  async function changeStatus(status: string) {
-    if (!id) return;
-    try {
-      await api.patch(`/estimates/${id}`, { status, ...(status === 'sent_to_client' ? { sent_at: new Date().toISOString() } : {}) });
-      toast('Status updated');
-      load();
-    } catch (e) {
-      toast(e instanceof ApiError ? e.message : 'Failed to update status', true);
-    }
-  }
-
-  async function duplicateVersion() {
-    if (!id) return;
-    setDuplicating(true);
-    try {
-      const created = await api.post<Estimate>(`/estimates/${id}/duplicate`);
-      toast(`Created version ${created.version}`);
-      navigate(`/estimates/${created.id}`);
-    } catch (e) {
-      toast(e instanceof ApiError ? e.message : 'Failed to duplicate', true);
-    } finally {
-      setDuplicating(false);
-    }
-  }
-
-  function downloadPdf() {
-    window.open(`/api/estimates/${id}/export/pdf`, '_blank');
-  }
-  function downloadExcel() {
-    window.open(`/api/estimates/${id}/export/excel`, '_blank');
-  }
-
   function openNewItem(bucket: string, groupName?: string) {
     setEditingItem(undefined);
     setNewItemDefaults({ bucket, groupName });
     setShowItemModal(true);
   }
-  function openEditItem(item: EstimateLineItem) {
+  function openEditItem(item: EstimateTemplateItem) {
     setEditingItem(item);
     setNewItemDefaults(undefined);
     setShowItemModal(true);
@@ -202,12 +136,12 @@ export default function EstimateWorksheet() {
     setEditingGroupKey(key);
     setEditingGroupValue(key);
   }
-  async function commitRenameGroup(oldKey: string, groupItems: EstimateLineItem[]) {
+  async function commitRenameGroup(oldKey: string, groupItems: EstimateTemplateItem[]) {
     const newName = editingGroupValue.trim();
     setEditingGroupKey(null);
     if (!id || !newName || newName === oldKey) return;
     try {
-      await Promise.all(groupItems.map((it) => api.patch(`/estimates/${id}/items/${it.id}`, { group_name: newName })));
+      await Promise.all(groupItems.map((it) => api.patch(`/estimate-templates/${id}/items/${it.id}`, { group_name: newName })));
       toast('Group renamed');
       load();
     } catch (e) {
@@ -223,7 +157,12 @@ export default function EstimateWorksheet() {
     openNewItem('construction', trimmed);
   }
 
-  async function handleReorder(groupName: string, groupItems: EstimateLineItem[], event: DragEndEvent, groups: Record<string, EstimateLineItem[]>) {
+  async function handleReorder(
+    groupName: string,
+    groupItems: EstimateTemplateItem[],
+    event: DragEndEvent,
+    groups: Record<string, EstimateTemplateItem[]>
+  ) {
     const { active, over } = event;
     if (!over || active.id === over.id) return;
     const oldIndex = groupItems.findIndex((i) => i.id === active.id);
@@ -231,10 +170,7 @@ export default function EstimateWorksheet() {
     if (oldIndex === -1 || newIndex === -1) return;
     const reorderedGroup = arrayMove(groupItems, oldIndex, newIndex);
 
-    // sort_order is one shared sequence across the whole estimate (not scoped
-    // per group), so splice the reordered group's new sub-order back into the
-    // full flattened list, leaving every other group's relative order as-is.
-    const flattened: EstimateLineItem[] = [];
+    const flattened: EstimateTemplateItem[] = [];
     for (const [name, groupItemsInner] of Object.entries(groups)) {
       flattened.push(...(name === groupName ? reorderedGroup : groupItemsInner));
     }
@@ -247,7 +183,9 @@ export default function EstimateWorksheet() {
 
     if (!id || changed.length === 0) return;
     try {
-      await Promise.all(changed.map(({ id: itemId, newOrder }) => api.patch(`/estimates/${id}/items/${itemId}`, { sort_order: newOrder })));
+      await Promise.all(
+        changed.map(({ id: itemId, newOrder }) => api.patch(`/estimate-templates/${id}/items/${itemId}`, { sort_order: newOrder }))
+      );
     } catch (e) {
       toast(e instanceof ApiError ? e.message : 'Failed to save the new order', true);
     } finally {
@@ -257,94 +195,35 @@ export default function EstimateWorksheet() {
 
   return (
     <>
-      <button className="btn btn-sm" style={{ marginBottom: 12 }} onClick={() => navigate(-1)}>
-        <IconArrowLeft size={14} /> Back
+      <button className="btn btn-sm" style={{ marginBottom: 12 }} onClick={() => navigate('/estimates/templates')}>
+        <IconArrowLeft size={14} /> Back to templates
       </button>
 
-      <div style={{ display: 'flex', gap: 16, alignItems: 'flex-start' }}>
-      <div style={{ flex: 1, minWidth: 0 }}>
       <div className="ph">
         <div>
-          <h1>{estimate.projects?.name?.replace(/\|.*/, '').trim() || 'Estimate'}</h1>
-          <p>
-            Version {estimate.version} ·{' '}
-            <select
-              className="fi"
-              style={{ width: 'auto', display: 'inline-block', fontSize: 12, padding: '2px 6px' }}
-              value={estimate.status}
-              onChange={(e) => changeStatus(e.target.value)}
-            >
-              {STATUS_OPTIONS.map((s) => (
-                <option key={s.value} value={s.value}>
-                  {s.label}
-                </option>
-              ))}
-            </select>
-          </p>
+          <h1>{template.name}</h1>
+          {template.category && <p>{template.category}</p>}
         </div>
         <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-          {siblings.length > 1 && (
-            <select
-              className="fi"
-              style={{ width: 'auto' }}
-              value={id}
-              onChange={(e) => navigate(`/estimates/${e.target.value}`)}
-            >
-              {siblings
-                .sort((a, b) => a.version - b.version)
-                .map((s) => (
-                  <option key={s.id} value={s.id}>
-                    v{s.version} — {s.status.replace(/_/g, ' ')}
-                  </option>
-                ))}
-            </select>
-          )}
-          <button className="btn btn-sm" onClick={duplicateVersion} disabled={duplicating}>
-            <IconCopy size={14} /> {duplicating ? 'Duplicating…' : 'New version'}
-          </button>
-          <button className="btn btn-sm" onClick={downloadExcel}>
-            <IconFileSpreadsheet size={14} /> Excel
-          </button>
-          <button className="btn btn-p btn-sm" onClick={downloadPdf}>
-            <IconDownload size={14} /> PDF
+          <button className="btn btn-p btn-sm" onClick={() => setShowApply(true)}>
+            <IconRocket size={14} /> Use for new estimate
           </button>
         </div>
       </div>
 
       <div className="card" style={{ padding: 20, marginBottom: 16 }}>
         <div className="fg">
-          <label className="fl">Title</label>
-          <input className="fi" value={title} onChange={(e) => setTitle(e.target.value)} placeholder={`Proposal for ${estimate.projects?.name || 'project'}`} />
+          <label className="fl">Name</label>
+          <input className="fi" value={name} onChange={(e) => setName(e.target.value)} />
         </div>
         <div className="fg">
-          <label className="fl">Approval deadline</label>
-          <input
-            className="fi"
-            type="date"
-            value={approvalDeadline}
-            onClick={openDatePicker}
-            onChange={(e) => setApprovalDeadline(e.target.value)}
-            style={{ maxWidth: 220 }}
-          />
+          <label className="fl">Category</label>
+          <input className="fi" value={category} onChange={(e) => setCategory(e.target.value)} placeholder="Bathroom, Kitchen, Addition…" />
         </div>
-        <div className="fg">
-          <label className="fl">Introductory text</label>
-          <RichTextEditor value={introductoryText} onChange={setIntroductoryText} minHeight={100} />
+        <div className="fg" style={{ marginBottom: 0 }}>
+          <label className="fl">Description</label>
+          <textarea className="fi" value={description} onChange={(e) => setDescription(e.target.value)} placeholder="Optional notes about when to use this template…" />
         </div>
-        <div className="fg">
-          <label className="fl">Closing text</label>
-          <RichTextEditor value={closingText} onChange={setClosingText} minHeight={220} />
-        </div>
-
-        <button type="button" className="btn btn-ghost btn-sm" style={{ marginBottom: 14 }} onClick={() => setShowMore((v) => !v)}>
-          {showMore ? 'Hide' : 'Show'} internal notes
-        </button>
-        {showMore && (
-          <div className="fg" style={{ marginBottom: 0 }}>
-            <label className="fl">Internal notes</label>
-            <textarea className="fi" value={notesInternal} onChange={(e) => setNotesInternal(e.target.value)} />
-          </div>
-        )}
         <div className="ma" style={{ marginTop: 14 }}>
           <button type="button" className="btn btn-p btn-sm" onClick={saveMeta} disabled={savingMeta}>
             {savingMeta ? 'Saving…' : 'Save details'}
@@ -365,19 +244,6 @@ export default function EstimateWorksheet() {
           <div className="m-label">Total client price</div>
           <div className="m-val" style={{ fontSize: 17, fontWeight: 700 }}>{fmt(clientPriceTotal)}</div>
         </div>
-        <div className="metric">
-          <div className="m-label">Status</div>
-          <div className="m-val" style={{ fontSize: 15 }}>
-            <span className={`badge ${STATUS_BADGE[estimate.status] || 'bg-gray'}`}>{estimate.status.replace(/_/g, ' ')}</span>
-          </div>
-          {estimate.sent_at && <div className="m-sub">Sent {fmtD(estimate.sent_at)}</div>}
-        </div>
-        {hasDays && (
-          <div className="metric">
-            <div className="m-label">Estimated workdays</div>
-            <div className="m-val" style={{ fontSize: 17 }}>{daysTotal.toLocaleString()} days</div>
-          </div>
-        )}
       </div>
 
       <div className="sh">
@@ -444,12 +310,12 @@ export default function EstimateWorksheet() {
       {groupKeys.length === 0 ? (
         <div className="empty">
           <div className="empty-t">No line items yet</div>
-          <div className="empty-s">Add construction, allowance, and fee line items to build out this proposal.</div>
+          <div className="empty-s">Add the line items this template should always start with.</div>
         </div>
       ) : visibleGroups.length === 0 ? (
         <div className="empty">
           <div className="empty-t">No matches</div>
-          <div className="empty-s">Nothing in this estimate matches "{searchQuery}".</div>
+          <div className="empty-s">Nothing in this template matches "{searchQuery}".</div>
         </div>
       ) : (
         visibleGroups.map(([groupName, groupItems]) => (
@@ -475,7 +341,7 @@ export default function EstimateWorksheet() {
 
       {showItemModal && id && (
         <LineItemModal
-          estimateId={id}
+          templateId={id}
           item={editingItem}
           defaultBucket={newItemDefaults?.bucket}
           defaultGroupName={newItemDefaults?.groupName}
@@ -493,10 +359,8 @@ export default function EstimateWorksheet() {
           }}
         />
       )}
-      </div>
 
-      {id && <EstimateCopilotPanel estimateId={id} existingGroups={existingGroups} onItemAdded={load} />}
-      </div>
+      {showApply && id && <ApplyTemplateModal templateId={id} onClose={() => setShowApply(false)} />}
     </>
   );
 }
