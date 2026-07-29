@@ -84,12 +84,19 @@ body{font-family:var(--font);background:var(--bg);color:var(--text);font-size:14
 
 /* Table */
 .tbl{width:100%;border-collapse:collapse;font-size:13px;}
-.tbl th{text-align:left;padding:8px 12px;color:var(--t2);font-weight:500;font-size:11px;border-bottom:1px solid var(--border);white-space:nowrap;cursor:default;}
+.tbl th{text-align:left;padding:8px 12px;color:var(--t2);font-weight:500;font-size:11px;border-bottom:1px solid var(--border);white-space:nowrap;cursor:default;background:var(--surface);}
 .tbl th.sortable{cursor:pointer;user-select:none;}
 .tbl th.sortable:hover{color:var(--text);}
 .tbl td{padding:10px 12px;border-bottom:1px solid var(--border);vertical-align:middle;}
 .tbl tbody tr:last-child td{border-bottom:none;}
-.tbl tbody tr:hover td{background:var(--bg);cursor:pointer;}
+.tbl tbody tr:hover td{background:var(--border);cursor:pointer;}
+
+/* Wrap a wide .tbl in this to scroll horizontally while keeping the
+   identifying column (marked .sticky-col) pinned in view, like a frozen
+   column in a spreadsheet. */
+.tbl-scroll{overflow-x:auto;}
+.tbl td.sticky-col,.tbl th.sticky-col{position:sticky;left:0;z-index:1;background:var(--surface);}
+.tbl tbody tr:hover td.sticky-col{background:var(--border);}
 .confidence-bar{width:60px;height:6px;background:var(--border);border-radius:3px;overflow:hidden;display:inline-block;vertical-align:middle;}
 .confidence-fill{height:100%;background:var(--border-md);border-radius:3px;}
 
