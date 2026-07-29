@@ -5,6 +5,7 @@ from pydantic import BaseModel
 
 class ParseTranscriptRequest(BaseModel):
     transcript: str
+    current_project_name: Optional[str] = None
 
 
 class ExtractedTask(BaseModel):
