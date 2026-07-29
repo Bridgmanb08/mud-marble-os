@@ -49,6 +49,11 @@ EXTRACTION_PROMPT = """You are an assistant for Mud & Marble, a luxury residenti
 company in Indianapolis. Read this meeting transcript and extract ALL action items, tasks, and \
 project updates mentioned.
 
+The input may include both a pre-written meeting summary and the full raw transcript for the same \
+meeting (e.g. pasted one after the other). If so, treat them as one combined source describing a single \
+meeting -- do not extract the same task or decision twice just because it's mentioned in both the summary \
+and the transcript's dialogue. Each distinct action item should appear exactly once in "tasks".
+
 Here are the company's real active projects. When a task or update clearly relates to one of them, \
 copy its EXACT name from this list into the "project" field -- do not paraphrase or invent a name. \
 If a task is internal/operational and doesn't clearly belong to any listed job, use null.

@@ -126,13 +126,14 @@ export function FathomImportWidget({
             </button>
           </div>
           <p style={{ fontSize: 12, color: 'var(--t2)', marginBottom: 10, lineHeight: 1.5 }}>
-            Paste a transcript for this meeting. Tasks default to <strong>{projectName}</strong> unless the
-            transcript names a different job, and a meeting summary gets logged as a project note.
+            Paste Fathom's summary, the full transcript, or both (pasting both is fine — it won't
+            double-count tasks). Tasks default to <strong>{projectName}</strong> unless the transcript
+            names a different job, and a meeting summary gets logged as a project note.
           </p>
           <textarea
             className="fi"
             style={{ minHeight: 100, fontSize: 12, marginBottom: 8 }}
-            placeholder="Paste Fathom transcript here…"
+            placeholder="Paste Fathom summary and/or transcript here…"
             value={transcript}
             onChange={(e) => setTranscript(e.target.value)}
           />
