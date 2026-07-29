@@ -1,9 +1,10 @@
 import { useEffect, useState, type FormEvent } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { IconTemplate, IconPlus, IconCopy, IconTrash } from '@tabler/icons-react';
+import { IconTemplate, IconPlus, IconCopy, IconTrash, IconFileSpreadsheet } from '@tabler/icons-react';
 import { api, ApiError } from '../api/client';
 import { useToast } from '../components/ui/Toast';
 import { Modal } from '../components/ui/Modal';
+import { ImportTemplateExcel } from '../components/estimates/ImportTemplateExcel';
 import type { EstimateTemplate } from '../types';
 
 function NewTemplateModal({ onClose, onCreated }: { onClose: () => void; onCreated: (t: EstimateTemplate) => void }) {
@@ -79,6 +80,7 @@ function NewTemplateModal({ onClose, onCreated }: { onClose: () => void; onCreat
 export default function EstimateTemplates() {
   const [templates, setTemplates] = useState<EstimateTemplate[] | null>(null);
   const [showNew, setShowNew] = useState(false);
+  const [showImport, setShowImport] = useState(false);
   const toast = useToast();
   const navigate = useNavigate();
 
@@ -126,9 +128,14 @@ export default function EstimateTemplates() {
           <h1>Estimate Templates</h1>
           <p>Reusable scopes you can build once and use on any job</p>
         </div>
-        <button className="btn btn-p btn-sm" onClick={() => setShowNew(true)}>
-          <IconPlus size={14} /> New template
-        </button>
+        <div style={{ display: 'flex', gap: 8 }}>
+          <button className="btn btn-sm" onClick={() => setShowImport(true)}>
+            <IconFileSpreadsheet size={14} /> Import from Excel
+          </button>
+          <button className="btn btn-p btn-sm" onClick={() => setShowNew(true)}>
+            <IconPlus size={14} /> New template
+          </button>
+        </div>
       </div>
 
       <div className="tabs" style={{ marginBottom: 16 }}>
@@ -198,6 +205,8 @@ export default function EstimateTemplates() {
           }}
         />
       )}
+
+      {showImport && <ImportTemplateExcel onClose={() => setShowImport(false)} />}
     </>
   );
 }
