@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
+import { useParams, useNavigate, useSearchParams } from 'react-router-dom';
 import { IconArrowLeft, IconPlus, IconCalendar, IconList } from '@tabler/icons-react';
 import { api } from '../api/client';
 import { useToast } from '../components/ui/Toast';
@@ -45,13 +45,15 @@ export default function ProjectDetail() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const toast = useToast();
+  const [searchParams] = useSearchParams();
   const [project, setProject] = useState<Project | null>(null);
   const [notes, setNotes] = useState<ProjectNote[]>([]);
   const [estimates, setEstimates] = useState<Estimate[]>([]);
   const [changeOrders, setChangeOrders] = useState<ChangeOrder[]>([]);
   const [invoices, setInvoices] = useState<Invoice[]>([]);
   const [tasks, setTasks] = useState<Task[]>([]);
-  const [tab, setTab] = useState('Overview');
+  const requestedTab = searchParams.get('tab');
+  const [tab, setTab] = useState(requestedTab && TABS.includes(requestedTab) ? requestedTab : 'Overview');
   const [showNewNote, setShowNewNote] = useState(false);
   const [showNewCO, setShowNewCO] = useState(false);
   const [showNewInvoice, setShowNewInvoice] = useState(false);

@@ -266,6 +266,13 @@ export default function EstimateWorksheet() {
         <IconArrowLeft size={14} /> Back
       </button>
 
+      <div className="tabs" style={{ marginBottom: 16 }}>
+        <button className="tab on">Estimate</button>
+        <button className="tab" onClick={() => navigate(`/projects/${estimate.project_id}?tab=Invoices`)}>
+          Invoices
+        </button>
+      </div>
+
       <div style={{ display: 'flex', gap: 16, alignItems: 'flex-start' }}>
       <div style={{ flex: 1, minWidth: 0 }}>
       <div className="ph">
