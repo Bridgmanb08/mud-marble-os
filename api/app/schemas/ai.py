@@ -24,12 +24,15 @@ class ParseTranscriptResponse(BaseModel):
     project_updates: list[ExtractedProjectUpdate]
     meeting_date: Optional[str] = None
     attendees: list[str] = []
+    meeting_title: Optional[str] = None
+    summary: Optional[str] = None
 
 
 class ImportTasksRequest(BaseModel):
     tasks: list[ExtractedTask]
     meeting_date: Optional[str] = None
     attendees: list[str] = []
+    default_project_id: Optional[str] = None
 
 
 class ImportTasksResponse(BaseModel):

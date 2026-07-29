@@ -60,6 +60,11 @@ near the top (e.g. a header line or the first few lines of dialogue introducing 
 date isn't stated anywhere, use null. If no attendees are named, use an empty list -- never guess or \
 invent a name that isn't in the transcript.
 
+Also write a short meeting title (e.g. "Kickoff call with Jon & Erin" or "4409 N Pennsylvania walkthrough" \
+-- reference the project or attendees if either is clear, otherwise a plain description of what the \
+meeting was about) and a concise 2-4 sentence summary of what was discussed and decided, suitable to log \
+as a project note. Use null for either if the transcript is too thin to summarize meaningfully.
+
 Return ONLY a JSON object with this structure (no markdown, no explanation):
 {{
   "tasks": [
@@ -69,7 +74,9 @@ Return ONLY a JSON object with this structure (no markdown, no explanation):
     {{"project": "exact project name from the list above", "update": "what was discussed"}}
   ],
   "meeting_date": "the meeting's date/time exactly as stated in the transcript, or null",
-  "attendees": ["name mentioned as present", "..."]
+  "attendees": ["name mentioned as present", "..."],
+  "meeting_title": "short descriptive title, or null",
+  "summary": "2-4 sentence summary of the meeting, or null"
 }}
 
 Transcript:
@@ -133,6 +140,8 @@ async def parse_transcript(body: ParseTranscriptRequest, _: CurrentUser = Depend
         project_updates=parsed.get("project_updates", []),
         meeting_date=parsed.get("meeting_date") or None,
         attendees=parsed.get("attendees") or [],
+        meeting_title=parsed.get("meeting_title") or None,
+        summary=parsed.get("summary") or None,
     )
 
 
@@ -166,6 +175,11 @@ async def import_tasks(body: ImportTasksRequest, _: CurrentUser = Depends(get_cu
                 # step with the real project list (e.g. tasks edited by hand).
                 needle = target[:6]
                 matched = next((p for p in projects if needle in p["name"].lower()), None)
+
+        if not matched and body.default_project_id:
+            # Imported from a specific job's page -- default there unless the
+            # transcript itself named a different project.
+            matched = next((p for p in projects if p["id"] == body.default_project_id), None)
 
         await db_post(
             "schedule_items",

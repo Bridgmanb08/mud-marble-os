@@ -865,6 +865,8 @@ export interface ParseTranscriptResponse {
   project_updates: ExtractedProjectUpdate[];
   meeting_date: string | null;
   attendees: string[];
+  meeting_title: string | null;
+  summary: string | null;
 }
 
 export interface ChatMessage {
