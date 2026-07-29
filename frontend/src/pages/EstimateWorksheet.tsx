@@ -9,6 +9,7 @@ import {
   IconFileSpreadsheet,
   IconCopy,
   IconSearch,
+  IconTemplate,
 } from '@tabler/icons-react';
 import { api, ApiError } from '../api/client';
 import { useToast } from '../components/ui/Toast';
@@ -17,6 +18,8 @@ import { fmt, fmtD } from '../lib/format';
 import { LineItemModal } from '../components/estimates/LineItemModal';
 import { EstimateCopilotPanel } from '../components/estimates/EstimateCopilotPanel';
 import { LineItemGroupCard } from '../components/estimates/LineItemGroupCard';
+import { SaveAsTemplateModal } from '../components/estimates/SaveAsTemplateModal';
+import { InsertFromTemplateModal } from '../components/estimates/InsertFromTemplateModal';
 import { RichTextEditor } from '../components/ui/RichTextEditor';
 import type { Estimate, EstimateLineItem } from '../types';
 
@@ -61,6 +64,8 @@ export default function EstimateWorksheet() {
   const [editingGroupValue, setEditingGroupValue] = useState('');
   const [showNewGroupPrompt, setShowNewGroupPrompt] = useState(false);
   const [newGroupName, setNewGroupName] = useState('');
+  const [showSaveAsTemplate, setShowSaveAsTemplate] = useState(false);
+  const [showInsertFromTemplate, setShowInsertFromTemplate] = useState(false);
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 5 } }));
 
   async function load() {
@@ -302,6 +307,9 @@ export default function EstimateWorksheet() {
           <button className="btn btn-sm" onClick={duplicateVersion} disabled={duplicating}>
             <IconCopy size={14} /> {duplicating ? 'Duplicating…' : 'New version'}
           </button>
+          <button className="btn btn-sm" onClick={() => setShowSaveAsTemplate(true)}>
+            <IconTemplate size={14} /> Save as template
+          </button>
           <button className="btn btn-sm" onClick={downloadExcel}>
             <IconFileSpreadsheet size={14} /> Excel
           </button>
@@ -383,6 +391,9 @@ export default function EstimateWorksheet() {
       <div className="sh">
         <div className="st">Worksheet</div>
         <div style={{ display: 'flex', gap: 8 }}>
+          <button className="btn btn-sm" onClick={() => setShowInsertFromTemplate(true)}>
+            <IconTemplate size={14} /> Insert from template
+          </button>
           <button className="btn btn-sm" onClick={() => setShowNewGroupPrompt(true)}>
             <IconPlus size={14} /> Add group
           </button>
@@ -489,6 +500,48 @@ export default function EstimateWorksheet() {
           onDeleted={() => {
             setShowItemModal(false);
             toast('Line item deleted');
+            load();
+          }}
+        />
+      )}
+
+      {showSaveAsTemplate && id && (
+        <SaveAsTemplateModal
+          estimateId={id}
+          onClose={() => setShowSaveAsTemplate(false)}
+          onSaved={(template) => {
+            setShowSaveAsTemplate(false);
+            toast(`Saved as template "${template.name}"`);
+          }}
+        />
+      )}
+
+      {showInsertFromTemplate && id && (
+        <InsertFromTemplateModal
+          onClose={() => setShowInsertFromTemplate(false)}
+          onInsert={async (items) => {
+            await Promise.all(
+              items.map((item) =>
+                api.post(`/estimates/${id}/items`, {
+                  cost_code_id: item.cost_code_id,
+                  group_name: item.group_name,
+                  bucket: item.bucket,
+                  title: item.title,
+                  description: item.description,
+                  quantity: item.quantity,
+                  unit: item.unit,
+                  unit_cost: item.unit_cost,
+                  cost_type: item.cost_type,
+                  markup_type: item.markup_type,
+                  markup_value: item.markup_value,
+                  estimated_days: item.estimated_days,
+                  notes_internal: item.notes_internal,
+                  notes_external: item.notes_external,
+                })
+              )
+            );
+            setShowInsertFromTemplate(false);
+            toast(`Inserted ${items.length} line item${items.length !== 1 ? 's' : ''}`);
             load();
           }}
         />
