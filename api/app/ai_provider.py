@@ -18,7 +18,7 @@ class ProviderError(Exception):
 
 
 class EstimateSuggestion(BaseModel):
-    kind: Literal["gap", "transcript_item"]
+    kind: Literal["gap", "transcript_item"] = "gap"
     title: str
     cost_code_id: Optional[str] = None
     suggested_group_name: Optional[str] = None
@@ -26,6 +26,40 @@ class EstimateSuggestion(BaseModel):
     quantity: Optional[float] = None
     unit: Optional[str] = None
     source_quote: Optional[str] = None
+
+
+class GapResolution(BaseModel):
+    """The payoff of answering one yes/no question (or its follow-up): a short
+    verdict, plus a concrete line item to add only when this branch actually
+    confirms a gap."""
+
+    advice: str
+    suggestion: Optional[EstimateSuggestion] = None
+
+
+class GapFollowUp(BaseModel):
+    """A single deeper yes/no question a branch can lead to -- e.g. "yes, paint
+    is priced" -> "does that include ceilings?". Resolves on its own; a
+    follow-up never has a further follow-up, which keeps the tree bounded at
+    two levels for both response size and a UI that stays a quick click-through."""
+
+    question: str
+    yes: GapResolution
+    no: GapResolution
+
+
+class GapBranch(BaseModel):
+    advice: str
+    suggestion: Optional[EstimateSuggestion] = None
+    follow_up: Optional[GapFollowUp] = None
+
+
+class GapQuestion(BaseModel):
+    id: str
+    question: str
+    context: Optional[str] = None
+    yes: GapBranch
+    no: GapBranch
 
 
 class LineItemBrief(BaseModel):
@@ -83,66 +117,126 @@ def _parse_suggestions(raw_text: str, kind: str) -> list[dict]:
     return items
 
 
-GAP_CHECK_PROMPT = """You are reviewing a construction estimate for Mud & Marble, a luxury residential \
-builder, looking for likely-missing complementary scope items -- things that are commonly needed \
-alongside what's already on the estimate but aren't listed yet.
+GAP_CHECK_INSTRUCTIONS = """You are reviewing a construction estimate for Mud & Marble, a luxury residential \
+builder. Instead of just listing what might be missing, coach the estimator with short Socratic yes/no \
+questions -- each one should be something they can answer just by checking their own scope, and the answer \
+itself is what reveals whether there's a real gap.
 
 {examples}
 
-Current line items on this estimate (title, group, cost code if set):
-{line_items}
+Frame each check as a question where answering "no" reveals a likely gap (pair it with a concrete suggested \
+line item), and answering "yes" gives a brief confirmation -- optionally followed by ONE deeper yes/no \
+question that probes a more specific risk within that same area (e.g. "yes, paint is priced" -> "does that \
+include ceilings, or just walls?"). Keep the tree to at most two levels: the main question, then at most one \
+follow-up question per branch, which resolves on its own without spawning a further follow-up.
+
+Before asking about something, check whether a group already covers it (e.g. don't ask about paint if a \
+"Paint & Finishes" group already has items in it). Only raise checks that are genuinely worth asking -- 3 to \
+6 sharp questions beats a long list of shallow ones.
 
 Available cost codes (id: code - name) -- if you're confident a suggestion matches one of these, use its \
 exact id; otherwise leave cost_code_id null rather than guessing:
 {cost_codes}
 
-Before suggesting something, check whether a group already covers it (e.g. don't suggest "Paint" if a \
-"Paint & Finishes" group already has items in it). Only suggest items that are genuinely missing.
+Return ONLY a JSON object with this exact structure (no markdown, no explanation). Here's one fully-worked \
+example so you can match the shape and tone:
 
-Return ONLY a JSON object with this structure (no markdown, no explanation):
 {{
-  "suggestions": [
-    {{"title": "short item title", "cost_code_id": "exact id from the list above, or null", \
-"suggested_group_name": "a sensible group name, or null", "rationale": "why this is likely needed"}}
+  "questions": [
+    {{
+      "id": "paint-after-drywall",
+      "context": "Drywall is on the estimate with no finish coat behind it yet.",
+      "question": "Have you already priced painting for the areas getting drywalled?",
+      "yes": {{
+        "advice": "Good -- just double check it covers ceilings, not only walls.",
+        "follow_up": {{
+          "question": "Does that pricing include ceiling paint, or just the walls?",
+          "yes": {{"advice": "You're covered -- nothing to add here."}},
+          "no": {{
+            "advice": "Ceilings are easy to miss and add real square footage -- worth a separate line.",
+            "suggestion": {{"title": "Ceiling paint - drywalled areas", "cost_code_id": null, \
+"suggested_group_name": "Paint & Finishes", "rationale": "Ceiling paint is often priced separately from wall \
+paint and gets missed."}}
+          }}
+        }}
+      }},
+      "no": {{
+        "advice": "Drywall without a finish coat is one of the most common estimate gaps -- worth adding now.",
+        "suggestion": {{"title": "Paint - drywalled areas", "cost_code_id": null, "suggested_group_name": \
+"Paint & Finishes", "rationale": "Drywall is on the estimate but no paint/finish line item follows it yet."}}
+      }}
+    }}
   ]
 }}
 
-If nothing looks missing, return {{"suggestions": []}}."""
+A branch only needs "suggestion" when it's confirming a real gap, and only needs "follow_up" when there's a \
+genuinely useful deeper question -- most branches will have just one or the other, and "yes" often needs \
+neither. If nothing looks worth asking about, return {{"questions": []}}."""
+
+GAP_CHECK_LINE_ITEMS_PROMPT = """Current line items on this estimate (title, group, cost code if set):
+{line_items}
+
+Check this specific estimate now."""
+
+
+def _parse_gap_questions(raw_text: str) -> list[dict]:
+    raw = raw_text.replace("```json", "").replace("```", "").strip()
+    try:
+        parsed = json.loads(raw)
+    except json.JSONDecodeError as e:
+        raise ProviderError(f"Response couldn't be parsed as JSON: {e}") from e
+    items = parsed.get("questions", []) if isinstance(parsed, dict) else parsed
+    if not isinstance(items, list):
+        raise ProviderError("Response JSON did not contain a questions list")
+    return items
 
 
 async def suggest_estimate_gaps(
     line_items: list[LineItemBrief], cost_code_catalog: list[CostCodeBrief]
-) -> list[EstimateSuggestion]:
+) -> list[GapQuestion]:
     client = _client()
     items_text = (
         "\n".join(f"- {i.title} (group: {i.group_name or '—'}, cost code: {i.cost_code or '—'})" for i in line_items)
         if line_items
         else "(no line items yet)"
     )
+    # Split into a static block (instructions/examples/cost codes -- identical
+    # across repeated gap-checks for this account) and a per-call block (this
+    # estimate's own line items). Marking the static block cacheable means a
+    # second gap-check within the ~5 min ephemeral-cache window reuses it
+    # instead of re-processing the whole prompt, which is most of the latency.
     message = await client.messages.create(
         model=MODEL,
-        max_tokens=2048,
+        max_tokens=3000,
         messages=[
             {
                 "role": "user",
-                "content": GAP_CHECK_PROMPT.format(
-                    examples=DEPENDENCY_EXAMPLES,
-                    line_items=items_text,
-                    cost_codes=_catalog_text(cost_code_catalog),
-                ),
+                "content": [
+                    {
+                        "type": "text",
+                        "text": GAP_CHECK_INSTRUCTIONS.format(
+                            examples=DEPENDENCY_EXAMPLES, cost_codes=_catalog_text(cost_code_catalog)
+                        ),
+                        "cache_control": {"type": "ephemeral"},
+                    },
+                    {
+                        "type": "text",
+                        "text": GAP_CHECK_LINE_ITEMS_PROMPT.format(line_items=items_text),
+                    },
+                ],
             }
         ],
     )
     raw = message.content[0].text if message.content else "{}"
-    items = _parse_suggestions(raw, "gap")
+    items = _parse_gap_questions(raw)
 
-    suggestions = []
+    questions: list[GapQuestion] = []
     for item in items:
         try:
-            suggestions.append(EstimateSuggestion(**item))
+            questions.append(GapQuestion(**item))
         except ValidationError:
             continue
-    return suggestions
+    return questions
 
 
 TRANSCRIPT_EXTRACT_PROMPT = """You are reading a jobsite walkthrough transcript for Mud & Marble, a luxury \

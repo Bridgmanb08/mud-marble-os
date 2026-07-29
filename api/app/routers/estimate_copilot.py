@@ -8,7 +8,7 @@ from ..ai_provider import (
     suggest_estimate_gaps,
 )
 from ..deps import CurrentUser, get_current_user
-from ..estimate_suggestion_spec import validate_suggestions
+from ..estimate_suggestion_spec import validate_gap_questions, validate_suggestions
 from ..schemas.estimate_copilot import GapCheckResponse, TranscriptExtractRequest, TranscriptExtractResponse
 from ..supabase_client import db_get
 
@@ -32,13 +32,13 @@ async def gap_check(estimate_id: str, _: CurrentUser = Depends(get_current_user)
     cost_codes = await _active_cost_codes()
 
     try:
-        suggestions = await suggest_estimate_gaps(line_items, cost_codes)
+        questions = await suggest_estimate_gaps(line_items, cost_codes)
     except ProviderError as e:
         raise HTTPException(status_code=502, detail=str(e)) from e
 
     valid_ids = {c.id for c in cost_codes}
-    accepted, dropped = validate_suggestions(suggestions, valid_ids)
-    return GapCheckResponse(suggestions=accepted, dropped=dropped)
+    accepted, dropped = validate_gap_questions(questions, valid_ids)
+    return GapCheckResponse(questions=accepted, dropped=dropped)
 
 
 @router.post("/{estimate_id}/copilot/transcript-extract", response_model=TranscriptExtractResponse)
