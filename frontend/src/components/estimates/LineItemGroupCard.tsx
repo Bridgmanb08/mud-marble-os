@@ -51,7 +51,7 @@ function SortableLineItemRow<T extends LineItemLike>({
           <IconGripVertical size={14} />
         </button>
       </td>
-      <td>
+      <td className="sticky-col">
         <div style={{ fontWeight: 500 }}>{item.title}</div>
         {item.cost_codes && (
           <div style={{ fontSize: 11, color: 'var(--t2)' }}>
@@ -137,29 +137,31 @@ export function LineItemGroupCard<T extends LineItemLike>({
         </button>
       </div>
       {!collapsed && (
-        <table className="tbl">
-          <thead>
-            <tr>
-              <th style={{ width: 24 }} />
-              <th>Items</th>
-              <th>Description</th>
-              <th style={{ textAlign: 'right' }}>Qty</th>
-              <th style={{ textAlign: 'right' }}>Unit cost</th>
-              <th style={{ textAlign: 'right' }}>Builder cost</th>
-              <th style={{ textAlign: 'right' }}>Client price</th>
-              {hasDays && <th style={{ textAlign: 'right' }}>Workdays</th>}
-            </tr>
-          </thead>
-          <DndContext sensors={itemSensors} onDragEnd={onReorderItems}>
-            <SortableContext items={groupItems.map((i) => i.id)} strategy={verticalListSortingStrategy}>
-              <tbody>
-                {groupItems.map((item) => (
-                  <SortableLineItemRow key={item.id} item={item} hasDays={hasDays} onClick={() => onItemClick(item)} />
-                ))}
-              </tbody>
-            </SortableContext>
-          </DndContext>
-        </table>
+        <div className="tbl-scroll">
+          <table className="tbl">
+            <thead>
+              <tr>
+                <th style={{ width: 24 }} />
+                <th className="sticky-col">Items</th>
+                <th>Description</th>
+                <th style={{ textAlign: 'right' }}>Qty</th>
+                <th style={{ textAlign: 'right' }}>Unit cost</th>
+                <th style={{ textAlign: 'right' }}>Builder cost</th>
+                <th style={{ textAlign: 'right' }}>Client price</th>
+                {hasDays && <th style={{ textAlign: 'right' }}>Workdays</th>}
+              </tr>
+            </thead>
+            <DndContext sensors={itemSensors} onDragEnd={onReorderItems}>
+              <SortableContext items={groupItems.map((i) => i.id)} strategy={verticalListSortingStrategy}>
+                <tbody>
+                  {groupItems.map((item) => (
+                    <SortableLineItemRow key={item.id} item={item} hasDays={hasDays} onClick={() => onItemClick(item)} />
+                  ))}
+                </tbody>
+              </SortableContext>
+            </DndContext>
+          </table>
+        </div>
       )}
     </div>
   );

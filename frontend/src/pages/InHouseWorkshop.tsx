@@ -307,10 +307,11 @@ export default function InHouseWorkshop() {
               <div className="empty-t">No transactions yet</div>
             </div>
           ) : (
+            <div className="tbl-scroll">
             <table className="tbl">
               <thead>
                 <tr>
-                  <th>Date</th>
+                  <th className="sticky-col">Date</th>
                   <th>Vendor</th>
                   <th>Description</th>
                   <th>Cost code</th>
@@ -321,7 +322,7 @@ export default function InHouseWorkshop() {
               <tbody>
                 {transactions.map((t) => (
                   <tr key={t.id} onClick={() => setEditingTransaction(t)} style={{ cursor: 'pointer' }}>
-                    <td>{fmtD(t.transaction_date)}</td>
+                    <td className="sticky-col">{fmtD(t.transaction_date)}</td>
                     <td>{t.vendor || '—'}</td>
                     <td style={{ maxWidth: 260, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                       {t.description || '—'}
@@ -353,6 +354,7 @@ export default function InHouseWorkshop() {
                 ))}
               </tbody>
             </table>
+            </div>
           )}
         </>
       )}
