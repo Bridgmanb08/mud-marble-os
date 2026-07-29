@@ -93,3 +93,24 @@ class SaveAsTemplateRequest(BaseModel):
 
 class ApplyTemplateRequest(BaseModel):
     project_id: str
+
+
+class ImportPreviewResponse(BaseModel):
+    headers: list[str]
+    rows: list[dict[str, str]]
+    suggested_mapping: dict[str, Optional[str]]
+    row_count: int
+
+
+class ImportCommitRequest(BaseModel):
+    name: str
+    category: Optional[str] = None
+    description: Optional[str] = None
+    mapping: dict[str, Optional[str]]
+    rows: list[dict[str, str]]
+
+
+class ImportCommitResponse(BaseModel):
+    template: EstimateTemplateOut
+    item_count: int
+    dropped: list[str]

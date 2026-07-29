@@ -243,6 +243,33 @@ export interface EstimateTemplateItem {
   cost_codes: { code: string; name: string } | null;
 }
 
+export const TEMPLATE_IMPORT_FIELDS = [
+  'title',
+  'category',
+  'cost_code',
+  'quantity',
+  'unit_cost',
+  'markup',
+  'markup_type',
+  'description',
+  'internal_notes',
+] as const;
+
+export type TemplateImportField = (typeof TEMPLATE_IMPORT_FIELDS)[number];
+
+export interface ImportPreviewResponse {
+  headers: string[];
+  rows: Record<string, string>[];
+  suggested_mapping: Record<TemplateImportField, string | null>;
+  row_count: number;
+}
+
+export interface ImportCommitResponse {
+  template: EstimateTemplate;
+  item_count: number;
+  dropped: string[];
+}
+
 export interface EstimateSuggestion {
   kind: 'gap' | 'transcript_item';
   title: string;

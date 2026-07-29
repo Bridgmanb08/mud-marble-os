@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
+import { useParams, useNavigate, useLocation } from 'react-router-dom';
 import { PointerSensor, useSensor, useSensors, type DragEndEvent } from '@dnd-kit/core';
 import { arrayMove } from '@dnd-kit/sortable';
 import { IconArrowLeft, IconPlus, IconSearch, IconRocket } from '@tabler/icons-react';
@@ -16,6 +16,7 @@ const BUCKET_LABEL: Record<string, string> = { pm_fee: 'PM Fee', construction: '
 export default function EstimateTemplateWorksheet() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
+  const location = useLocation();
   const toast = useToast();
 
   const [template, setTemplate] = useState<EstimateTemplate | null>(null);
@@ -57,6 +58,15 @@ export default function EstimateTemplateWorksheet() {
     load();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [id]);
+
+  useEffect(() => {
+    const dropped = (location.state as { importDropped?: string[] } | null)?.importDropped;
+    if (dropped && dropped.length > 0) {
+      toast(`Imported, but ${dropped.length} item${dropped.length !== 1 ? 's' : ''} needed a manual cost-code check`, true);
+      navigate(location.pathname, { replace: true, state: null });
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   if (!template) {
     return (

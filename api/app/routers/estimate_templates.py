@@ -1,14 +1,18 @@
 from datetime import datetime, timezone
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, File, HTTPException, UploadFile
 
 from ..deps import CurrentUser, get_current_user
 from ..estimate_defaults import DEFAULT_CLOSING_TEXT
+from ..estimate_import import bucket_for, guess_mapping, normalize_markup, parse_cost_code, parse_workbook
 from ..schemas.estimate_templates import (
     ApplyTemplateRequest,
     EstimateTemplateCreate,
     EstimateTemplateOut,
     EstimateTemplateUpdate,
+    ImportCommitRequest,
+    ImportCommitResponse,
+    ImportPreviewResponse,
     SaveAsTemplateRequest,
     TemplateLineItemCreate,
     TemplateLineItemOut,
@@ -231,3 +235,107 @@ async def update_template_item(
 async def delete_template_item(template_id: str, item_id: str, _: CurrentUser = Depends(get_current_user)):
     await db_delete("estimate_template_items", item_id)
     return {"ok": True}
+
+
+@router.post("/import/preview", response_model=ImportPreviewResponse)
+async def import_preview(file: UploadFile = File(...), _: CurrentUser = Depends(get_current_user)):
+    content = await file.read()
+    try:
+        headers, rows = parse_workbook(file.filename or "", content)
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=f"Could not read that file: {e}") from e
+    if not headers:
+        raise HTTPException(status_code=400, detail="No header row found in that file")
+    return ImportPreviewResponse(
+        headers=headers,
+        rows=rows[:1000],
+        suggested_mapping=guess_mapping(headers),
+        row_count=len(rows),
+    )
+
+
+@router.post("/import/commit", response_model=ImportCommitResponse)
+async def import_commit(body: ImportCommitRequest, _: CurrentUser = Depends(get_current_user)):
+    title_header = body.mapping.get("title")
+    if not title_header:
+        raise HTTPException(status_code=400, detail="Title must be mapped to a column")
+
+    cost_code_rows = await db_get("cost_codes", "?is_active=eq.true&order=code.asc&limit=200&select=id,code,name")
+    codes_by_code = {c["code"].strip().lower(): c["id"] for c in cost_code_rows if c.get("code")}
+
+    new_template = (
+        await db_post(
+            "estimate_templates",
+            {"name": body.name, "category": body.category, "description": body.description},
+        )
+    )[0]
+
+    category_header = body.mapping.get("category")
+    cost_code_header = body.mapping.get("cost_code")
+    quantity_header = body.mapping.get("quantity")
+    unit_cost_header = body.mapping.get("unit_cost")
+    markup_header = body.mapping.get("markup")
+    markup_type_header = body.mapping.get("markup_type")
+    description_header = body.mapping.get("description")
+    internal_notes_header = body.mapping.get("internal_notes")
+
+    items_to_insert: list[dict] = []
+    dropped: list[str] = []
+    for row in body.rows:
+        title = (row.get(title_header) or "").strip()
+        if not title:
+            continue
+        category = row.get(category_header, "") if category_header else ""
+        raw_cost_code = row.get(cost_code_header, "") if cost_code_header else ""
+        quantity_raw = row.get(quantity_header, "") if quantity_header else ""
+        unit_cost_raw = row.get(unit_cost_header, "") if unit_cost_header else ""
+        markup_raw = row.get(markup_header, "") if markup_header else ""
+        markup_type_raw = row.get(markup_type_header, "") if markup_type_header else ""
+        description = (row.get(description_header) or None) if description_header else None
+        internal_notes = (row.get(internal_notes_header) or None) if internal_notes_header else None
+
+        try:
+            quantity = float(quantity_raw) if quantity_raw else 1.0
+        except ValueError:
+            quantity = 1.0
+        try:
+            unit_cost = float(unit_cost_raw) if unit_cost_raw else 0.0
+        except ValueError:
+            unit_cost = 0.0
+
+        markup_type, markup_value = normalize_markup(markup_raw, markup_type_raw, quantity)
+        builder_cost, owner_price = _compute_costs(quantity, unit_cost, markup_type, markup_value)
+
+        code = parse_cost_code(raw_cost_code)
+        cost_code_id = codes_by_code.get(code.lower()) if code else None
+        notes_internal = internal_notes or ""
+        if raw_cost_code and not cost_code_id:
+            notes_internal = f"{notes_internal}\n[Source cost code not matched: {raw_cost_code}]".strip()
+            dropped.append(f"'{title}' referenced cost code '{raw_cost_code}' which doesn't match any active code -- left unassigned")
+
+        items_to_insert.append(
+            {
+                "template_id": new_template["id"],
+                "cost_code_id": cost_code_id,
+                "group_name": None,
+                "bucket": bucket_for(category, title),
+                "title": title,
+                "description": description,
+                "quantity": quantity,
+                "unit": None,
+                "unit_cost": unit_cost,
+                "cost_type": "none",
+                "builder_cost": builder_cost,
+                "markup_type": markup_type,
+                "markup_value": markup_value,
+                "owner_price": owner_price,
+                "notes_internal": notes_internal or None,
+                "notes_external": description,
+                "sort_order": len(items_to_insert),
+            }
+        )
+
+    if items_to_insert:
+        await db_post_many("estimate_template_items", items_to_insert)
+
+    return ImportCommitResponse(template=new_template, item_count=len(items_to_insert), dropped=dropped)
