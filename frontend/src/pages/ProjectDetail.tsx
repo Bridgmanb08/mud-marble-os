@@ -11,10 +11,20 @@ import { NewChangeOrderModal } from '../components/change-orders/NewChangeOrderM
 import { NewInvoiceModal } from '../components/invoices/NewInvoiceModal';
 import { NewTaskModal } from '../components/tasks/NewTaskModal';
 import { TaskDetailDrawer } from '../components/tasks/TaskDetailDrawer';
+import { KanbanBoard } from '../components/tasks/KanbanBoard';
 import { FilesTab } from '../components/projects/FilesTab';
 import { WeekScrollCalendar } from '../components/schedule/WeekScrollCalendar';
+import { FathomImportWidget } from '../components/projects/FathomImportWidget';
 
-const TABS = ['Overview', 'Notes', 'Estimate', 'Change Orders', 'Invoices', 'Schedule', 'Files'];
+const TABS = ['Overview', 'Notes', 'Estimate', 'Change Orders', 'Invoices', 'Tasks', 'Schedule', 'Files'];
+
+// Sticky tab bar sits below the fixed 52px topbar; sections need matching
+// scroll-margin so scrollIntoView doesn't tuck the section header under it.
+const SECTION_SCROLL_MARGIN = 108;
+
+function sectionId(tab: string): string {
+  return `pd-section-${tab.toLowerCase().replace(/\s+/g, '-')}`;
+}
 
 const NOTE_COLORS: Record<string, string> = {
   site_visit: 'var(--blue)',
@@ -53,11 +63,12 @@ export default function ProjectDetail() {
   const [invoices, setInvoices] = useState<Invoice[]>([]);
   const [tasks, setTasks] = useState<Task[]>([]);
   const requestedTab = searchParams.get('tab');
-  const [tab, setTab] = useState(requestedTab && TABS.includes(requestedTab) ? requestedTab : 'Overview');
+  const [activeTab, setActiveTab] = useState(requestedTab && TABS.includes(requestedTab) ? requestedTab : 'Overview');
   const [showNewNote, setShowNewNote] = useState(false);
   const [showNewCO, setShowNewCO] = useState(false);
   const [showNewInvoice, setShowNewInvoice] = useState(false);
   const [showNewTask, setShowNewTask] = useState(false);
+  const [newTaskStatus, setNewTaskStatus] = useState('upcoming');
   const [detailTask, setDetailTask] = useState<Task | undefined>(undefined);
   const [startingEstimate, setStartingEstimate] = useState(false);
   const [scheduleView, setScheduleView] = useState<'calendar' | 'list'>('calendar');
@@ -108,7 +119,25 @@ export default function ProjectDetail() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [id]);
 
+  // Deep link (e.g. "?tab=Invoices" from the estimate worksheet) -- scroll to
+  // that section once the page (and its section anchors) has actually mounted.
+  useEffect(() => {
+    if (!project || !requestedTab) return;
+    document.getElementById(sectionId(requestedTab))?.scrollIntoView({ block: 'start' });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [project]);
+
   const filteredTasks = subFilter ? tasks.filter((t) => t.subcontractor_id === subFilter) : tasks;
+
+  function scrollToSection(t: string) {
+    setActiveTab(t);
+    document.getElementById(sectionId(t))?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  }
+
+  function openNewTask(status: string) {
+    setNewTaskStatus(status);
+    setShowNewTask(true);
+  }
 
   if (!project) {
     return (
@@ -178,15 +207,21 @@ export default function ProjectDetail() {
         </select>
       </div>
 
-      <div className="tabs" style={{ margin: '0 -24px 0', borderRadius: 0 }}>
+      <div
+        className="tabs"
+        style={{ margin: '0 -24px 0', borderRadius: 0, position: 'sticky', top: 'var(--tb)', zIndex: 50 }}
+      >
         {TABS.map((t) => (
-          <button key={t} type="button" className={`tab${tab === t ? ' on' : ''}`} onClick={() => setTab(t)}>
+          <button key={t} type="button" className={`tab${activeTab === t ? ' on' : ''}`} onClick={() => scrollToSection(t)}>
             {t}
           </button>
         ))}
       </div>
       <div className="tb" style={{ borderRadius: '0 0 12px 12px' }}>
-        {tab === 'Overview' && (
+        <div id={sectionId('Overview')} style={{ scrollMarginTop: SECTION_SCROLL_MARGIN, paddingBottom: 24, marginBottom: 24, borderBottom: '1px solid var(--border)' }}>
+          <div className="ibt" style={{ fontSize: 13, textTransform: 'none', letterSpacing: 0, border: 'none', padding: 0, marginBottom: 14 }}>
+            Overview
+          </div>
           <div className="ig">
             <div>
               <div className="ibt">Project details</div>
@@ -235,161 +270,179 @@ export default function ProjectDetail() {
               <p style={{ fontSize: 13, color: 'var(--t2)', lineHeight: 1.5 }}>{project.internal_notes || 'No notes yet.'}</p>
             </div>
           </div>
-        )}
+        </div>
 
-        {tab === 'Notes' && (
-          <>
-            <div className="sh">
-              <div className="st">Activity log</div>
-              <button className="btn btn-p btn-sm" onClick={() => setShowNewNote(true)}>
-                <IconPlus size={14} /> Log a note
-              </button>
-            </div>
-            {notes.length ? (
-              notes.map((n) => (
-                <div key={n.id} style={{ display: 'flex', gap: 12, padding: '10px 0', borderBottom: '1px solid var(--border)' }}>
-                  <div className="af-dot" style={{ background: NOTE_COLORS[n.note_type] || 'var(--t3)', width: 8, height: 8, borderRadius: '50%', marginTop: 4, flexShrink: 0 }} />
-                  <div style={{ flex: 1 }}>
-                    <div style={{ fontSize: 12 }}>
-                      <strong>{n.author}</strong> logged a {n.note_type.replace('_', ' ')}
-                      {n.is_client_visible && <span className="badge bg-blue" style={{ marginLeft: 6 }}>Client visible</span>}
-                    </div>
-                    <div style={{ fontSize: 13, marginTop: 4 }}>{n.content}</div>
-                    <div style={{ fontSize: 11, color: 'var(--t3)', marginTop: 4 }}>{fmtD(n.created_at)}</div>
+        <div id={sectionId('Notes')} style={{ scrollMarginTop: SECTION_SCROLL_MARGIN, paddingBottom: 24, marginBottom: 24, borderBottom: '1px solid var(--border)' }}>
+          <div className="ibt" style={{ fontSize: 13, textTransform: 'none', letterSpacing: 0, border: 'none', padding: 0, marginBottom: 14 }}>
+            Notes
+          </div>
+          <div className="sh">
+            <div className="st">Activity log</div>
+            <button className="btn btn-p btn-sm" onClick={() => setShowNewNote(true)}>
+              <IconPlus size={14} /> Log a note
+            </button>
+          </div>
+          {notes.length ? (
+            notes.map((n) => (
+              <div key={n.id} style={{ display: 'flex', gap: 12, padding: '10px 0', borderBottom: '1px solid var(--border)' }}>
+                <div className="af-dot" style={{ background: NOTE_COLORS[n.note_type] || 'var(--t3)', width: 8, height: 8, borderRadius: '50%', marginTop: 4, flexShrink: 0 }} />
+                <div style={{ flex: 1 }}>
+                  <div style={{ fontSize: 12 }}>
+                    <strong>{n.author}</strong> logged a {n.note_type.replace('_', ' ')}
+                    {n.is_client_visible && <span className="badge bg-blue" style={{ marginLeft: 6 }}>Client visible</span>}
                   </div>
+                  <div style={{ fontSize: 13, marginTop: 4, whiteSpace: 'pre-wrap' }}>{n.content}</div>
+                  <div style={{ fontSize: 11, color: 'var(--t3)', marginTop: 4 }}>{fmtD(n.created_at)}</div>
                 </div>
-              ))
-            ) : (
-              <div className="empty-s">No notes logged yet.</div>
-            )}
-          </>
-        )}
-
-        {tab === 'Estimate' && (
-          <>
-            <div className="sh">
-              <div className="st">{estimates.length} version{estimates.length === 1 ? '' : 's'}</div>
-              <button className="btn btn-p btn-sm" onClick={startEstimate} disabled={startingEstimate}>
-                <IconPlus size={14} /> {startingEstimate ? 'Starting…' : 'New estimate'}
-              </button>
-            </div>
-            {estimates.length === 0 ? (
-              <div className="empty">
-                <div className="empty-t">No estimate yet</div>
-                <div className="empty-s">Start an estimate to build out a proposal worksheet with grouped line items, markup, and PDF export.</div>
               </div>
-            ) : (
-              <table className="tbl">
-                <thead>
-                  <tr>
-                    <th>Title</th>
-                    <th>Version</th>
-                    <th style={{ textAlign: 'right' }}>Grand total</th>
-                    <th>Status</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {[...estimates]
-                    .sort((a, b) => b.version - a.version)
-                    .map((e) => (
-                      <tr key={e.id} onClick={() => navigate(`/estimates/${e.id}`)} style={{ cursor: 'pointer' }}>
-                        <td style={{ fontWeight: 500 }}>{e.title || `Version ${e.version}`}</td>
-                        <td>v{e.version}</td>
-                        <td style={{ textAlign: 'right' }}>{fmt(e.grand_total_owner_price)}</td>
-                        <td>
-                          <span className={`badge ${ESTIMATE_STATUS_BADGE[e.status] || 'bg-gray'}`}>{e.status.replace(/_/g, ' ')}</span>
-                        </td>
-                      </tr>
-                    ))}
-                </tbody>
-              </table>
-            )}
-          </>
-        )}
+            ))
+          ) : (
+            <div className="empty-s">No notes logged yet.</div>
+          )}
+        </div>
 
-        {tab === 'Change Orders' && (
-          <>
-            <div className="sh">
-              <div className="st">{changeOrders.length} change orders</div>
-              <button className="btn btn-p btn-sm" onClick={() => setShowNewCO(true)}>
-                <IconPlus size={14} /> New change order
-              </button>
+        <div id={sectionId('Estimate')} style={{ scrollMarginTop: SECTION_SCROLL_MARGIN, paddingBottom: 24, marginBottom: 24, borderBottom: '1px solid var(--border)' }}>
+          <div className="ibt" style={{ fontSize: 13, textTransform: 'none', letterSpacing: 0, border: 'none', padding: 0, marginBottom: 14 }}>
+            Estimate
+          </div>
+          <div className="sh">
+            <div className="st">{estimates.length} version{estimates.length === 1 ? '' : 's'}</div>
+            <button className="btn btn-p btn-sm" onClick={startEstimate} disabled={startingEstimate}>
+              <IconPlus size={14} /> {startingEstimate ? 'Starting…' : 'New estimate'}
+            </button>
+          </div>
+          {estimates.length === 0 ? (
+            <div className="empty">
+              <div className="empty-t">No estimate yet</div>
+              <div className="empty-s">Start an estimate to build out a proposal worksheet with grouped line items, markup, and PDF export.</div>
             </div>
-            {changeOrders.length === 0 ? (
-              <div className="empty-s">No change orders yet.</div>
-            ) : (
-              <table className="tbl">
-                <thead>
-                  <tr>
-                    <th>CO #</th>
-                    <th>Title</th>
-                    <th>Type</th>
-                    <th style={{ textAlign: 'right' }}>Owner price</th>
-                    <th>Status</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {changeOrders.map((co) => (
-                    <tr key={co.id}>
-                      <td>{co.co_number ?? '—'}</td>
-                      <td style={{ fontWeight: 500 }}>{co.title}</td>
-                      <td><span className={`badge ${CO_TYPE_BADGE[co.co_type] || 'bg-gray'}`}>{co.co_type.replace('_', ' ')}</span></td>
-                      <td style={{ textAlign: 'right' }}>{fmt(co.owner_price)}</td>
+          ) : (
+            <table className="tbl">
+              <thead>
+                <tr>
+                  <th>Title</th>
+                  <th>Version</th>
+                  <th style={{ textAlign: 'right' }}>Grand total</th>
+                  <th>Status</th>
+                </tr>
+              </thead>
+              <tbody>
+                {[...estimates]
+                  .sort((a, b) => b.version - a.version)
+                  .map((e) => (
+                    <tr key={e.id} onClick={() => navigate(`/estimates/${e.id}`)} style={{ cursor: 'pointer' }}>
+                      <td style={{ fontWeight: 500 }}>{e.title || `Version ${e.version}`}</td>
+                      <td>v{e.version}</td>
+                      <td style={{ textAlign: 'right' }}>{fmt(e.grand_total_owner_price)}</td>
                       <td>
-                        <span className={`badge ${CO_STATUS_BADGE[co.status] || 'bg-gray'}`}>{co.status}</span>
-                        {co.sop_breach && <span className="badge bg-red" style={{ marginLeft: 6 }}>SOP breach</span>}
+                        <span className={`badge ${ESTIMATE_STATUS_BADGE[e.status] || 'bg-gray'}`}>{e.status.replace(/_/g, ' ')}</span>
                       </td>
                     </tr>
                   ))}
-                </tbody>
-              </table>
-            )}
-          </>
-        )}
+              </tbody>
+            </table>
+          )}
+        </div>
 
-        {tab === 'Invoices' && (
-          <>
-            <div className="sh">
-              <div className="st">{invoices.length} invoices</div>
-              <button className="btn btn-p btn-sm" onClick={() => setShowNewInvoice(true)}>
-                <IconPlus size={14} /> Create invoice
-              </button>
-            </div>
-            {invoices.length === 0 ? (
-              <div className="empty-s">No invoices yet.</div>
-            ) : (
-              <table className="tbl">
-                <thead>
-                  <tr>
-                    <th>Invoice #</th>
-                    <th>Type</th>
-                    <th style={{ textAlign: 'right' }}>Amount due</th>
-                    <th style={{ textAlign: 'right' }}>Paid</th>
-                    <th>Due</th>
-                    <th>Status</th>
+        <div id={sectionId('Change Orders')} style={{ scrollMarginTop: SECTION_SCROLL_MARGIN, paddingBottom: 24, marginBottom: 24, borderBottom: '1px solid var(--border)' }}>
+          <div className="ibt" style={{ fontSize: 13, textTransform: 'none', letterSpacing: 0, border: 'none', padding: 0, marginBottom: 14 }}>
+            Change Orders
+          </div>
+          <div className="sh">
+            <div className="st">{changeOrders.length} change orders</div>
+            <button className="btn btn-p btn-sm" onClick={() => setShowNewCO(true)}>
+              <IconPlus size={14} /> New change order
+            </button>
+          </div>
+          {changeOrders.length === 0 ? (
+            <div className="empty-s">No change orders yet.</div>
+          ) : (
+            <table className="tbl">
+              <thead>
+                <tr>
+                  <th>CO #</th>
+                  <th>Title</th>
+                  <th>Type</th>
+                  <th style={{ textAlign: 'right' }}>Owner price</th>
+                  <th>Status</th>
+                </tr>
+              </thead>
+              <tbody>
+                {changeOrders.map((co) => (
+                  <tr key={co.id}>
+                    <td>{co.co_number ?? '—'}</td>
+                    <td style={{ fontWeight: 500 }}>{co.title}</td>
+                    <td><span className={`badge ${CO_TYPE_BADGE[co.co_type] || 'bg-gray'}`}>{co.co_type.replace('_', ' ')}</span></td>
+                    <td style={{ textAlign: 'right' }}>{fmt(co.owner_price)}</td>
+                    <td>
+                      <span className={`badge ${CO_STATUS_BADGE[co.status] || 'bg-gray'}`}>{co.status}</span>
+                      {co.sop_breach && <span className="badge bg-red" style={{ marginLeft: 6 }}>SOP breach</span>}
+                    </td>
                   </tr>
-                </thead>
-                <tbody>
-                  {invoices.map((inv) => (
-                    <tr key={inv.id}>
-                      <td style={{ fontWeight: 500 }}>{inv.invoice_number || 'Draft'}</td>
-                      <td>{inv.invoice_type}</td>
-                      <td style={{ textAlign: 'right' }}>{fmt(inv.amount_due)}</td>
-                      <td style={{ textAlign: 'right' }}>{fmt(inv.amount_paid)}</td>
-                      <td>{fmtD(inv.due_date)}</td>
-                      <td><span className={`badge ${INVOICE_STATUS_BADGE[inv.status] || 'bg-gray'}`}>{inv.status}</span></td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            )}
-          </>
-        )}
+                ))}
+              </tbody>
+            </table>
+          )}
+        </div>
 
-        {tab === 'Files' && id && <FilesTab projectId={id} tasks={tasks} />}
+        <div id={sectionId('Invoices')} style={{ scrollMarginTop: SECTION_SCROLL_MARGIN, paddingBottom: 24, marginBottom: 24, borderBottom: '1px solid var(--border)' }}>
+          <div className="ibt" style={{ fontSize: 13, textTransform: 'none', letterSpacing: 0, border: 'none', padding: 0, marginBottom: 14 }}>
+            Invoices
+          </div>
+          <div className="sh">
+            <div className="st">{invoices.length} invoices</div>
+            <button className="btn btn-p btn-sm" onClick={() => setShowNewInvoice(true)}>
+              <IconPlus size={14} /> Create invoice
+            </button>
+          </div>
+          {invoices.length === 0 ? (
+            <div className="empty-s">No invoices yet.</div>
+          ) : (
+            <table className="tbl">
+              <thead>
+                <tr>
+                  <th>Invoice #</th>
+                  <th>Type</th>
+                  <th style={{ textAlign: 'right' }}>Amount due</th>
+                  <th style={{ textAlign: 'right' }}>Paid</th>
+                  <th>Due</th>
+                  <th>Status</th>
+                </tr>
+              </thead>
+              <tbody>
+                {invoices.map((inv) => (
+                  <tr key={inv.id}>
+                    <td style={{ fontWeight: 500 }}>{inv.invoice_number || 'Draft'}</td>
+                    <td>{inv.invoice_type}</td>
+                    <td style={{ textAlign: 'right' }}>{fmt(inv.amount_due)}</td>
+                    <td style={{ textAlign: 'right' }}>{fmt(inv.amount_paid)}</td>
+                    <td>{fmtD(inv.due_date)}</td>
+                    <td><span className={`badge ${INVOICE_STATUS_BADGE[inv.status] || 'bg-gray'}`}>{inv.status}</span></td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          )}
+        </div>
 
-        {tab === 'Schedule' && (
-          <>
+        <div id={sectionId('Tasks')} style={{ scrollMarginTop: SECTION_SCROLL_MARGIN, paddingBottom: 24, marginBottom: 24, borderBottom: '1px solid var(--border)' }}>
+          <div className="ibt" style={{ fontSize: 13, textTransform: 'none', letterSpacing: 0, border: 'none', padding: 0, marginBottom: 14 }}>
+            Tasks
+          </div>
+          <div className="sh">
+            <div className="st">{tasks.length} tasks</div>
+            <button className="btn btn-p btn-sm" onClick={() => openNewTask('upcoming')}>
+              <IconPlus size={14} /> New task
+            </button>
+          </div>
+          <KanbanBoard tasks={tasks} onTaskClick={openTask} onAddTask={openNewTask} onChanged={loadTasks} />
+        </div>
+
+        <div id={sectionId('Schedule')} style={{ scrollMarginTop: SECTION_SCROLL_MARGIN, paddingBottom: 24, marginBottom: 24, borderBottom: '1px solid var(--border)' }}>
+          <div className="ibt" style={{ fontSize: 13, textTransform: 'none', letterSpacing: 0, border: 'none', padding: 0, marginBottom: 14 }}>
+            Schedule
+          </div>
+          <div>
             <div className="sh">
               <div className="st">{filteredTasks.length} tasks</div>
               <div style={{ display: 'flex', gap: 8 }}>
@@ -418,7 +471,7 @@ export default function ProjectDetail() {
                     <IconList size={14} /> List
                   </button>
                 </div>
-                <button className="btn btn-p btn-sm" onClick={() => setShowNewTask(true)}>
+                <button className="btn btn-p btn-sm" onClick={() => openNewTask('upcoming')}>
                   <IconPlus size={14} /> New task
                 </button>
               </div>
@@ -457,9 +510,25 @@ export default function ProjectDetail() {
                 </tbody>
               </table>
             )}
-          </>
-        )}
+          </div>
+        </div>
+
+        <div id={sectionId('Files')} style={{ scrollMarginTop: SECTION_SCROLL_MARGIN }}>
+          <div className="ibt" style={{ fontSize: 13, textTransform: 'none', letterSpacing: 0, border: 'none', padding: 0, marginBottom: 14 }}>
+            Files
+          </div>
+          {id && <FilesTab projectId={id} tasks={tasks} />}
+        </div>
       </div>
+
+      {id && (
+        <FathomImportWidget
+          projectId={id}
+          projectName={project.name.replace(/\|.*/, '').trim()}
+          onImported={loadTasks}
+          onNoteAdded={loadNotes}
+        />
+      )}
 
       {showNewNote && id && (
         <NewNoteModal
@@ -500,6 +569,7 @@ export default function ProjectDetail() {
       {showNewTask && id && (
         <NewTaskModal
           defaultProjectId={id}
+          defaultStatus={newTaskStatus}
           onClose={() => setShowNewTask(false)}
           onSaved={() => {
             setShowNewTask(false);

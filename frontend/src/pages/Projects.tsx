@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { IconPlus, IconBuilding } from '@tabler/icons-react';
-import { api } from '../api/client';
+import { api, ApiError } from '../api/client';
 import { useToast } from '../components/ui/Toast';
 import { fmt } from '../lib/format';
 import type { Project } from '../types';
@@ -20,6 +20,8 @@ const STATUS_BADGE: Record<string, string> = {
   on_hold: 'bg-amber',
   lost: 'bg-red',
 };
+
+const STATUS_OPTIONS = ['lead', 'vetting', 'estimating', 'proposed', 'pre_construction', 'active', 'complete', 'on_hold', 'punch_list', 'lost'];
 
 const FILTERS = ['all', 'lead', 'vetting', 'estimating', 'proposed', 'pre_construction', 'active', 'complete', 'on_hold'];
 
@@ -55,6 +57,17 @@ export default function Projects() {
 
   const activeCount = projects?.filter((p) => p.status === 'active').length ?? 0;
   const totalContractValue = projects?.reduce((s, p) => s + (p.contract_value || 0), 0) ?? 0;
+
+  async function handleStatusChange(project: Project, newStatus: string) {
+    const previous = project.status;
+    setProjects((prev) => prev && prev.map((p) => (p.id === project.id ? { ...p, status: newStatus } : p)));
+    try {
+      await api.patch(`/projects/${project.id}`, { status: newStatus });
+    } catch (e) {
+      setProjects((prev) => prev && prev.map((p) => (p.id === project.id ? { ...p, status: previous } : p)));
+      toast(e instanceof ApiError ? e.message : 'Failed to update status', true);
+    }
+  }
 
   return (
     <>
@@ -123,7 +136,24 @@ export default function Projects() {
             </div>
             <div className="pm">
               {p.contract_value ? <span style={{ fontSize: 12, color: 'var(--t2)' }}>{fmt(p.contract_value)}</span> : null}
-              <span className={`badge ${STATUS_BADGE[p.status] || 'bg-gray'}`}>{p.status.replace('_', ' ')}</span>
+              <select
+                className={`badge ${STATUS_BADGE[p.status] || 'bg-gray'}`}
+                style={{ border: 'none', WebkitAppearance: 'none', appearance: 'none', cursor: 'pointer', textTransform: 'capitalize', font: 'inherit' }}
+                value={p.status}
+                title="Change status"
+                onClick={(e) => e.stopPropagation()}
+                onMouseDown={(e) => e.stopPropagation()}
+                onChange={(e) => {
+                  e.stopPropagation();
+                  handleStatusChange(p, e.target.value);
+                }}
+              >
+                {(STATUS_OPTIONS.includes(p.status) ? STATUS_OPTIONS : [p.status, ...STATUS_OPTIONS]).map((s) => (
+                  <option key={s} value={s}>
+                    {s.replace('_', ' ')}
+                  </option>
+                ))}
+              </select>
             </div>
           </Link>
         ))
