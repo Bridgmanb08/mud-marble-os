@@ -1,6 +1,6 @@
 from pydantic import BaseModel
 
-from ..ai_provider import EstimateSuggestion
+from ..ai_provider import EstimateSuggestion, GapQuestion
 
 
 class TranscriptExtractRequest(BaseModel):
@@ -8,7 +8,7 @@ class TranscriptExtractRequest(BaseModel):
 
 
 class GapCheckResponse(BaseModel):
-    suggestions: list[EstimateSuggestion]
+    questions: list[GapQuestion]
     dropped: list[str] = []
 
 

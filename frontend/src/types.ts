@@ -281,8 +281,33 @@ export interface EstimateSuggestion {
   source_quote: string | null;
 }
 
+export interface GapResolution {
+  advice: string;
+  suggestion: EstimateSuggestion | null;
+}
+
+export interface GapFollowUp {
+  question: string;
+  yes: GapResolution;
+  no: GapResolution;
+}
+
+export interface GapBranch {
+  advice: string;
+  suggestion: EstimateSuggestion | null;
+  follow_up: GapFollowUp | null;
+}
+
+export interface GapQuestion {
+  id: string;
+  question: string;
+  context: string | null;
+  yes: GapBranch;
+  no: GapBranch;
+}
+
 export interface GapCheckResponse {
-  suggestions: EstimateSuggestion[];
+  questions: GapQuestion[];
   dropped: string[];
 }
 

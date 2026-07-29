@@ -1,4 +1,4 @@
-import { IconPlus, IconX } from '@tabler/icons-react';
+import { IconPlus, IconX, IconCheck } from '@tabler/icons-react';
 import type { CostCode, EstimateSuggestion } from '../../types';
 
 export function SuggestionCard({
@@ -6,11 +6,13 @@ export function SuggestionCard({
   costCodes,
   onAdd,
   onDismiss,
+  added,
 }: {
   suggestion: EstimateSuggestion;
   costCodes: CostCode[];
   onAdd: () => void;
   onDismiss: () => void;
+  added?: boolean;
 }) {
   const costCode = suggestion.cost_code_id ? costCodes.find((c) => c.id === suggestion.cost_code_id) : undefined;
 
@@ -29,12 +31,20 @@ export function SuggestionCard({
         </div>
       )}
       <div style={{ display: 'flex', gap: 6, marginTop: 10 }}>
-        <button type="button" className="btn btn-p btn-sm" onClick={onAdd}>
-          <IconPlus size={13} /> Add
-        </button>
-        <button type="button" className="btn btn-ghost btn-sm" onClick={onDismiss}>
-          <IconX size={13} /> Dismiss
-        </button>
+        {added ? (
+          <span className="badge bg-green" style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}>
+            <IconCheck size={13} /> Added
+          </span>
+        ) : (
+          <>
+            <button type="button" className="btn btn-p btn-sm" onClick={onAdd}>
+              <IconPlus size={13} /> Add
+            </button>
+            <button type="button" className="btn btn-ghost btn-sm" onClick={onDismiss}>
+              <IconX size={13} /> Dismiss
+            </button>
+          </>
+        )}
       </div>
     </div>
   );
