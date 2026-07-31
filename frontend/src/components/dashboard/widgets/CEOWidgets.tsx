@@ -1,5 +1,8 @@
+import { useState } from 'react';
+import { IconSparkles } from '@tabler/icons-react';
+import { api, ApiError } from '../../../api/client';
 import { fmt, fmtD } from '../../../lib/format';
-import type { DashboardSummary } from '../../../types';
+import type { DashboardSummary, TeamWorkloadInsightsResponse } from '../../../types';
 
 const LEAD_STAGE_LABELS: Record<string, string> = {
   new: 'New',
@@ -9,31 +12,91 @@ const LEAD_STAGE_LABELS: Record<string, string> = {
   disqualified: 'Disqualified',
 };
 
+const TASK_PRIORITY_COLOR: Record<string, string> = {
+  low: 'var(--green)',
+  normal: 'var(--border-md)',
+  high: 'var(--amber)',
+  urgent: 'var(--red)',
+};
+
 export function TeamWorkloadWidget({ data }: { data: DashboardSummary }) {
+  const [insights, setInsights] = useState<Record<string, string>>({});
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState('');
+
+  async function getInsights() {
+    setLoading(true);
+    setError('');
+    try {
+      const res = await api.post<TeamWorkloadInsightsResponse>('/dashboard/team-workload-insights');
+      setInsights(res.summaries);
+    } catch (e) {
+      setError(e instanceof ApiError ? e.message : 'Failed to generate insights');
+    } finally {
+      setLoading(false);
+    }
+  }
+
   if (!data.team_workload.length) return <div style={{ fontSize: 13, color: 'var(--t2)' }}>No tasks assigned yet.</div>;
+
   return (
-    <table className="tbl">
-      <thead>
-        <tr>
-          <th>Team member</th>
-          <th style={{ textAlign: 'right' }}>Open tasks</th>
-          <th style={{ textAlign: 'right' }}>Done this week</th>
-          <th style={{ textAlign: 'right' }}>Past due</th>
-        </tr>
-      </thead>
-      <tbody>
+    <div>
+      <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: 12 }}>
+        <button type="button" className="btn btn-sm" onClick={getInsights} disabled={loading}>
+          <IconSparkles size={14} /> {loading ? 'Thinking…' : 'Get AI insights'}
+        </button>
+      </div>
+      {error && <div className="merr" style={{ marginBottom: 10 }}>{error}</div>}
+      <div style={{ display: 'flex', gap: 12, overflowX: 'auto', paddingBottom: 4 }}>
         {data.team_workload.map((w) => (
-          <tr key={w.name}>
-            <td style={{ fontWeight: 500 }}>{w.name}</td>
-            <td style={{ textAlign: 'right' }}>{w.incomplete_count}</td>
-            <td style={{ textAlign: 'right', color: 'var(--green)' }}>{w.completed_this_week}</td>
-            <td style={{ textAlign: 'right', color: w.overdue_count > 0 ? 'var(--red)' : undefined, fontWeight: w.overdue_count > 0 ? 600 : undefined }}>
-              {w.overdue_count}
-            </td>
-          </tr>
+          <div
+            key={w.user_id || w.name}
+            style={{ flex: '0 0 220px', background: 'var(--bg)', borderRadius: 10, padding: 12 }}
+          >
+            <div style={{ fontWeight: 600, fontSize: 14, marginBottom: 8 }}>{w.name}</div>
+            <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginBottom: 10 }}>
+              <span className="badge bg-gray">{w.incomplete_count} open</span>
+              {w.completed_this_week > 0 && <span className="badge bg-green">{w.completed_this_week} done</span>}
+              {w.overdue_count > 0 && <span className="badge bg-red">{w.overdue_count} overdue</span>}
+            </div>
+            {insights[w.name] && (
+              <div style={{ fontSize: 11.5, color: 'var(--t2)', fontStyle: 'italic', marginBottom: 10, lineHeight: 1.4 }}>
+                "{insights[w.name]}"
+              </div>
+            )}
+            {w.top_tasks.length === 0 ? (
+              <div style={{ fontSize: 11.5, color: 'var(--t3)' }}>Nothing open right now.</div>
+            ) : (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                {w.top_tasks.map((t) => (
+                  <div key={t.id} style={{ display: 'flex', gap: 6, alignItems: 'flex-start' }}>
+                    <span
+                      style={{
+                        width: 6,
+                        height: 6,
+                        borderRadius: '50%',
+                        background: TASK_PRIORITY_COLOR[t.priority] || 'var(--border-md)',
+                        marginTop: 4,
+                        flexShrink: 0,
+                      }}
+                    />
+                    <div style={{ minWidth: 0 }}>
+                      <div style={{ fontSize: 12, lineHeight: 1.3, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                        {t.title}
+                      </div>
+                      <div style={{ fontSize: 10.5, color: 'var(--t3)' }}>
+                        {t.project_name || 'No job'}
+                        {t.due_date ? ` · ${fmtD(t.due_date)}` : ''}
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
         ))}
-      </tbody>
-    </table>
+      </div>
+    </div>
   );
 }
 

@@ -102,11 +102,25 @@ class DesignProjectCard(BaseModel):
     at_risk: bool = False
 
 
+class WorkloadTaskBrief(BaseModel):
+    id: str
+    title: str
+    priority: str
+    project_name: Optional[str] = None
+    due_date: Optional[str] = None
+
+
 class TeamWorkloadEntry(BaseModel):
+    user_id: Optional[str] = None
     name: str
     incomplete_count: int
     completed_this_week: int
     overdue_count: int
+    top_tasks: list[WorkloadTaskBrief] = []
+
+
+class TeamWorkloadInsightsResponse(BaseModel):
+    summaries: dict[str, str]
 
 
 class OverdueJobEntry(BaseModel):

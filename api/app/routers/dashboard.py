@@ -8,6 +8,7 @@ from anthropic import AsyncAnthropic
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import ValidationError
 
+from ..ai_provider import ProviderError, TeamMemberBrief, summarize_team_workload
 from ..change_order_utils import compute_sop_breach
 from ..config import settings
 from ..custom_widget_spec import (
@@ -41,7 +42,9 @@ from ..schemas.dashboard import (
     QBOSyncStatus,
     SubcontractorRisk,
     TeamWorkloadEntry,
+    TeamWorkloadInsightsResponse,
     UpcomingTask,
+    WorkloadTaskBrief,
 )
 from ..schemas.layout import LayoutOut, LayoutUpdate, WidgetItem
 from ..supabase_client import db_delete, db_get, db_patch, db_post
@@ -86,6 +89,92 @@ def _parse_dt(value):
     return dt
 
 
+_PRIORITY_RANK = {"urgent": 0, "high": 1, "normal": 2, "low": 3}
+
+
+def _match_user(raw_name: Optional[str], users: list[dict]) -> Optional[dict]:
+    """Match a task's free-text assignee to a real app_users row by first name
+    (case-insensitive). Tasks created via the UI use short first names
+    ("shannon") while AI-imported tasks sometimes carry a full name as it
+    appeared in a transcript ("Shannon Ingram") -- without this, the same
+    real person shows up as two separate people in team-workload views."""
+    if not raw_name or not raw_name.strip():
+        return None
+    first = raw_name.strip().split()[0].lower()
+    for u in users:
+        u_name = u.get("name") or ""
+        if u_name.strip() and u_name.strip().split()[0].lower() == first:
+            return u
+    return None
+
+
+def _build_team_workload(schedule_items: list[dict], users: list[dict], now: datetime) -> list[TeamWorkloadEntry]:
+    week_start = now - timedelta(days=7)
+    buckets: dict[str, dict] = {}
+
+    def bucket_for(raw_name: str) -> dict:
+        matched = _match_user(raw_name, users)
+        key = matched["id"] if matched else raw_name
+        if key not in buckets:
+            buckets[key] = {
+                "name": matched["name"].split()[0] if matched else raw_name,
+                "user_id": matched["id"] if matched else None,
+                "incomplete": 0,
+                "completed_week": 0,
+                "overdue": 0,
+                "tasks": [],
+            }
+        return buckets[key]
+
+    for t in schedule_items:
+        names = t.get("assignees") or ([t["assigned_to"]] if t.get("assigned_to") else [])
+        if not names:
+            names = ["Unassigned"]
+        status = t.get("status")
+        end = _parse_dt(t.get("scheduled_end"))
+        is_overdue = status != "complete" and end is not None and end < now
+        completed_at = _parse_dt(t.get("completed_at"))
+        completed_this_week = status == "complete" and completed_at is not None and completed_at >= week_start
+        for name in names:
+            b = bucket_for(name)
+            if status != "complete":
+                b["incomplete"] += 1
+                if is_overdue:
+                    b["overdue"] += 1
+                b["tasks"].append(
+                    {
+                        "id": t["id"],
+                        "title": t["title"],
+                        "priority": t.get("priority") or "normal",
+                        "project_name": (t.get("projects") or {}).get("name"),
+                        "due_date": t.get("scheduled_end"),
+                    }
+                )
+            if completed_this_week:
+                b["completed_week"] += 1
+
+    entries: list[TeamWorkloadEntry] = []
+    for v in buckets.values():
+        if not (v["incomplete"] or v["completed_week"]):
+            continue
+        top = sorted(
+            v["tasks"],
+            key=lambda x: (_PRIORITY_RANK.get(x["priority"], 2), x["due_date"] or "9999-99-99"),
+        )[:4]
+        entries.append(
+            TeamWorkloadEntry(
+                user_id=v["user_id"],
+                name=v["name"],
+                incomplete_count=v["incomplete"],
+                completed_this_week=v["completed_week"],
+                overdue_count=v["overdue"],
+                top_tasks=[WorkloadTaskBrief(**tk) for tk in top],
+            )
+        )
+    entries.sort(key=lambda e: e.incomplete_count, reverse=True)
+    return entries
+
+
 @router.get("", response_model=DashboardSummary)
 async def get_dashboard(_: CurrentUser = Depends(get_current_user)):
     now = datetime.now(timezone.utc)
@@ -101,6 +190,7 @@ async def get_dashboard(_: CurrentUser = Depends(get_current_user)):
         estimates,
         leads,
         subcontractors,
+        users,
     ) = await asyncio.gather(
         db_get("projects", "?is_archived=eq.false&select=*,clients(first_name,last_name)"),
         db_get(
@@ -131,6 +221,7 @@ async def get_dashboard(_: CurrentUser = Depends(get_current_user)):
         ),
         db_get("leads", "?select=status,estimated_revenue_min,estimated_revenue_max"),
         db_get("subcontractors", "?select=is_active,insurance_expiry,w9_on_file"),
+        db_get("app_users", "?select=id,name&order=name.asc"),
     )
 
     active = [p for p in projects if p.get("status") == "active"]
@@ -340,36 +431,10 @@ async def get_dashboard(_: CurrentUser = Depends(get_current_user)):
             )
         )
 
-    # -- team workload: incomplete/completed-this-week/overdue per assignee --
-    week_start = now - timedelta(days=7)
-    workload: dict[str, dict] = defaultdict(lambda: {"incomplete": 0, "completed_week": 0, "overdue": 0})
-    for t in schedule_items:
-        names = t.get("assignees") or ([t["assigned_to"]] if t.get("assigned_to") else [])
-        if not names:
-            names = ["Unassigned"]
-        status = t.get("status")
-        end = _parse_dt(t.get("scheduled_end"))
-        is_overdue = status != "complete" and end is not None and end < now
-        completed_at = _parse_dt(t.get("completed_at"))
-        completed_this_week = status == "complete" and completed_at is not None and completed_at >= week_start
-        for name in names:
-            if status != "complete":
-                workload[name]["incomplete"] += 1
-                if is_overdue:
-                    workload[name]["overdue"] += 1
-            if completed_this_week:
-                workload[name]["completed_week"] += 1
-    team_workload = [
-        TeamWorkloadEntry(
-            name=name,
-            incomplete_count=v["incomplete"],
-            completed_this_week=v["completed_week"],
-            overdue_count=v["overdue"],
-        )
-        for name, v in workload.items()
-        if v["incomplete"] or v["completed_week"]
-    ]
-    team_workload.sort(key=lambda e: e.incomplete_count, reverse=True)
+    # -- team workload: incomplete/completed-this-week/overdue + top tasks per
+    # real team member (see _build_team_workload for the name-matching that
+    # merges "shannon" and "Shannon Ingram" into one person) --
+    team_workload = _build_team_workload(schedule_items, users, now)
 
     # -- jobs overdue to close: active/punch_list projects past their estimated
     # completion date, with the potential revenue still tied up in them --
@@ -533,6 +598,37 @@ async def get_dashboard(_: CurrentUser = Depends(get_current_user)):
         change_order_stats=change_order_stats,
         estimate_win_rate=estimate_win_rate,
     )
+
+
+@router.post("/team-workload-insights", response_model=TeamWorkloadInsightsResponse)
+async def get_team_workload_insights(_: CurrentUser = Depends(get_current_user)):
+    if not settings.anthropic_api_key:
+        raise HTTPException(status_code=503, detail="ANTHROPIC_API_KEY is not configured")
+
+    now = datetime.now(timezone.utc)
+    schedule_items, users = await asyncio.gather(
+        db_get("schedule_items", "?order=scheduled_end.asc&select=*,projects(name)"),
+        db_get("app_users", "?select=id,name&order=name.asc"),
+    )
+    entries = _build_team_workload(schedule_items, users, now)
+    if not entries:
+        return TeamWorkloadInsightsResponse(summaries={})
+
+    members = [
+        TeamMemberBrief(
+            name=e.name,
+            incomplete_count=e.incomplete_count,
+            completed_this_week=e.completed_this_week,
+            overdue_count=e.overdue_count,
+            top_task_titles=[t.title for t in e.top_tasks],
+        )
+        for e in entries
+    ]
+    try:
+        summaries = await summarize_team_workload(members)
+    except ProviderError as e:
+        raise HTTPException(status_code=502, detail=str(e)) from e
+    return TeamWorkloadInsightsResponse(summaries=summaries)
 
 
 @router.get("/layout", response_model=LayoutOut)
