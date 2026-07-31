@@ -12,11 +12,14 @@
   box-shadow:0 6px 20px rgba(0,0,0,.16);
   padding:10px 12px;display:flex;align-items:flex-start;gap:8px;
   cursor:pointer;font-size:12.5px;line-height:1.4;color:var(--text);
-  transform:translateX(130%);opacity:0;
+  /* A fixed offset (not a %) -- translateX(%) is relative to the toast's own
+     width, which is ~300px on desktop but nearly full-viewport on mobile, so
+     a percentage-based slide distance ballooned to 400+px on narrow screens. */
+  transform:translateX(40px);opacity:0;
   transition:transform .35s cubic-bezier(.2,.8,.2,1),opacity .3s ease;
 }
 .tr-toast.tr-shown{transform:translateX(0);opacity:1;}
-.tr-toast.tr-leave{transform:translateX(130%);opacity:0;}
+.tr-toast.tr-leave{transform:translateX(40px);opacity:0;}
 .tr-toast-close{flex-shrink:0;color:var(--t3);cursor:pointer;margin-top:1px;}
 .tr-toast-close:hover{color:var(--text);}
 
