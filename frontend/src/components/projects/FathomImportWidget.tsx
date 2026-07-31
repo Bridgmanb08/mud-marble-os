@@ -43,7 +43,10 @@ export function FathomImportWidget({
     setError('');
     setResult(null);
     try {
-      const data = await api.post<ParseTranscriptResponse>('/ai/parse-transcript', { transcript });
+      const data = await api.post<ParseTranscriptResponse>('/ai/parse-transcript', {
+        transcript,
+        current_project_name: projectName,
+      });
       setResult(data);
       setChecked(data.tasks.map(() => true));
     } catch (e) {

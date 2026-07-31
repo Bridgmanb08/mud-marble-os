@@ -53,7 +53,7 @@ The input may include both a pre-written meeting summary and the full raw transc
 meeting (e.g. pasted one after the other). If so, treat them as one combined source describing a single \
 meeting -- do not extract the same task or decision twice just because it's mentioned in both the summary \
 and the transcript's dialogue. Each distinct action item should appear exactly once in "tasks".
-
+{current_project_context}
 Here are the company's real active projects. When a task or update clearly relates to one of them, \
 copy its EXACT name from this list into the "project" field -- do not paraphrase or invent a name. \
 If a task is internal/operational and doesn't clearly belong to any listed job, use null.
@@ -110,6 +110,17 @@ async def parse_transcript(body: ParseTranscriptRequest, _: CurrentUser = Depend
     names = await _active_project_names()
     project_names = "\n".join(f"- {n}" for n in names) if names else "(no active projects yet)"
 
+    current_project_context = ""
+    if body.current_project_name:
+        current_project_context = (
+            f"\nThis transcript is being imported from the project page for \"{body.current_project_name}\". "
+            f"Default every task's \"project\" field to this exact name. Only use a different project name if "
+            f"the transcript clearly and explicitly states the MEETING ITSELF is about a different specific "
+            f"job -- a passing mention of another address, job, or a subcontractor who also works elsewhere is "
+            f"not enough to override this default. If it's unclear, use \"{body.current_project_name}\" rather "
+            f"than guessing another job.\n"
+        )
+
     client = AsyncAnthropic(api_key=settings.anthropic_api_key)
     message = await client.messages.create(
         model="claude-sonnet-4-6",
@@ -118,7 +129,9 @@ async def parse_transcript(body: ParseTranscriptRequest, _: CurrentUser = Depend
             {
                 "role": "user",
                 "content": EXTRACTION_PROMPT.format(
-                    project_names=project_names, transcript=body.transcript[:MAX_TRANSCRIPT_CHARS]
+                    project_names=project_names,
+                    current_project_context=current_project_context,
+                    transcript=body.transcript[:MAX_TRANSCRIPT_CHARS],
                 ),
             }
         ],
