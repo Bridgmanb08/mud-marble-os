@@ -715,7 +715,8 @@ export type WidgetId =
   | 'lead_pipeline'
   | 'subcontractor_risk'
   | 'change_order_stats'
-  | 'estimate_win_rate';
+  | 'estimate_win_rate'
+  | 'team_pulse';
 
 export interface WidgetItem {
   id: WidgetId | string;
@@ -794,6 +795,49 @@ export interface AppNotification {
   is_read: boolean;
   created_at: string;
   projects: ProjectBrief | null;
+}
+
+export interface PulseCheckinCreate {
+  workload_rating: number;
+  feeling_stuck: boolean;
+  stuck_note?: string;
+  grateful_for?: string;
+  win?: string;
+}
+
+export interface PulseCheckinOut {
+  id: string;
+  user_id: string;
+  workload_rating: number;
+  feeling_stuck: boolean;
+  stuck_note: string | null;
+  grateful_for: string | null;
+  win: string | null;
+  created_at: string;
+}
+
+export interface PulseMemberSummary {
+  user_id: string;
+  name: string;
+  latest: PulseCheckinOut | null;
+  days_since_checkin: number | null;
+  trend: number[];
+}
+
+export interface PulseWinEntry {
+  user_id: string;
+  name: string;
+  grateful_for: string | null;
+  win: string | null;
+  created_at: string;
+}
+
+export interface PulseTeamSummary {
+  members: PulseMemberSummary[];
+  avg_workload: number | null;
+  stuck_count: number;
+  responses_this_week: number;
+  recent_wins: PulseWinEntry[];
 }
 
 export type CustomWidgetSource =

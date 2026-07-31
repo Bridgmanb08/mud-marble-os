@@ -19,12 +19,14 @@ WIDGET_IDS = [
     "subcontractor_risk",
     "change_order_stats",
     "estimate_win_rate",
+    "team_pulse",
 ]
 
 # Per role: default widget order (also determines which are visible by default).
 ROLE_DEFAULTS = {
     "owner": [
         "team_workload",
+        "team_pulse",
         "jobs_overdue_to_close",
         "lead_pipeline",
         "change_order_stats",

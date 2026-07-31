@@ -1,9 +1,10 @@
 import { useEffect, useRef, useState } from 'react';
-import { IconFlame, IconTarget, IconRocket, IconX } from '@tabler/icons-react';
+import { IconFlame, IconTarget, IconRocket, IconX, IconHeartHandshake } from '@tabler/icons-react';
 import { api } from '../../api/client';
 import { useAuth } from '../../auth/AuthContext';
 import { DashboardTaskDrawer } from '../dashboard/DashboardTaskDrawer';
-import type { Task } from '../../types';
+import { PulseCheckinModal } from '../dashboard/PulseCheckinModal';
+import type { Task, PulseCheckinOut } from '../../types';
 
 /**
  * Proactive, personality-driven reminders for the current user's own tasks
@@ -14,14 +15,14 @@ import type { Task } from '../../types';
  * fires once per day (tracked in localStorage) so it nudges without nagging.
  */
 
-type Category = 'overdue' | 'due_today' | 'starting_today';
+type Category = 'overdue' | 'due_today' | 'starting_today' | 'pulse_nudge';
 
 interface ReminderToast {
   id: string;
   key: string;
   category: Category;
   message: string;
-  taskId: string;
+  taskId?: string;
   phase: 'enter' | 'shown' | 'leave';
 }
 
@@ -48,11 +49,18 @@ const STARTING_TODAY_MESSAGES = [
   (t: string) => `Heads up: "${t}" is on the schedule for today.`,
   (t: string) => `Today's the day "${t}" gets going. Places, everyone!`,
 ];
+const PULSE_NUDGE_MESSAGES = [
+  () => `Got a sec? Share a quick pulse check-in -- how's the week treating you?`,
+  () => `Weekly gut-check: workload, wins, and anything you're stuck on. 30 seconds, tops.`,
+  () => `How's the week going? Drop a quick pulse check-in when you get a moment.`,
+  () => `A quick pulse check-in helps leadership have your back. Got a beat?`,
+];
 
 const CATEGORY_META: Record<Category, { Icon: typeof IconFlame; color: string }> = {
   overdue: { Icon: IconFlame, color: 'var(--red)' },
   due_today: { Icon: IconTarget, color: 'var(--amber)' },
   starting_today: { Icon: IconRocket, color: 'var(--blue)' },
+  pulse_nudge: { Icon: IconHeartHandshake, color: 'var(--accent)' },
 };
 
 function pick<T>(arr: T[]): T {
@@ -62,6 +70,7 @@ function pick<T>(arr: T[]): T {
 function messageFor(category: Category, title: string): string {
   if (category === 'overdue') return pick(OVERDUE_MESSAGES)(title);
   if (category === 'due_today') return pick(DUE_TODAY_MESSAGES)(title);
+  if (category === 'pulse_nudge') return pick(PULSE_NUDGE_MESSAGES)();
   return pick(STARTING_TODAY_MESSAGES)(title);
 }
 
@@ -69,12 +78,25 @@ function todayStr(): string {
   return new Date().toISOString().slice(0, 10);
 }
 
+// ISO 8601 week identifier (e.g. "2026-W31"), used as the pulse nudge's dedupe
+// scope since check-ins are weekly, not daily like the task reminders above.
+function isoWeekStr(date: Date = new Date()): string {
+  const d = new Date(date);
+  d.setHours(0, 0, 0, 0);
+  d.setDate(d.getDate() + 3 - ((d.getDay() + 6) % 7));
+  const week1 = new Date(d.getFullYear(), 0, 4);
+  const weekNo = 1 + Math.round(((d.getTime() - week1.getTime()) / 86400000 - 3 + ((week1.getDay() + 6) % 7)) / 7);
+  return `${d.getFullYear()}-W${String(weekNo).padStart(2, '0')}`;
+}
+
 function loadShown(): Set<string> {
   try {
     const raw = localStorage.getItem(STORAGE_KEY);
     if (!raw) return new Set();
     const parsed: string[] = JSON.parse(raw);
-    return new Set(parsed.filter((k) => k.startsWith(todayStr())));
+    const today = todayStr();
+    const week = isoWeekStr();
+    return new Set(parsed.filter((k) => k.startsWith(today) || k.startsWith(`wk:${week}`)));
   } catch {
     return new Set();
   }
@@ -122,19 +144,13 @@ export function TeamReminders() {
   const { user } = useAuth();
   const [toasts, setToasts] = useState<ReminderToast[]>([]);
   const [openTaskId, setOpenTaskId] = useState<string | null>(null);
+  const [showPulseCheckin, setShowPulseCheckin] = useState(false);
   const shownRef = useRef<Set<string>>(loadShown());
   const nextIdRef = useRef(1);
 
-  function queueToast(candidate: Candidate) {
+  function queueToast(category: Category, message: string, key: string, taskId?: string) {
     const id = `tr-${nextIdRef.current++}`;
-    const toast: ReminderToast = {
-      id,
-      key: candidate.key,
-      category: candidate.category,
-      message: messageFor(candidate.category, candidate.task.title),
-      taskId: candidate.task.id,
-      phase: 'enter',
-    };
+    const toast: ReminderToast = { id, key, category, message, taskId, phase: 'enter' };
     setToasts((prev) => [...prev, toast]);
 
     // Flip to 'shown' on the next frame so the enter transition actually animates
@@ -159,15 +175,31 @@ export function TeamReminders() {
     if (!user) return;
     const tasks = await api.get<Task[]>('/tasks').catch(() => []);
     const candidates = findCandidates(tasks, user.name, shownRef.current);
-    if (!candidates.length) return;
-    // Mark as shown immediately (synchronously), not inside the staggered
-    // callback below -- React StrictMode (and any other near-simultaneous
-    // poll) double-invokes effects in dev, and if the dedupe write were
-    // deferred, a second poll() could run findCandidates() before the first
-    // one's setTimeout had fired, seeing the same "new" candidates twice.
-    candidates.forEach((c) => shownRef.current.add(c.key));
+    if (candidates.length) {
+      // Mark as shown immediately (synchronously), not inside the staggered
+      // callback below -- React StrictMode (and any other near-simultaneous
+      // poll) double-invokes effects in dev, and if the dedupe write were
+      // deferred, a second poll() could run findCandidates() before the first
+      // one's setTimeout had fired, seeing the same "new" candidates twice.
+      candidates.forEach((c) => shownRef.current.add(c.key));
+      saveShown(shownRef.current);
+      candidates.forEach((c, i) =>
+        setTimeout(() => queueToast(c.category, messageFor(c.category, c.task.title), c.key, c.task.id), i * STAGGER_MS)
+      );
+    }
+    await pollPulse();
+  }
+
+  async function pollPulse() {
+    if (!user) return;
+    const week = isoWeekStr();
+    const key = `wk:${week}:pulse_nudge`;
+    if (shownRef.current.has(key)) return;
+    const recent = await api.get<PulseCheckinOut[]>('/pulse/checkins/me?limit=1').catch(() => []);
+    if (recent.length && isoWeekStr(new Date(recent[0].created_at)) === week) return;
+    shownRef.current.add(key);
     saveShown(shownRef.current);
-    candidates.forEach((c, i) => setTimeout(() => queueToast(c), i * STAGGER_MS));
+    queueToast('pulse_nudge', messageFor('pulse_nudge', ''), key);
   }
 
   useEffect(() => {
@@ -189,7 +221,7 @@ export function TeamReminders() {
             <div
               key={t.id}
               className={`tr-toast tr-${t.phase}`}
-              onClick={() => setOpenTaskId(t.taskId)}
+              onClick={() => (t.category === 'pulse_nudge' ? setShowPulseCheckin(true) : setOpenTaskId(t.taskId!))}
             >
               <Icon size={16} style={{ color, flexShrink: 0, marginTop: 1 }} />
               <span style={{ flex: 1 }}>{t.message}</span>
@@ -208,6 +240,7 @@ export function TeamReminders() {
         })}
       </div>
       {openTaskId && <DashboardTaskDrawer taskId={openTaskId} onClose={() => setOpenTaskId(null)} />}
+      {showPulseCheckin && <PulseCheckinModal onClose={() => setShowPulseCheckin(false)} />}
     </>
   );
 }

@@ -21,6 +21,7 @@ from .routers import (
     person_tags,
     project_subcontractor_items,
     projects,
+    pulse,
     quick_reminders,
     reports,
     sub_intelligence,
@@ -75,3 +76,4 @@ app.include_router(reports.router, prefix="/api")
 app.include_router(quick_reminders.router, prefix="/api")
 app.include_router(twilio_sms.router, prefix="/api")
 app.include_router(person_tags.router, prefix="/api")
+app.include_router(pulse.router, prefix="/api")

@@ -1,13 +1,15 @@
 import { useState } from 'react';
 import { Link } from 'react-router-dom';
-import { IconLogout, IconChevronDown, IconSettings, IconSearch } from '@tabler/icons-react';
+import { IconLogout, IconChevronDown, IconSettings, IconSearch, IconHeartHandshake } from '@tabler/icons-react';
 import { useAuth } from '../../auth/AuthContext';
 import { NotificationBell } from './NotificationBell';
 import { JobSwitcher } from './JobSwitcher';
+import { PulseCheckinModal } from '../dashboard/PulseCheckinModal';
 
 export function Topbar() {
   const { user, logout } = useAuth();
   const [menuOpen, setMenuOpen] = useState(false);
+  const [showPulseCheckin, setShowPulseCheckin] = useState(false);
 
   return (
     <div className="topbar">
@@ -48,6 +50,16 @@ export function Topbar() {
             <button
               className="btn btn-ghost btn-sm"
               style={{ width: '100%', justifyContent: 'flex-start' }}
+              onClick={() => {
+                setMenuOpen(false);
+                setShowPulseCheckin(true);
+              }}
+            >
+              <IconHeartHandshake size={14} /> Share a pulse check-in
+            </button>
+            <button
+              className="btn btn-ghost btn-sm"
+              style={{ width: '100%', justifyContent: 'flex-start' }}
               onClick={() => logout()}
             >
               <IconLogout size={14} /> Log out
@@ -55,6 +67,7 @@ export function Topbar() {
           </div>
         )}
       </div>
+      {showPulseCheckin && <PulseCheckinModal onClose={() => setShowPulseCheckin(false)} />}
     </div>
   );
 }
