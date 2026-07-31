@@ -1,6 +1,9 @@
 /* Week-scrolling drag-and-drop calendar (per-project Schedule tab).
    Additive-only, imported once from index.css. */
 
+.wcal-wrap{max-width:760px;}
+.wcal-toolbar{display:flex;justify-content:flex-end;margin-bottom:8px;}
+
 .wcal{border:1px solid var(--border);border-radius:var(--rl);background:var(--surface);overflow:hidden;}
 .wcal-hd{display:grid;grid-template-columns:repeat(7,1fr);border-bottom:1px solid var(--border);background:var(--surface);}
 .wcal-hd-cell{padding:8px 4px;font-size:11px;font-weight:600;color:var(--t2);text-align:center;text-transform:uppercase;letter-spacing:.4px;}
@@ -13,10 +16,14 @@
 .wcal-grid{position:relative;display:grid;grid-template-columns:repeat(7,1fr);}
 .wcal-day{border-right:1px solid var(--border);padding:18px 4px 4px;cursor:pointer;min-height:60px;}
 .wcal-day:last-child{border-right:none;}
-.wcal-day.today .wcal-daynum{color:var(--accent);font-weight:700;}
 .wcal-day.today{background:var(--bg);}
 .wcal-day.drag-range{background:var(--bbg);}
 .wcal-daynum{font-size:11px;color:var(--t2);}
+.wcal-day.today .wcal-daynum{
+  display:inline-flex;align-items:center;justify-content:center;
+  width:18px;height:18px;border-radius:50%;
+  background:var(--blue);color:#fff;font-weight:700;
+}
 .wcal-more{font-size:9.5px;color:var(--t2);margin-top:2px;}
 
 .wcal-bar{

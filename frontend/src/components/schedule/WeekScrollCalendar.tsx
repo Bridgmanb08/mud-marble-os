@@ -294,15 +294,21 @@ export function WeekScrollCalendar({
     : null;
 
   return (
-    <div className="wcal">
-      <div className="wcal-hd">
-        {['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'].map((d) => (
-          <div key={d} className="wcal-hd-cell">
-            {d}
-          </div>
-        ))}
+    <div className="wcal-wrap">
+      <div className="wcal-toolbar">
+        <button type="button" className="btn btn-sm" onClick={scrollToToday}>
+          Today
+        </button>
       </div>
-      <div className="wcal-scroll" ref={scrollRef} onScroll={handleScroll}>
+      <div className="wcal">
+        <div className="wcal-hd">
+          {['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'].map((d) => (
+            <div key={d} className="wcal-hd-cell">
+              {d}
+            </div>
+          ))}
+        </div>
+        <div className="wcal-scroll" ref={scrollRef} onScroll={handleScroll}>
         {weekStarts.map((weekStart) => {
           const weekStartKey = dateKey(weekStart);
           const weekEndKey = dateKey(addDays(weekStart, 6));
@@ -423,6 +429,7 @@ export function WeekScrollCalendar({
             </div>
           );
         })}
+      </div>
       </div>
 
       {quickAdd && (
