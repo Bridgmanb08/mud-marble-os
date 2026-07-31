@@ -2,6 +2,7 @@ import { Outlet } from 'react-router-dom';
 import { Topbar } from './Topbar';
 import { Sidebar } from './Sidebar';
 import { NotificationTicker } from './NotificationTicker';
+import { TeamReminders } from './TeamReminders';
 import { CommandPalette } from './CommandPalette';
 import { AskAIWidget } from '../ai/AskAIWidget';
 import { QuickReminderWidget } from '../reminders/QuickReminderWidget';
@@ -19,6 +20,7 @@ export function AppLayout() {
       </div>
       <AskAIWidget />
       <QuickReminderWidget />
+      <TeamReminders />
       <CommandPalette />
     </>
   );
