@@ -555,6 +555,18 @@ export interface Lead {
   created_at: string;
 }
 
+export interface WorkloadTaskBrief {
+  id: string;
+  title: string;
+  priority: string;
+  project_name: string | null;
+  due_date: string | null;
+}
+
+export interface TeamWorkloadInsightsResponse {
+  summaries: Record<string, string>;
+}
+
 export interface DashboardSummary {
   active_project_count: number;
   total_contract_value: number;
@@ -634,10 +646,12 @@ export interface DashboardSummary {
     at_risk: boolean;
   }[];
   team_workload: {
+    user_id: string | null;
     name: string;
     incomplete_count: number;
     completed_this_week: number;
     overdue_count: number;
+    top_tasks: WorkloadTaskBrief[];
   }[];
   jobs_overdue_to_close: {
     jobs: {

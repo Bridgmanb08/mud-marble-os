@@ -292,3 +292,58 @@ async def extract_estimate_from_transcript(
         except ValidationError:
             continue
     return suggestions
+
+
+class TeamMemberBrief(BaseModel):
+    name: str
+    incomplete_count: int
+    completed_this_week: int
+    overdue_count: int
+    top_task_titles: list[str]
+
+
+TEAM_WORKLOAD_SUMMARY_PROMPT = """You are looking at this week's task load for each person on a small \
+residential construction team at Mud & Marble. For each person listed below, write ONE short, specific \
+sentence (max ~20 words) capturing how they're doing right now -- grounded in their actual numbers and task \
+titles, not generic praise. It's fine to name a real risk (overdue items, a heavy load) as plainly as a good \
+manager would, and just as fine to call out when someone's clearly on top of things. Keep the tone direct and \
+human, not corporate.
+
+Team:
+{team}
+
+Return ONLY a JSON object mapping each person's exact name (as given) to their one-sentence summary -- no \
+markdown, no explanation. Example shape: {{"Shannon": "...", "Brent": "..."}}"""
+
+
+def _team_workload_text(members: list["TeamMemberBrief"]) -> str:
+    lines = []
+    for m in members:
+        tasks = "; ".join(m.top_task_titles) if m.top_task_titles else "no open tasks"
+        lines.append(
+            f"- {m.name}: {m.incomplete_count} open, {m.overdue_count} overdue, "
+            f"{m.completed_this_week} completed this week. Top tasks: {tasks}"
+        )
+    return "\n".join(lines)
+
+
+async def summarize_team_workload(members: list[TeamMemberBrief]) -> dict[str, str]:
+    if not members:
+        return {}
+    client = _client()
+    message = await client.messages.create(
+        model=MODEL,
+        max_tokens=1024,
+        messages=[
+            {"role": "user", "content": TEAM_WORKLOAD_SUMMARY_PROMPT.format(team=_team_workload_text(members))}
+        ],
+    )
+    raw = message.content[0].text if message.content else "{}"
+    raw = raw.replace("```json", "").replace("```", "").strip()
+    try:
+        parsed = json.loads(raw)
+    except json.JSONDecodeError as e:
+        raise ProviderError(f"Response couldn't be parsed as JSON: {e}") from e
+    if not isinstance(parsed, dict):
+        raise ProviderError("Response JSON was not an object mapping names to summaries")
+    return {str(k): str(v) for k, v in parsed.items()}
