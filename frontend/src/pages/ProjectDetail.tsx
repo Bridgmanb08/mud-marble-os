@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { useParams, useNavigate, useSearchParams } from 'react-router-dom';
+import { useParams, useNavigate, useSearchParams, Link } from 'react-router-dom';
 import { IconArrowLeft, IconPlus, IconCalendar, IconList } from '@tabler/icons-react';
 import { api } from '../api/client';
 import { useToast } from '../components/ui/Toast';
@@ -186,10 +186,24 @@ export default function ProjectDetail() {
       <div className="ph">
         <div>
           <h1>{project.name.replace(/\|.*/, '').trim()}</h1>
-          <p>
-            {project.clients ? `${project.clients.first_name || ''} ${project.clients.last_name || ''}`.trim() : 'No client'}
-            {project.address ? ` · ${project.address}` : ''}
+          <p style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
+            {project.clients ? (
+              <Link to={`/clients/${project.clients.id}`} style={{ color: 'var(--blue)' }}>
+                {`${project.clients.first_name || ''} ${project.clients.last_name || ''}`.trim()}
+              </Link>
+            ) : (
+              'No client'
+            )}
+            {project.clients?.is_repeat_client && <span className="badge bg-green">Repeat</span>}
+            {project.clients?.is_advocate && <span className="badge bg-blue">Advocate</span>}
+            {project.clients?.preferred_contact_method && (
+              <span style={{ fontSize: 12, color: 'var(--t3)' }}>Prefers {project.clients.preferred_contact_method}</span>
+            )}
+            {project.address ? <span>· {project.address}</span> : null}
           </p>
+          {project.clients?.notes && (
+            <p style={{ fontSize: 12, color: 'var(--t3)', fontStyle: 'italic' }}>"{project.clients.notes}"</p>
+          )}
         </div>
         <select
           className="fi"

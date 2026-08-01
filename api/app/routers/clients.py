@@ -1,7 +1,9 @@
+from collections import defaultdict
+
 from fastapi import APIRouter, Depends, HTTPException
 
 from ..deps import CurrentUser, get_current_user
-from ..schemas.clients import ClientBrief, ClientCreate, ClientOut, ClientUpdate
+from ..schemas.clients import ClientBrief, ClientCreate, ClientOut, ClientProjectSummary, ClientUpdate
 from ..supabase_client import db_get, db_patch, db_post
 
 router = APIRouter(prefix="/clients", tags=["clients"])
@@ -95,3 +97,34 @@ async def update_client(client_id: str, body: ClientUpdate, _: CurrentUser = Dep
     )
     updated["referred"] = [ClientBrief(**r) for r in referred_rows]
     return (await _attach_lifetime_values([updated]))[0]
+
+
+@router.get("/{client_id}/projects", response_model=list[ClientProjectSummary])
+async def get_client_projects(client_id: str, _: CurrentUser = Depends(get_current_user)):
+    projects = await db_get(
+        "projects", f"?client_id=eq.{client_id}&select=id,name,status,contract_value&order=created_at.desc"
+    )
+    if not projects:
+        return []
+
+    project_ids = [p["id"] for p in projects]
+    pid_filter = ",".join(project_ids)
+    invoices = await db_get("invoices", f"?project_id=in.({pid_filter})&select=project_id,amount_due,amount_paid")
+
+    invoiced_by_project: dict = defaultdict(float)
+    paid_by_project: dict = defaultdict(float)
+    for inv in invoices:
+        invoiced_by_project[inv["project_id"]] += inv.get("amount_due") or 0
+        paid_by_project[inv["project_id"]] += inv.get("amount_paid") or 0
+
+    return [
+        ClientProjectSummary(
+            id=p["id"],
+            name=p["name"],
+            status=p["status"],
+            contract_value=p.get("contract_value"),
+            invoiced_total=round(invoiced_by_project.get(p["id"], 0.0), 2),
+            paid_total=round(paid_by_project.get(p["id"], 0.0), 2),
+        )
+        for p in projects
+    ]

@@ -186,6 +186,7 @@ async def get_dashboard(_: CurrentUser = Depends(get_current_user)):
         schedule_items,
         recent_notes,
         client_comm_notes,
+        sms_for_contact,
         transactions,
         estimates,
         leads,
@@ -210,6 +211,7 @@ async def get_dashboard(_: CurrentUser = Depends(get_current_user)):
             "project_notes",
             "?note_type=eq.client_communication&order=created_at.desc&select=project_id,created_at",
         ),
+        db_get("sms_messages", "?project_id=not.is.null&select=project_id,created_at"),
         db_get(
             "transactions",
             "?select=amount,transaction_type,vendor,quickbooks_synced,transaction_date,project_id",
@@ -261,11 +263,18 @@ async def get_dashboard(_: CurrentUser = Depends(get_current_user)):
         )
 
     # -- client communication log (per active project, most recent contact) --
+    # Merges logged client-communication notes with actual SMS traffic -- a
+    # project someone is actively texting through Messages shouldn't get
+    # flagged as overdue for contact just because no one logged a note.
     last_contact_by_project: dict[str, str] = {}
-    for note in client_comm_notes:
-        pid = note.get("project_id")
-        if pid and pid not in last_contact_by_project:
-            last_contact_by_project[pid] = note["created_at"]
+    for entry in client_comm_notes + sms_for_contact:
+        pid = entry.get("project_id")
+        ts = entry.get("created_at")
+        if not pid or not ts:
+            continue
+        current = last_contact_by_project.get(pid)
+        if current is None or _parse_dt(ts) > _parse_dt(current):
+            last_contact_by_project[pid] = ts
 
     client_communications = []
     for p in active:
