@@ -1,17 +1,25 @@
 import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { IconBell } from '@tabler/icons-react';
+import { IconBell, IconX } from '@tabler/icons-react';
 import { api } from '../../api/client';
 import { fmtD } from '../../lib/format';
+import { loadReminderHistory, removeReminderHistoryEntry, type ReminderHistoryEntry } from '../../lib/reminderHistory';
+import { CATEGORY_META, type Category } from './TeamReminders';
 import type { AppNotification } from '../../types';
+
+function fmtTime(iso: string): string {
+  return new Date(iso).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' });
+}
 
 export function NotificationBell() {
   const [notifications, setNotifications] = useState<AppNotification[]>([]);
+  const [reminders, setReminders] = useState<ReminderHistoryEntry[]>([]);
   const [open, setOpen] = useState(false);
   const navigate = useNavigate();
 
   async function load() {
     setNotifications(await api.get<AppNotification[]>('/notifications').catch(() => []));
+    setReminders(loadReminderHistory());
   }
 
   useEffect(() => {
@@ -19,6 +27,14 @@ export function NotificationBell() {
     const interval = setInterval(load, 60000);
     return () => clearInterval(interval);
   }, []);
+
+  function clearReminder(key: string) {
+    // Only removes it from this list -- doesn't touch the underlying task,
+    // and doesn't re-enable the toast to fire again today (that's governed by
+    // TeamReminders' own separate dedupe-key set).
+    removeReminderHistoryEntry(key);
+    setReminders((prev) => prev.filter((r) => r.key !== key));
+  }
 
   const unreadCount = notifications.filter((n) => !n.is_read).length;
 
@@ -39,7 +55,14 @@ export function NotificationBell() {
 
   return (
     <div style={{ position: 'relative' }}>
-      <button className="btn btn-sm btn-ghost" style={{ position: 'relative' }} onClick={() => setOpen((v) => !v)}>
+      <button
+        className="btn btn-sm btn-ghost"
+        style={{ position: 'relative' }}
+        onClick={() => {
+          setOpen((v) => !v);
+          setReminders(loadReminderHistory());
+        }}
+      >
         <IconBell size={16} />
         {unreadCount > 0 && (
           <span
@@ -92,6 +115,39 @@ export function NotificationBell() {
                 <div style={{ fontSize: 11, color: 'var(--t3)', marginTop: 3 }}>{fmtD(n.created_at)}</div>
               </button>
             ))
+          )}
+
+          <div style={{ padding: '10px 12px', borderBottom: '1px solid var(--border)', borderTop: '1px solid var(--border)' }}>
+            <span style={{ fontSize: 13, fontWeight: 600 }}>Today's reminders</span>
+          </div>
+          {reminders.length === 0 ? (
+            <div style={{ padding: 16, fontSize: 12, color: 'var(--t2)' }}>No reminders shown yet today.</div>
+          ) : (
+            [...reminders].reverse().map((r) => {
+              const meta = CATEGORY_META[r.category as Category];
+              const Icon = meta?.Icon;
+              return (
+                <div
+                  key={r.key}
+                  style={{ display: 'flex', alignItems: 'flex-start', gap: 8, padding: '10px 12px', borderBottom: '1px solid var(--border)' }}
+                >
+                  {Icon && <Icon size={14} style={{ color: meta.color, flexShrink: 0, marginTop: 2 }} />}
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <div style={{ fontSize: 12.5, lineHeight: 1.4 }}>{r.message}</div>
+                    <div style={{ fontSize: 11, color: 'var(--t3)', marginTop: 3 }}>{fmtTime(r.firedAt)}</div>
+                  </div>
+                  <button
+                    type="button"
+                    className="btn-reset"
+                    title="Clear -- doesn't affect the task"
+                    onClick={() => clearReminder(r.key)}
+                    style={{ flexShrink: 0, color: 'var(--t3)', cursor: 'pointer' }}
+                  >
+                    <IconX size={13} />
+                  </button>
+                </div>
+              );
+            })
           )}
         </div>
       )}
