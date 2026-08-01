@@ -300,6 +300,8 @@ class TeamMemberBrief(BaseModel):
     completed_this_week: int
     overdue_count: int
     top_task_titles: list[str]
+    pulse_workload_rating: Optional[int] = None
+    pulse_feeling_stuck: bool = False
 
 
 TEAM_WORKLOAD_SUMMARY_PROMPT = """You are looking at this week's task load for each person on a small \
@@ -308,6 +310,13 @@ sentence (max ~20 words) capturing how they're doing right now -- grounded in th
 titles, not generic praise. It's fine to name a real risk (overdue items, a heavy load) as plainly as a good \
 manager would, and just as fine to call out when someone's clearly on top of things. Keep the tone direct and \
 human, not corporate.
+
+Some people also have a self-reported weekly pulse check-in (workload 1-5, and whether they said they're \
+feeling stuck). When that's present, weigh it against their actual task numbers -- call out when the two \
+agree (e.g. a heavy self-reported workload that matches a real pile of overdue tasks) or notably disagree \
+(e.g. they rated themselves overwhelmed but their task load looks light, or the reverse: task load is heavy \
+but they didn't report feeling stuck). Don't force this into every sentence -- only mention it when it adds a \
+real insight beyond the task numbers alone.
 
 Team:
 {team}
@@ -320,9 +329,13 @@ def _team_workload_text(members: list["TeamMemberBrief"]) -> str:
     lines = []
     for m in members:
         tasks = "; ".join(m.top_task_titles) if m.top_task_titles else "no open tasks"
+        pulse_note = ""
+        if m.pulse_workload_rating is not None:
+            pulse_note = f" Self-reported workload this week: {m.pulse_workload_rating}/5"
+            pulse_note += " (said they're feeling stuck)." if m.pulse_feeling_stuck else "."
         lines.append(
             f"- {m.name}: {m.incomplete_count} open, {m.overdue_count} overdue, "
-            f"{m.completed_this_week} completed this week. Top tasks: {tasks}"
+            f"{m.completed_this_week} completed this week. Top tasks: {tasks}.{pulse_note}"
         )
     return "\n".join(lines)
 
