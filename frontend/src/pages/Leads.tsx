@@ -4,9 +4,10 @@ import { IconPlus, IconArrowRight } from '@tabler/icons-react';
 import { api } from '../api/client';
 import { useToast } from '../components/ui/Toast';
 import { fmt, fmtD, fmtAge } from '../lib/format';
-import type { Lead, LeadStatus } from '../types';
+import type { Lead, LeadStatus, PersonTag } from '../types';
 import { NewLeadModal } from '../components/leads/NewLeadModal';
 import { ConvertLeadModal } from '../components/leads/ConvertLeadModal';
+import { EntityTagList } from '../components/tags/EntityTagList';
 
 type SortKey = 'created_at' | 'title' | 'last_contacted_at';
 
@@ -40,6 +41,7 @@ export default function Leads() {
   const [sortDir, setSortDir] = useState<'asc' | 'desc'>('desc');
   const [showNew, setShowNew] = useState(false);
   const [convertingLead, setConvertingLead] = useState<Lead | null>(null);
+  const [allTags, setAllTags] = useState<PersonTag[]>([]);
   const [searchParams, setSearchParams] = useSearchParams();
   const toast = useToast();
   const navigate = useNavigate();
@@ -56,6 +58,7 @@ export default function Leads() {
 
   useEffect(() => {
     load();
+    api.get<PersonTag[]>('/person-tags').then(setAllTags).catch(() => {});
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -179,10 +182,12 @@ export default function Leads() {
                 <th>Confidence</th>
                 <th>Est. Revenue Min</th>
                 <th>Est. Revenue Max</th>
+                <th>Vetting</th>
                 <th className="sortable" onClick={() => toggleSort('last_contacted_at')}>
                   Last Contacted
                 </th>
                 <th>Referred by</th>
+                <th>Tags</th>
                 <th></th>
               </tr>
             </thead>
@@ -210,8 +215,12 @@ export default function Leads() {
                     </td>
                     <td>{fmt(l.estimated_revenue_min ?? l.budget_range_min)}</td>
                     <td>{fmt(l.estimated_revenue_max ?? l.budget_range_max)}</td>
+                    <td>{l.vetting_score ?? '—'}</td>
                     <td>{fmtD(l.last_contacted_at)}</td>
                     <td>{referredByName || '—'}</td>
+                    <td>
+                      <EntityTagList entityType="lead" entityId={l.id} allTags={allTags} />
+                    </td>
                     <td>
                       {l.converted_project_id ? (
                         <button

@@ -565,6 +565,7 @@ export interface Lead {
   referred_by: ClientBrief | null;
   converted_client_id: string | null;
   converted_project_id: string | null;
+  vetting_score: number | null;
   last_contacted_at: string | null;
   created_at: string;
 }
