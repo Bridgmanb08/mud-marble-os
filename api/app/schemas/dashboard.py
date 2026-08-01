@@ -8,6 +8,8 @@ class ActiveProject(BaseModel):
     name: str
     client_name: Optional[str] = None
     health_status: Optional[str] = None
+    start_date: Optional[str] = None
+    estimated_completion: Optional[str] = None
 
 
 class LeadBrief(BaseModel):
