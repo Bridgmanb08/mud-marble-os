@@ -29,17 +29,20 @@ from ..schemas.dashboard import (
     CashPosition,
     ChangeOrderAction,
     ChangeOrderStats,
+    ClientBriefRow,
     ClientCommunicationEntry,
     ContractorMilestone,
     DashboardSummary,
     DesignProjectCard,
     EstimateWinRate,
     JobsOverdueToClose,
+    LeadBrief,
     LeadPipeline,
     LeadPipelineStage,
     OverdueJobEntry,
     ProjectProfitability,
     QBOSyncStatus,
+    SubcontractorBrief,
     SubcontractorRisk,
     TeamWorkloadEntry,
     TeamWorkloadInsightsResponse,
@@ -61,7 +64,8 @@ Available data sources and their fields (you MUST only use these — nothing els
 Numeric fields (only these may be used for "sum" or "avg" aggregation):
 {numeric}
 
-Respond with ONLY a JSON object, no markdown, no explanation, in this exact shape:
+If the request can be answered using ONLY the sources and fields above, respond with ONLY a JSON \
+object, no markdown, no explanation, in this exact shape:
 {{
   "title": "short widget title",
   "spec": {{
@@ -72,8 +76,11 @@ Respond with ONLY a JSON object, no markdown, no explanation, in this exact shap
   }}
 }}
 
-If the request doesn't clearly map to one of the available sources, pick the closest reasonable match \
-rather than refusing — "aggregation":"list" with no filters is a safe fallback.
+If the request does NOT clearly map to one of the available sources — do not guess or substitute a \
+different source that would produce a different, misleading result. Instead respond with ONLY this shape:
+{{
+  "error": "<one sentence explaining what data isn't available>"
+}}
 
 User's request: {prompt}"""
 
@@ -191,6 +198,7 @@ async def get_dashboard(_: CurrentUser = Depends(get_current_user)):
         estimates,
         leads,
         subcontractors,
+        clients,
         users,
     ) = await asyncio.gather(
         db_get("projects", "?is_archived=eq.false&select=*,clients(first_name,last_name)"),
@@ -221,8 +229,13 @@ async def get_dashboard(_: CurrentUser = Depends(get_current_user)):
             "?select=project_id,version,status,grand_total_owner_price,construction_total_owner_price,"
             "allowance_total,pm_fee_total&order=version.desc",
         ),
-        db_get("leads", "?select=status,estimated_revenue_min,estimated_revenue_max"),
-        db_get("subcontractors", "?select=is_active,insurance_expiry,w9_on_file"),
+        db_get(
+            "leads",
+            "?select=id,title,first_name,last_name,project_address,status,estimated_revenue_min,"
+            "estimated_revenue_max,confidence",
+        ),
+        db_get("subcontractors", "?select=id,company_name,trade,is_active,insurance_expiry,w9_on_file"),
+        db_get("clients", "?select=id,first_name,last_name,is_advocate,is_repeat_client"),
         db_get("app_users", "?select=id,name&order=name.asc"),
     )
 
@@ -606,6 +619,40 @@ async def get_dashboard(_: CurrentUser = Depends(get_current_user)):
         subcontractor_risk=subcontractor_risk,
         change_order_stats=change_order_stats,
         estimate_win_rate=estimate_win_rate,
+        leads=[
+            LeadBrief(
+                id=lead["id"],
+                title=lead.get("title")
+                or " ".join(filter(None, [lead.get("first_name"), lead.get("last_name")]))
+                or lead.get("project_address")
+                or "Untitled lead",
+                status=lead["status"],
+                estimated_revenue_min=lead.get("estimated_revenue_min"),
+                estimated_revenue_max=lead.get("estimated_revenue_max"),
+                confidence=lead.get("confidence"),
+            )
+            for lead in leads
+        ],
+        clients=[
+            ClientBriefRow(
+                id=c["id"],
+                name=" ".join(filter(None, [c.get("first_name"), c.get("last_name")])) or "Unnamed client",
+                is_advocate=bool(c.get("is_advocate")),
+                is_repeat_client=bool(c.get("is_repeat_client")),
+            )
+            for c in clients
+        ],
+        subcontractors=[
+            SubcontractorBrief(
+                id=s["id"],
+                company_name=s["company_name"],
+                trade=s.get("trade"),
+                is_active=bool(s.get("is_active")),
+                w9_on_file=bool(s.get("w9_on_file")),
+                insurance_expiry=s.get("insurance_expiry"),
+            )
+            for s in subcontractors
+        ],
     )
 
 
@@ -728,10 +775,17 @@ async def create_custom_widget(
 
     try:
         parsed = json.loads(raw)
+    except json.JSONDecodeError as e:
+        raise HTTPException(status_code=422, detail=f"Couldn't turn that into a widget: {e}")
+
+    if parsed.get("error"):
+        raise HTTPException(status_code=422, detail=parsed["error"])
+
+    try:
         spec = CustomWidgetSpec(**parsed["spec"])
         title = (parsed.get("title") or body.prompt[:60]).strip()
         validate_spec(spec)
-    except (json.JSONDecodeError, KeyError, ValidationError, SpecValidationError) as e:
+    except (KeyError, ValidationError, SpecValidationError) as e:
         raise HTTPException(status_code=422, detail=f"Couldn't turn that into a widget: {e}")
 
     rows = await db_post(

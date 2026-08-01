@@ -10,6 +10,31 @@ class ActiveProject(BaseModel):
     health_status: Optional[str] = None
 
 
+class LeadBrief(BaseModel):
+    id: str
+    title: str
+    status: str
+    estimated_revenue_min: Optional[float] = None
+    estimated_revenue_max: Optional[float] = None
+    confidence: Optional[int] = None
+
+
+class ClientBriefRow(BaseModel):
+    id: str
+    name: str
+    is_advocate: bool
+    is_repeat_client: bool
+
+
+class SubcontractorBrief(BaseModel):
+    id: str
+    company_name: str
+    trade: Optional[str] = None
+    is_active: bool
+    w9_on_file: bool
+    insurance_expiry: Optional[str] = None
+
+
 class UpcomingTask(BaseModel):
     id: str
     title: str
@@ -204,3 +229,6 @@ class DashboardSummary(BaseModel):
     subcontractor_risk: SubcontractorRisk
     change_order_stats: ChangeOrderStats
     estimate_win_rate: EstimateWinRate
+    leads: list[LeadBrief]
+    clients: list[ClientBriefRow]
+    subcontractors: list[SubcontractorBrief]

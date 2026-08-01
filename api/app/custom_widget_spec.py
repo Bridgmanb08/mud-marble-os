@@ -15,6 +15,9 @@ SOURCE_FIELDS: dict[str, set[str]] = {
     "ar_aging_detail": {"project_name", "client_name", "amount_outstanding", "days_overdue"},
     "project_profitability": {"project_id", "project_name", "estimated", "actual_spend", "variance"},
     "design_projects": {"project_id", "project_name", "timeline_pct", "task_completion_pct", "at_risk"},
+    "leads": {"id", "title", "status", "estimated_revenue_min", "estimated_revenue_max", "confidence"},
+    "clients": {"id", "name", "is_advocate", "is_repeat_client"},
+    "subcontractors": {"id", "company_name", "trade", "is_active", "w9_on_file", "insurance_expiry"},
 }
 
 NUMERIC_FIELDS: dict[str, set[str]] = {
@@ -27,6 +30,9 @@ NUMERIC_FIELDS: dict[str, set[str]] = {
     "ar_aging_detail": {"amount_outstanding", "days_overdue"},
     "project_profitability": {"estimated", "actual_spend", "variance"},
     "design_projects": {"timeline_pct", "task_completion_pct"},
+    "leads": {"estimated_revenue_min", "estimated_revenue_max", "confidence"},
+    "clients": set(),
+    "subcontractors": set(),
 }
 
 WidgetSource = Literal[
@@ -39,6 +45,9 @@ WidgetSource = Literal[
     "ar_aging_detail",
     "project_profitability",
     "design_projects",
+    "leads",
+    "clients",
+    "subcontractors",
 ]
 
 

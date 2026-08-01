@@ -729,6 +729,28 @@ export interface DashboardSummary {
     win_rate_pct: number;
     pipeline_value: number;
   };
+  leads: {
+    id: string;
+    title: string;
+    status: string;
+    estimated_revenue_min: number | null;
+    estimated_revenue_max: number | null;
+    confidence: number | null;
+  }[];
+  clients: {
+    id: string;
+    name: string;
+    is_advocate: boolean;
+    is_repeat_client: boolean;
+  }[];
+  subcontractors: {
+    id: string;
+    company_name: string;
+    trade: string | null;
+    is_active: boolean;
+    w9_on_file: boolean;
+    insurance_expiry: string | null;
+  }[];
 }
 
 export type WidgetId =
@@ -885,7 +907,10 @@ export type CustomWidgetSource =
   | 'change_orders_action'
   | 'ar_aging_detail'
   | 'project_profitability'
-  | 'design_projects';
+  | 'design_projects'
+  | 'leads'
+  | 'clients'
+  | 'subcontractors';
 
 export interface CustomWidgetFilter {
   field: string;
