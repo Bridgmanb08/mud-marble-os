@@ -17,6 +17,7 @@ from .routers import (
     invoices,
     leads,
     messages,
+    notification_settings,
     notifications,
     person_tags,
     project_subcontractor_items,
@@ -24,6 +25,7 @@ from .routers import (
     pulse,
     quick_reminders,
     reports,
+    smart_nudges,
     sub_intelligence,
     subcontractor_files,
     subcontractors,
@@ -77,3 +79,5 @@ app.include_router(quick_reminders.router, prefix="/api")
 app.include_router(twilio_sms.router, prefix="/api")
 app.include_router(person_tags.router, prefix="/api")
 app.include_router(pulse.router, prefix="/api")
+app.include_router(notification_settings.router, prefix="/api")
+app.include_router(smart_nudges.router, prefix="/api")

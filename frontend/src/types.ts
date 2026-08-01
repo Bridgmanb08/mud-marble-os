@@ -931,6 +931,13 @@ export interface CustomWidget {
   spec: CustomWidgetSpec;
 }
 
+export interface NotificationSettings {
+  id: string;
+  smart_learning_enabled: boolean;
+  updated_at: string;
+  updated_by: string | null;
+}
+
 export type ReportSource = 'transactions' | 'invoices' | 'change_orders' | 'projects';
 
 export interface ReportFilter {
