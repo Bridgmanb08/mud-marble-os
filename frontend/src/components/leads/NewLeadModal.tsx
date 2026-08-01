@@ -18,6 +18,7 @@ export function NewLeadModal({ onClose, onCreated }: NewLeadModalProps) {
   const [projectType, setProjectType] = useState('');
   const [revenueMin, setRevenueMin] = useState('');
   const [revenueMax, setRevenueMax] = useState('');
+  const [vettingScore, setVettingScore] = useState('');
   const [wasReferred, setWasReferred] = useState(false);
   const [referredByClientId, setReferredByClientId] = useState<string | null>(null);
   const [referralName, setReferralName] = useState<string | null>(null);
@@ -47,6 +48,7 @@ export function NewLeadModal({ onClose, onCreated }: NewLeadModalProps) {
         project_type: projectType.trim() || null,
         estimated_revenue_min: revenueMin ? Number(revenueMin) : null,
         estimated_revenue_max: revenueMax ? Number(revenueMax) : null,
+        vetting_score: vettingScore ? Number(vettingScore) : null,
         referred_by_client_id: wasReferred ? referredByClientId : null,
         referral_name: wasReferred ? referralName : null,
         status: 'new',
@@ -101,6 +103,18 @@ export function NewLeadModal({ onClose, onCreated }: NewLeadModalProps) {
           <div className="fg">
             <label className="fl">Estimated revenue max ($)</label>
             <input className="fi" type="number" value={revenueMax} onChange={(e) => setRevenueMax(e.target.value)} placeholder="100000" />
+          </div>
+          <div className="fg">
+            <label className="fl">Vetting score (0-100)</label>
+            <input
+              className="fi"
+              type="number"
+              min={0}
+              max={100}
+              value={vettingScore}
+              onChange={(e) => setVettingScore(e.target.value)}
+              placeholder="How well-qualified is this lead?"
+            />
           </div>
         </div>
         <div className="fg">

@@ -1,10 +1,11 @@
 import { useEffect, useRef, useState } from 'react';
-import { IconFlame, IconTarget, IconRocket, IconX, IconHeartHandshake } from '@tabler/icons-react';
+import { useNavigate } from 'react-router-dom';
+import { IconFlame, IconTarget, IconRocket, IconX, IconHeartHandshake, IconAlertTriangle } from '@tabler/icons-react';
 import { api } from '../../api/client';
 import { useAuth } from '../../auth/AuthContext';
 import { DashboardTaskDrawer } from '../dashboard/DashboardTaskDrawer';
 import { PulseCheckinModal } from '../dashboard/PulseCheckinModal';
-import type { Task, PulseCheckinOut } from '../../types';
+import type { Task, PulseCheckinOut, DashboardSummary } from '../../types';
 
 /**
  * Proactive, personality-driven reminders for the current user's own tasks
@@ -15,7 +16,7 @@ import type { Task, PulseCheckinOut } from '../../types';
  * fires once per day (tracked in localStorage) so it nudges without nagging.
  */
 
-type Category = 'overdue' | 'due_today' | 'starting_today' | 'pulse_nudge';
+type Category = 'overdue' | 'due_today' | 'starting_today' | 'pulse_nudge' | 'risk_nudge';
 
 interface ReminderToast {
   id: string;
@@ -61,6 +62,7 @@ const CATEGORY_META: Record<Category, { Icon: typeof IconFlame; color: string }>
   due_today: { Icon: IconTarget, color: 'var(--amber)' },
   starting_today: { Icon: IconRocket, color: 'var(--blue)' },
   pulse_nudge: { Icon: IconHeartHandshake, color: 'var(--accent)' },
+  risk_nudge: { Icon: IconAlertTriangle, color: 'var(--red)' },
 };
 
 function pick<T>(arr: T[]): T {
@@ -72,6 +74,34 @@ function messageFor(category: Category, title: string): string {
   if (category === 'due_today') return pick(DUE_TODAY_MESSAGES)(title);
   if (category === 'pulse_nudge') return pick(PULSE_NUDGE_MESSAGES)();
   return pick(STARTING_TODAY_MESSAGES)(title);
+}
+
+// Turns the dashboard's already-computed risk signals (sub compliance, CO SOP
+// breaches, seriously-overdue AR) into one plain-English sentence -- these are
+// otherwise only visible if an admin happens to open the Dashboard/Sub
+// Intelligence page. Returns null when nothing is worth flagging.
+function buildRiskMessage(summary: DashboardSummary): string | null {
+  const parts: string[] = [];
+  const risk = summary.subcontractor_risk;
+  if (risk.insurance_expired > 0) {
+    parts.push(`${risk.insurance_expired} sub${risk.insurance_expired > 1 ? 's have' : ' has'} expired insurance`);
+  }
+  if (risk.insurance_expiring_soon > 0) {
+    parts.push(`${risk.insurance_expiring_soon} expiring soon`);
+  }
+  const breaches = summary.change_orders_action.filter((c) => c.sop_breach);
+  if (breaches.length > 0) {
+    parts.push(`${breaches.length} change order${breaches.length > 1 ? 's are' : ' is'} past SOP without a response`);
+  }
+  const seriouslyOverdue = summary.ar_aging_detail.filter((a) => a.days_overdue >= 90);
+  if (seriouslyOverdue.length > 0) {
+    const total = seriouslyOverdue.reduce((s, a) => s + a.amount_outstanding, 0);
+    parts.push(
+      `$${Math.round(total).toLocaleString()} is 90+ days overdue across ${seriouslyOverdue.length} invoice${seriouslyOverdue.length > 1 ? 's' : ''}`
+    );
+  }
+  if (!parts.length) return null;
+  return `Weekly risk check: ${parts.join('; ')}.`;
 }
 
 function todayStr(): string {
@@ -142,6 +172,7 @@ function findCandidates(tasks: Task[], userName: string, shown: Set<string>): Ca
 
 export function TeamReminders() {
   const { user } = useAuth();
+  const navigate = useNavigate();
   const [toasts, setToasts] = useState<ReminderToast[]>([]);
   const [openTaskId, setOpenTaskId] = useState<string | null>(null);
   const [showPulseCheckin, setShowPulseCheckin] = useState(false);
@@ -188,6 +219,7 @@ export function TeamReminders() {
       );
     }
     await pollPulse();
+    await pollRisks();
   }
 
   async function pollPulse() {
@@ -195,11 +227,33 @@ export function TeamReminders() {
     const week = isoWeekStr();
     const key = `wk:${week}:pulse_nudge`;
     if (shownRef.current.has(key)) return;
-    const recent = await api.get<PulseCheckinOut[]>('/pulse/checkins/me?limit=1').catch(() => []);
-    if (recent.length && isoWeekStr(new Date(recent[0].created_at)) === week) return;
+    // Marked synchronously, before the async fetch below -- otherwise two
+    // near-simultaneous polls (React StrictMode double-invokes effects in
+    // dev, but a fast reconnect could do the same in prod) both see the key
+    // as unset and both queue a toast. See the identical fix's reasoning on
+    // the task-reminder dedupe path above.
     shownRef.current.add(key);
     saveShown(shownRef.current);
+    const recent = await api.get<PulseCheckinOut[]>('/pulse/checkins/me?limit=1').catch(() => []);
+    if (recent.length && isoWeekStr(new Date(recent[0].created_at)) === week) return;
     queueToast('pulse_nudge', messageFor('pulse_nudge', ''), key);
+  }
+
+  async function pollRisks() {
+    if (!user?.is_admin) return;
+    const week = isoWeekStr();
+    const key = `wk:${week}:risk_nudge`;
+    if (shownRef.current.has(key)) return;
+    // Marked synchronously up front for the same reason as pollPulse above --
+    // also means a quiet week (nothing to flag) won't keep re-fetching
+    // /dashboard on every poll trying to find something to report.
+    shownRef.current.add(key);
+    saveShown(shownRef.current);
+    const summary = await api.get<DashboardSummary>('/dashboard').catch(() => null);
+    if (!summary) return;
+    const message = buildRiskMessage(summary);
+    if (!message) return;
+    queueToast('risk_nudge', message, key);
   }
 
   useEffect(() => {
@@ -221,7 +275,11 @@ export function TeamReminders() {
             <div
               key={t.id}
               className={`tr-toast tr-${t.phase}`}
-              onClick={() => (t.category === 'pulse_nudge' ? setShowPulseCheckin(true) : setOpenTaskId(t.taskId!))}
+              onClick={() => {
+                if (t.category === 'pulse_nudge') setShowPulseCheckin(true);
+                else if (t.category === 'risk_nudge') navigate('/');
+                else setOpenTaskId(t.taskId!);
+              }}
             >
               <Icon size={16} style={{ color, flexShrink: 0, marginTop: 1 }} />
               <span style={{ flex: 1 }}>{t.message}</span>
