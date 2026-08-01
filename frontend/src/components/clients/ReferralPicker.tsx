@@ -25,7 +25,7 @@ export function ReferralPicker({ clients, referredByClientId, referralName, onCh
   useEffect(() => {
     setText(linked ? fullName(linked) : referralName || '');
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [referredByClientId, referralName]);
+  }, [referredByClientId, referralName, clients]);
 
   function commit(value: string) {
     const trimmed = value.trim();

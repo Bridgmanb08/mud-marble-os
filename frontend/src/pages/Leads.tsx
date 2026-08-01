@@ -1,11 +1,12 @@
 import { useEffect, useMemo, useState } from 'react';
-import { useSearchParams } from 'react-router-dom';
-import { IconPlus } from '@tabler/icons-react';
+import { useNavigate, useSearchParams } from 'react-router-dom';
+import { IconPlus, IconArrowRight } from '@tabler/icons-react';
 import { api } from '../api/client';
 import { useToast } from '../components/ui/Toast';
 import { fmt, fmtD, fmtAge } from '../lib/format';
 import type { Lead, LeadStatus } from '../types';
 import { NewLeadModal } from '../components/leads/NewLeadModal';
+import { ConvertLeadModal } from '../components/leads/ConvertLeadModal';
 
 type SortKey = 'created_at' | 'title' | 'last_contacted_at';
 
@@ -38,8 +39,10 @@ export default function Leads() {
   const [sortKey, setSortKey] = useState<SortKey>('created_at');
   const [sortDir, setSortDir] = useState<'asc' | 'desc'>('desc');
   const [showNew, setShowNew] = useState(false);
+  const [convertingLead, setConvertingLead] = useState<Lead | null>(null);
   const [searchParams, setSearchParams] = useSearchParams();
   const toast = useToast();
+  const navigate = useNavigate();
 
   async function load() {
     try {
@@ -179,12 +182,17 @@ export default function Leads() {
                 <th className="sortable" onClick={() => toggleSort('last_contacted_at')}>
                   Last Contacted
                 </th>
+                <th>Referred by</th>
+                <th></th>
               </tr>
             </thead>
             <tbody>
               {filtered.map((l) => {
                 const group = STATUS_GROUPS[l.status];
                 const confidence = l.confidence ?? 0;
+                const referredByName = l.referred_by
+                  ? [l.referred_by.first_name, l.referred_by.last_name].filter(Boolean).join(' ')
+                  : l.referral_name;
                 return (
                   <tr key={l.id}>
                     <td style={{ fontWeight: 500, color: 'var(--blue)' }}>{leadTitle(l)}</td>
@@ -203,6 +211,22 @@ export default function Leads() {
                     <td>{fmt(l.estimated_revenue_min ?? l.budget_range_min)}</td>
                     <td>{fmt(l.estimated_revenue_max ?? l.budget_range_max)}</td>
                     <td>{fmtD(l.last_contacted_at)}</td>
+                    <td>{referredByName || '—'}</td>
+                    <td>
+                      {l.converted_project_id ? (
+                        <button
+                          type="button"
+                          className="btn btn-ghost btn-sm"
+                          onClick={() => navigate(`/projects/${l.converted_project_id}`)}
+                        >
+                          View project <IconArrowRight size={13} />
+                        </button>
+                      ) : (
+                        <button type="button" className="btn btn-sm" onClick={() => setConvertingLead(l)}>
+                          Convert
+                        </button>
+                      )}
+                    </td>
                   </tr>
                 );
               })}
@@ -218,6 +242,19 @@ export default function Leads() {
             setShowNew(false);
             toast('Lead created');
             load();
+          }}
+        />
+      )}
+
+      {convertingLead && (
+        <ConvertLeadModal
+          lead={convertingLead}
+          onClose={() => setConvertingLead(null)}
+          onConverted={(res) => {
+            setConvertingLead(null);
+            toast('Lead converted -- client and project created');
+            load();
+            navigate(`/projects/${res.project_id}`);
           }}
         />
       )}

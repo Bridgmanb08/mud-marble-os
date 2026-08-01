@@ -235,6 +235,9 @@ export default function InHouseWorkshop() {
             <div className="metric">
               <div className="m-label">Owner Price</div>
               <div className="m-val">{fmt(summary.owner_price)}</div>
+              {summary.change_order_owner_price > 0 && (
+                <div className="m-sub">incl. {fmt(summary.change_order_owner_price)} in approved COs</div>
+              )}
             </div>
             <div className="metric">
               <div className="m-label">Builder Cost</div>

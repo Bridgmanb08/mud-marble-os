@@ -1,7 +1,7 @@
 from datetime import datetime, timezone
 from typing import Optional
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, HTTPException
 
 from ..change_order_utils import compute_sop_breach
 from ..deps import CurrentUser, get_current_user
@@ -42,6 +42,31 @@ async def create_change_order(body: ChangeOrderCreate, _: CurrentUser = Depends(
 
 @router.patch("/{co_id}", response_model=ChangeOrderOut)
 async def update_change_order(co_id: str, body: ChangeOrderUpdate, _: CurrentUser = Depends(get_current_user)):
+    existing = await db_get("change_orders", f"?id=eq.{co_id}&select=status,project_id,owner_price")
+    if not existing:
+        raise HTTPException(status_code=404, detail="Change order not found")
+    old_status = existing[0]["status"]
+    project_id = existing[0]["project_id"]
+    owner_price = existing[0].get("owner_price") or 0
+
     await db_patch("change_orders", co_id, body.model_dump(exclude_none=True))
+
+    # Approving a change order should grow the project's contracted value by
+    # its owner price (and shrink it back if it's ever un-approved) -- without
+    # this, an approved addition never shows up in the project's contract
+    # value or the dashboard's total-contract-value rollup.
+    new_status = body.status if body.status is not None else old_status
+    if new_status != old_status and owner_price:
+        delta = 0.0
+        if new_status == "approved" and old_status != "approved":
+            delta = owner_price
+        elif old_status == "approved" and new_status != "approved":
+            delta = -owner_price
+        if delta:
+            proj_rows = await db_get("projects", f"?id=eq.{project_id}&select=contract_value")
+            if proj_rows:
+                current = proj_rows[0].get("contract_value") or 0
+                await db_patch("projects", project_id, {"contract_value": round(current + delta, 2)})
+
     full = await db_get("change_orders", f"?id=eq.{co_id}&select=*,projects(name)")
     return _attach_breach(full[0])

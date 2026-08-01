@@ -1,6 +1,8 @@
-import { useState, type FormEvent } from 'react';
+import { useEffect, useState, type FormEvent } from 'react';
 import { api, ApiError } from '../../api/client';
 import { Modal } from '../ui/Modal';
+import { ReferralPicker } from '../clients/ReferralPicker';
+import type { Client } from '../../types';
 
 interface NewLeadModalProps {
   onClose: () => void;
@@ -16,8 +18,16 @@ export function NewLeadModal({ onClose, onCreated }: NewLeadModalProps) {
   const [projectType, setProjectType] = useState('');
   const [revenueMin, setRevenueMin] = useState('');
   const [revenueMax, setRevenueMax] = useState('');
+  const [wasReferred, setWasReferred] = useState(false);
+  const [referredByClientId, setReferredByClientId] = useState<string | null>(null);
+  const [referralName, setReferralName] = useState<string | null>(null);
+  const [clients, setClients] = useState<Client[]>([]);
   const [error, setError] = useState('');
   const [saving, setSaving] = useState(false);
+
+  useEffect(() => {
+    api.get<Client[]>('/clients').then(setClients).catch(() => {});
+  }, []);
 
   async function handleSubmit(e: FormEvent) {
     e.preventDefault();
@@ -37,6 +47,8 @@ export function NewLeadModal({ onClose, onCreated }: NewLeadModalProps) {
         project_type: projectType.trim() || null,
         estimated_revenue_min: revenueMin ? Number(revenueMin) : null,
         estimated_revenue_max: revenueMax ? Number(revenueMax) : null,
+        referred_by_client_id: wasReferred ? referredByClientId : null,
+        referral_name: wasReferred ? referralName : null,
         status: 'new',
       });
       onCreated();
@@ -91,6 +103,27 @@ export function NewLeadModal({ onClose, onCreated }: NewLeadModalProps) {
             <input className="fi" type="number" value={revenueMax} onChange={(e) => setRevenueMax(e.target.value)} placeholder="100000" />
           </div>
         </div>
+        <div className="fg">
+          <label className="fl" style={{ display: 'flex', alignItems: 'center', gap: 6, cursor: 'pointer' }}>
+            <input type="checkbox" checked={wasReferred} onChange={(e) => setWasReferred(e.target.checked)} />
+            This lead was referred by someone
+          </label>
+        </div>
+        {wasReferred && (
+          <div className="fg">
+            <label className="fl">Referred by</label>
+            <ReferralPicker
+              clients={clients}
+              referredByClientId={referredByClientId}
+              referralName={referralName}
+              onChange={(next) => {
+                setReferredByClientId(next.referredByClientId);
+                setReferralName(next.referralName);
+              }}
+              listId="new-lead-referral-options"
+            />
+          </div>
+        )}
         <div className="ma">
           <button type="button" className="btn" onClick={onClose}>
             Cancel
