@@ -33,6 +33,7 @@ from .routers import (
     transactions,
     twilio_sms,
     users,
+    weather,
 )
 
 app = FastAPI(title="Mud & Marble OS API")
@@ -81,3 +82,4 @@ app.include_router(person_tags.router, prefix="/api")
 app.include_router(pulse.router, prefix="/api")
 app.include_router(notification_settings.router, prefix="/api")
 app.include_router(smart_nudges.router, prefix="/api")
+app.include_router(weather.router, prefix="/api")

@@ -1,7 +1,17 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
+import { IconSun, IconCloud, IconCloudFog, IconCloudRain, IconSnowflake, IconCloudStorm } from '@tabler/icons-react';
 import { api, ApiError } from '../../api/client';
 import { useToast } from '../ui/Toast';
-import type { Project, Task } from '../../types';
+import type { Project, Task, WeatherOut } from '../../types';
+
+const CONDITION_ICON: Record<string, typeof IconSun> = {
+  clear: IconSun,
+  cloudy: IconCloud,
+  fog: IconCloudFog,
+  rain: IconCloudRain,
+  snow: IconSnowflake,
+  thunderstorm: IconCloudStorm,
+};
 
 const STATUS_COLOR: Record<string, string> = {
   upcoming: 'var(--border-md)',
@@ -135,6 +145,13 @@ export function WeekScrollCalendar({
   });
   const [drag, setDrag] = useState<DragState | null>(null);
   const [quickAdd, setQuickAdd] = useState<{ startKey: string; endKey: string; title: string; projectId: string } | null>(null);
+  const [weather, setWeather] = useState<WeatherOut | null>(null);
+
+  useEffect(() => {
+    api.get<WeatherOut>('/weather').then(setWeather).catch(() => {});
+  }, []);
+
+  const weatherByDate = useMemo(() => new Map((weather?.daily ?? []).map((d) => [d.date, d])), [weather]);
 
   useLayoutEffect(() => {
     if (pendingPrependHeight.current !== null && scrollRef.current) {
@@ -346,7 +363,23 @@ export function WeekScrollCalendar({
                         startDrag('create', key);
                       }}
                     >
-                      <div className="wcal-daynum">{day.getDate()}</div>
+                      <div className="wcal-daynum" style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+                        {day.getDate()}
+                        {weatherByDate.get(key) &&
+                          (() => {
+                            const w = weatherByDate.get(key)!;
+                            const Icon = CONDITION_ICON[w.condition] || IconCloud;
+                            return (
+                              <span
+                                title={`High ${Math.round(w.high_f)}° / Low ${Math.round(w.low_f)}°${w.precipitation_chance !== null ? ` · ${w.precipitation_chance}% precip` : ''}`}
+                                style={{ display: 'inline-flex', alignItems: 'center', gap: 2, fontSize: 10, color: 'var(--t2)', fontWeight: 400 }}
+                              >
+                                <Icon size={12} style={{ color: 'var(--accent)' }} />
+                                {Math.round(w.high_f)}°
+                              </span>
+                            );
+                          })()}
+                      </div>
                       {overflowByDay.get(key) ? <div className="wcal-more">+{overflowByDay.get(key)} more</div> : null}
                     </div>
                   );
