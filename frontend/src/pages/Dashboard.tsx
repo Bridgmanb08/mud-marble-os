@@ -75,6 +75,10 @@ export default function Dashboard() {
     setWidgets((prev) => (prev ? [...prev, { id, visible: true }] : prev));
   }
 
+  function removeWidget(id: string) {
+    setWidgets((prev) => prev && prev.filter((w) => w.id !== id));
+  }
+
   async function handleSave() {
     if (!widgets) return;
     setSaving(true);
@@ -167,6 +171,7 @@ export default function Dashboard() {
                     editMode={editMode}
                     visible={w.visible}
                     onToggleVisible={() => toggleVisible(w.id)}
+                    onRemove={() => removeWidget(w.id)}
                     wide={custom ? true : def!.wide}
                   >
                     {custom ? <CustomWidgetRenderer spec={custom.spec} data={data} /> : (() => {
