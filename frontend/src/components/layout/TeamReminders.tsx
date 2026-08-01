@@ -1,6 +1,16 @@
 import { useEffect, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { IconFlame, IconTarget, IconRocket, IconX, IconHeartHandshake, IconAlertTriangle } from '@tabler/icons-react';
+import {
+  IconFlame,
+  IconTarget,
+  IconRocket,
+  IconX,
+  IconHeartHandshake,
+  IconAlertTriangle,
+  IconSunrise,
+  IconBriefcase,
+  IconClockHour3,
+} from '@tabler/icons-react';
 import { api } from '../../api/client';
 import { useAuth } from '../../auth/AuthContext';
 import { DashboardTaskDrawer } from '../dashboard/DashboardTaskDrawer';
@@ -16,7 +26,15 @@ import type { Task, PulseCheckinOut, DashboardSummary } from '../../types';
  * fires once per day (tracked in localStorage) so it nudges without nagging.
  */
 
-type Category = 'overdue' | 'due_today' | 'starting_today' | 'pulse_nudge' | 'risk_nudge';
+type Category =
+  | 'overdue'
+  | 'due_today'
+  | 'starting_today'
+  | 'pulse_nudge'
+  | 'risk_nudge'
+  | 'morning_briefing'
+  | 'job_context'
+  | 'closeout_briefing';
 
 interface ReminderToast {
   id: string;
@@ -24,6 +42,7 @@ interface ReminderToast {
   category: Category;
   message: string;
   taskId?: string;
+  projectId?: string;
   phase: 'enter' | 'shown' | 'leave';
 }
 
@@ -63,6 +82,9 @@ const CATEGORY_META: Record<Category, { Icon: typeof IconFlame; color: string }>
   starting_today: { Icon: IconRocket, color: 'var(--blue)' },
   pulse_nudge: { Icon: IconHeartHandshake, color: 'var(--accent)' },
   risk_nudge: { Icon: IconAlertTriangle, color: 'var(--red)' },
+  morning_briefing: { Icon: IconSunrise, color: 'var(--amber)' },
+  job_context: { Icon: IconBriefcase, color: 'var(--blue)' },
+  closeout_briefing: { Icon: IconClockHour3, color: 'var(--accent)' },
 };
 
 function pick<T>(arr: T[]): T {
@@ -178,10 +200,11 @@ export function TeamReminders() {
   const [showPulseCheckin, setShowPulseCheckin] = useState(false);
   const shownRef = useRef<Set<string>>(loadShown());
   const nextIdRef = useRef(1);
+  const smartLearningEnabledRef = useRef(false);
 
-  function queueToast(category: Category, message: string, key: string, taskId?: string) {
+  function queueToast(category: Category, message: string, key: string, taskId?: string, projectId?: string) {
     const id = `tr-${nextIdRef.current++}`;
-    const toast: ReminderToast = { id, key, category, message, taskId, phase: 'enter' };
+    const toast: ReminderToast = { id, key, category, message, taskId, projectId, phase: 'enter' };
     setToasts((prev) => [...prev, toast]);
 
     // Flip to 'shown' on the next frame so the enter transition actually animates
@@ -220,6 +243,9 @@ export function TeamReminders() {
     }
     await pollPulse();
     await pollRisks();
+    await pollMorningBriefing();
+    await pollJobContext(tasks);
+    await pollCloseoutBriefing();
   }
 
   async function pollPulse() {
@@ -256,8 +282,80 @@ export function TeamReminders() {
     queueToast('risk_nudge', message, key);
   }
 
+  async function pollMorningBriefing() {
+    if (!user || !smartLearningEnabledRef.current) return;
+    const key = `${todayStr()}:morning_briefing`;
+    if (shownRef.current.has(key)) return;
+    // Marked synchronously up front for the same StrictMode-double-invoke reason
+    // as every other poll function in this file -- see pollPulse above.
+    shownRef.current.add(key);
+    saveShown(shownRef.current);
+    const res = await api
+      .post<{ message: string | null }>('/smart-nudges/generate', { kind: 'morning_briefing' })
+      .catch(() => null);
+    if (!res?.message) return;
+    queueToast('morning_briefing', res.message, key);
+  }
+
+  async function pollJobContext(tasks: Task[]) {
+    if (!user || !smartLearningEnabledRef.current) return;
+    const today = todayStr();
+    const mine = tasks.filter(
+      (t) => t.status !== 'complete' && (t.assigned_to === user.name || t.assignees?.includes(user.name))
+    );
+    const projectIds = new Set(
+      mine
+        .filter((t) => {
+          const start = (t.scheduled_start || t.scheduled_end || '').slice(0, 10);
+          const end = (t.scheduled_end || t.scheduled_start || '').slice(0, 10);
+          return start && end && start <= today && today <= end && t.project_id;
+        })
+        .map((t) => t.project_id!)
+    );
+    for (const projectId of projectIds) {
+      const key = `${today}:job_context:${projectId}`;
+      if (shownRef.current.has(key)) continue;
+      // Marked synchronously up front for the same StrictMode-double-invoke
+      // reason as every other poll function in this file -- see pollPulse above.
+      shownRef.current.add(key);
+      saveShown(shownRef.current);
+      const res = await api
+        .post<{ message: string | null }>('/smart-nudges/generate', { kind: 'job_context', project_id: projectId })
+        .catch(() => null);
+      if (res?.message) queueToast('job_context', res.message, key, undefined, projectId);
+    }
+  }
+
+  async function pollCloseoutBriefing() {
+    if (!user || !smartLearningEnabledRef.current) return;
+    if (new Date().getHours() < 15) return; // client-side wall-clock gate -- see Phase 13 design notes
+    const key = `${todayStr()}:closeout_briefing`;
+    if (shownRef.current.has(key)) return;
+    // Marked synchronously up front for the same StrictMode-double-invoke reason
+    // as every other poll function in this file -- see pollPulse above.
+    shownRef.current.add(key);
+    saveShown(shownRef.current);
+    const res = await api
+      .post<{ message: string | null }>('/smart-nudges/generate', { kind: 'closeout_briefing' })
+      .catch(() => null);
+    if (!res?.message) return;
+    queueToast('closeout_briefing', res.message, key);
+  }
+
   useEffect(() => {
     if (!user) return;
+    // Fetched once per mount (not every 5-minute poll cycle) -- this is a
+    // rarely-changed, admin-controlled company-wide switch, so a full page
+    // reload picking up a flip is an acceptable trade-off for not adding an
+    // extra request to every poll tick.
+    api
+      .get<{ smart_learning_enabled: boolean }>('/notification-settings')
+      .then((s) => {
+        smartLearningEnabledRef.current = s.smart_learning_enabled;
+      })
+      .catch(() => {
+        smartLearningEnabledRef.current = false;
+      });
     poll();
     const interval = setInterval(poll, POLL_MS);
     return () => clearInterval(interval);
@@ -278,6 +376,8 @@ export function TeamReminders() {
               onClick={() => {
                 if (t.category === 'pulse_nudge') setShowPulseCheckin(true);
                 else if (t.category === 'risk_nudge') navigate('/');
+                else if (t.category === 'morning_briefing' || t.category === 'closeout_briefing') navigate('/tasks');
+                else if (t.category === 'job_context') navigate(`/projects/${t.projectId}`);
                 else setOpenTaskId(t.taskId!);
               }}
             >

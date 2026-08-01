@@ -411,3 +411,112 @@ async def draft_sub_info_email(
     if not isinstance(parsed, dict) or "subject" not in parsed or "body" not in parsed:
         raise ProviderError("Response JSON did not contain subject/body")
     return SubInfoEmailDraft(subject=str(parsed["subject"]), body=str(parsed["body"]))
+
+
+class SmartNudgeOpenTask(BaseModel):
+    title: str
+    project_name: Optional[str] = None
+    overdue: bool = False
+    due_date: Optional[str] = None
+
+
+class SmartNudgeJobToday(BaseModel):
+    project_name: str
+    open_task_titles: list[str] = []
+
+
+class SmartNudgeContext(BaseModel):
+    name: str
+    kind: Literal["morning_briefing", "job_context", "closeout_briefing"]
+    jobs_today: list[SmartNudgeJobToday] = []
+    open_tasks: list[SmartNudgeOpenTask] = []
+    overdue_count: int = 0
+    completed_this_week: int = 0
+
+
+class SmartNudgeResult(BaseModel):
+    message: Optional[str] = None
+
+
+# One framing sentence per nudge kind, interpolated into the shared prompt below --
+# same pattern as DEPENDENCY_EXAMPLES being folded into a shared prompt, so the
+# tone/house-style instructions stay in one place instead of drifting across
+# three near-duplicate prompts.
+_KIND_FRAMING = {
+    "morning_briefing": (
+        "It's the start of {name}'s day. Give one short, energizing heads-up about what matters most today -- "
+        "which job(s) they're at, and anything urgent/overdue they shouldn't lose track of. If there's genuinely "
+        'nothing notable (no jobs today, nothing overdue, light load), return {{"message": null}} rather than '
+        "manufacturing filler."
+    ),
+    "job_context": (
+        "{name} is at (or scheduled at) {focus_job} today. Remind them, in one short sentence, of the specific "
+        "open tasks tied to THIS job that they might otherwise forget while they're on site. If there's nothing "
+        'open on this job worth flagging, return {{"message": null}}.'
+    ),
+    "closeout_briefing": (
+        "It's mid-afternoon and {name}'s work day is winding down. Give one short, low-key nudge about anything "
+        "still open today that's worth wrapping up before they head out, or a quick nod if they're in good shape. "
+        'If there\'s nothing worth flagging, return {{"message": null}}.'
+    ),
+}
+
+SMART_NUDGE_PROMPT = """You write short, proactive nudges for {name}, a member of a small residential \
+construction team at Mud & Marble, based on their real task load and schedule -- never generic filler. Keep \
+the tone direct and human, not corporate, max ~20 words, like a sharp PM texting a heads-up, not a notification \
+robot.
+
+{framing}
+
+{name}'s current load: {overdue_count} overdue, {completed_this_week} completed this week.
+Today's job(s): {jobs_text}
+Open tasks: {tasks_text}
+
+Return ONLY a JSON object with exactly one key, "message" -- either a short string, or null if there's nothing \
+worth saying. No markdown, no explanation. Example shape: {{"message": "..."}} or {{"message": null}}."""
+
+
+async def generate_smart_nudge(ctx: SmartNudgeContext, focus_job: Optional[str] = None) -> SmartNudgeResult:
+    # Cheap short-circuit before spending a Claude call: nothing to reason about.
+    if not ctx.jobs_today and not ctx.open_tasks and ctx.overdue_count == 0:
+        return SmartNudgeResult(message=None)
+
+    client = _client()
+    framing = _KIND_FRAMING[ctx.kind].format(name=ctx.name, focus_job=focus_job or "a job")
+    jobs_text = (
+        "; ".join(f"{j.project_name} (open: {', '.join(j.open_task_titles) or 'none'})" for j in ctx.jobs_today)
+        or "none scheduled today"
+    )
+    tasks_text = (
+        "; ".join(
+            f"{t.title}{' [OVERDUE]' if t.overdue else ''} ({t.project_name or 'no job'})" for t in ctx.open_tasks
+        )
+        or "none"
+    )
+
+    message = await client.messages.create(
+        model=MODEL,
+        max_tokens=300,
+        messages=[
+            {
+                "role": "user",
+                "content": SMART_NUDGE_PROMPT.format(
+                    name=ctx.name,
+                    framing=framing,
+                    overdue_count=ctx.overdue_count,
+                    completed_this_week=ctx.completed_this_week,
+                    jobs_text=jobs_text,
+                    tasks_text=tasks_text,
+                ),
+            }
+        ],
+    )
+    raw = message.content[0].text if message.content else "{}"
+    raw = raw.replace("```json", "").replace("```", "").strip()
+    try:
+        parsed = json.loads(raw)
+    except json.JSONDecodeError as e:
+        raise ProviderError(f"Response couldn't be parsed as JSON: {e}") from e
+    if not isinstance(parsed, dict):
+        raise ProviderError("Response JSON was not an object")
+    return SmartNudgeResult(message=parsed.get("message"))

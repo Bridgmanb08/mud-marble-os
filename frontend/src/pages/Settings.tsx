@@ -8,7 +8,8 @@ import { NewSubcontractorModal } from '../components/subcontractors/NewSubcontra
 import { RichTextEditor } from '../components/ui/RichTextEditor';
 import { TagChip } from '../components/tags/TagChip';
 import { useReferenceData } from '../reference-data/ReferenceDataContext';
-import type { CostCode, EstimateTextDefaults, PersonTag, Subcontractor } from '../types';
+import { fmtD } from '../lib/format';
+import type { CostCode, EstimateTextDefaults, NotificationSettings, PersonTag, Subcontractor } from '../types';
 
 function CostCodeModal({ onClose, onSaved }: { onClose: () => void; onSaved: () => void }) {
   const [code, setCode] = useState('');
@@ -599,9 +600,72 @@ function PersonTagsTab() {
   );
 }
 
+function NotificationSettingsTab() {
+  const toast = useToast();
+  const [settings, setSettings] = useState<NotificationSettings | null>(null);
+  const [saving, setSaving] = useState(false);
+
+  async function load() {
+    try {
+      setSettings(await api.get<NotificationSettings>('/notification-settings'));
+    } catch (e) {
+      toast(e instanceof Error ? e.message : 'Failed to load notification settings', true);
+    }
+  }
+
+  useEffect(() => {
+    load();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  async function toggle() {
+    if (!settings) return;
+    setSaving(true);
+    try {
+      const updated = await api.patch<NotificationSettings>('/notification-settings', {
+        smart_learning_enabled: !settings.smart_learning_enabled,
+      });
+      setSettings(updated);
+      toast(updated.smart_learning_enabled ? 'Smart learning enabled' : 'Smart learning disabled');
+    } catch (e) {
+      toast(e instanceof ApiError ? e.message : 'Failed to update notification settings', true);
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  if (!settings) {
+    return (
+      <div className="empty">
+        <div className="empty-t">Loading…</div>
+      </div>
+    );
+  }
+
+  return (
+    <>
+      <div className="sh">
+        <div className="st">Notification settings</div>
+      </div>
+      <p style={{ fontSize: 12, color: 'var(--t2)', marginBottom: 14 }}>
+        When enabled, the app proactively nudges people about tasks tied to the job they're scheduled at, with a
+        short briefing when they first sign in each day and another checkpoint around 3pm. This is a company-wide
+        switch — it applies to everyone, not per person.
+      </p>
+      <label style={{ display: 'flex', alignItems: 'center', gap: 10, cursor: 'pointer' }}>
+        <input type="checkbox" checked={settings.smart_learning_enabled} onChange={toggle} disabled={saving} />
+        Enable smart learning & proactive reminders
+      </label>
+      {settings.updated_at && (
+        <p style={{ fontSize: 11, color: 'var(--t3)', marginTop: 10 }}>Last changed {fmtD(settings.updated_at)}</p>
+      )}
+    </>
+  );
+}
+
 export default function Settings() {
   const { user } = useAuth();
-  const [tab, setTab] = useState<'cost-codes' | 'subcontractors' | 'person-tags' | 'default-text'>(
+  const [tab, setTab] = useState<'cost-codes' | 'subcontractors' | 'person-tags' | 'notifications' | 'default-text'>(
     user?.is_admin ? 'cost-codes' : 'default-text'
   );
 
@@ -626,6 +690,9 @@ export default function Settings() {
             <button className={`tab${tab === 'person-tags' ? ' on' : ''}`} onClick={() => setTab('person-tags')}>
               Person tags
             </button>
+            <button className={`tab${tab === 'notifications' ? ' on' : ''}`} onClick={() => setTab('notifications')}>
+              Notification settings
+            </button>
           </>
         )}
         <button className={`tab${tab === 'default-text' ? ' on' : ''}`} onClick={() => setTab('default-text')}>
@@ -636,6 +703,7 @@ export default function Settings() {
       {tab === 'cost-codes' && user?.is_admin && <CostCodesTab />}
       {tab === 'subcontractors' && user?.is_admin && <SubcontractorsTab />}
       {tab === 'person-tags' && user?.is_admin && <PersonTagsTab />}
+      {tab === 'notifications' && user?.is_admin && <NotificationSettingsTab />}
       {tab === 'default-text' && <DefaultTextTab />}
     </>
   );
