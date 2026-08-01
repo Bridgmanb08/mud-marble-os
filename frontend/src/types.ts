@@ -421,6 +421,19 @@ export interface ClientBrief {
   id: string;
   first_name: string | null;
   last_name: string | null;
+  preferred_contact_method?: string | null;
+  is_advocate?: boolean;
+  is_repeat_client?: boolean;
+  notes?: string | null;
+}
+
+export interface ClientProjectSummary {
+  id: string;
+  name: string;
+  status: string;
+  contract_value: number | null;
+  invoiced_total: number;
+  paid_total: number;
 }
 
 export interface Project {

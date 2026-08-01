@@ -1,12 +1,12 @@
 import { useEffect, useState } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
-import { IconArrowLeft, IconGift, IconUsers, IconX } from '@tabler/icons-react';
+import { IconArrowLeft, IconGift, IconUsers, IconX, IconBriefcase } from '@tabler/icons-react';
 import { api, ApiError } from '../api/client';
 import { useToast } from '../components/ui/Toast';
 import { fmt } from '../lib/format';
 import { ReferralPicker } from '../components/clients/ReferralPicker';
 import { EntityTagList } from '../components/tags/EntityTagList';
-import type { Client, PersonTag } from '../types';
+import type { Client, ClientProjectSummary, PersonTag } from '../types';
 
 export default function ClientDetail() {
   const { id } = useParams<{ id: string }>();
@@ -16,6 +16,7 @@ export default function ClientDetail() {
   const [client, setClient] = useState<Client | null>(null);
   const [allClients, setAllClients] = useState<Client[]>([]);
   const [allTags, setAllTags] = useState<PersonTag[]>([]);
+  const [projects, setProjects] = useState<ClientProjectSummary[]>([]);
   const [editingReferral, setEditingReferral] = useState(false);
 
   const [firstName, setFirstName] = useState('');
@@ -54,6 +55,7 @@ export default function ClientDetail() {
     load();
     api.get<Client[]>('/clients').then(setAllClients).catch(() => {});
     api.get<PersonTag[]>('/person-tags').then(setAllTags).catch(() => {});
+    if (id) api.get<ClientProjectSummary[]>(`/clients/${id}/projects`).then(setProjects).catch(() => {});
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [id]);
 
@@ -366,6 +368,40 @@ export default function ClientDetail() {
             </div>
           </div>
         </div>
+      </div>
+
+      <div className="card" style={{ padding: 20 }}>
+        <div className="st" style={{ marginBottom: 14, display: 'flex', alignItems: 'center', gap: 6 }}>
+          <IconBriefcase size={14} /> Projects {projects.length > 0 ? `(${projects.length})` : ''}
+        </div>
+        {projects.length === 0 ? (
+          <div style={{ fontSize: 13, color: 'var(--t3)' }}>No projects for this client yet.</div>
+        ) : (
+          projects.map((p) => (
+            <Link
+              key={p.id}
+              to={`/projects/${p.id}`}
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: 12,
+                padding: '10px 0',
+                borderBottom: '1px solid var(--border)',
+                color: 'inherit',
+                textDecoration: 'none',
+              }}
+            >
+              <div style={{ flex: 1, minWidth: 0, fontSize: 13, fontWeight: 500 }}>{p.name.replace(/\|.*/, '').trim()}</div>
+              <span className="badge bg-gray" style={{ textTransform: 'capitalize' }}>
+                {p.status.replace(/_/g, ' ')}
+              </span>
+              <div style={{ fontSize: 12, color: 'var(--t2)', textAlign: 'right', minWidth: 130 }}>
+                {p.contract_value ? `${fmt(p.contract_value)} contract` : '—'}
+              </div>
+              <div style={{ fontSize: 12, color: 'var(--t2)', textAlign: 'right', minWidth: 110 }}>{fmt(p.paid_total)} paid</div>
+            </Link>
+          ))
+        )}
       </div>
     </>
   );

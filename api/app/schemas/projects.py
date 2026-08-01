@@ -46,6 +46,10 @@ class ClientBrief(BaseModel):
     id: str
     first_name: Optional[str] = None
     last_name: Optional[str] = None
+    preferred_contact_method: Optional[str] = None
+    is_advocate: bool = False
+    is_repeat_client: bool = False
+    notes: Optional[str] = None
 
 
 class ProjectOut(BaseModel):

@@ -50,3 +50,12 @@ class ClientOut(ClientCreate):
     created_at: Optional[str] = None
     referred_by: Optional[ClientBrief] = None
     referred: list[ClientBrief] = []
+
+
+class ClientProjectSummary(BaseModel):
+    id: str
+    name: str
+    status: str
+    contract_value: Optional[float] = None
+    invoiced_total: float = 0
+    paid_total: float = 0
