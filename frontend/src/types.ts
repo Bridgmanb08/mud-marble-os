@@ -774,7 +774,8 @@ export type WidgetId =
   | 'subcontractor_risk'
   | 'change_order_stats'
   | 'estimate_win_rate'
-  | 'team_pulse';
+  | 'team_pulse'
+  | 'weather';
 
 export interface WidgetItem {
   id: WidgetId | string;
@@ -936,6 +937,20 @@ export interface NotificationSettings {
   smart_learning_enabled: boolean;
   updated_at: string;
   updated_by: string | null;
+}
+
+export interface DailyWeather {
+  date: string;
+  condition: string;
+  high_f: number;
+  low_f: number;
+  precipitation_chance: number | null;
+}
+
+export interface WeatherOut {
+  condition: string;
+  current_temp_f: number;
+  daily: DailyWeather[];
 }
 
 export type ReportSource = 'transactions' | 'invoices' | 'change_orders' | 'projects';

@@ -25,6 +25,7 @@ import {
 } from './widgets/CEOWidgets';
 import { FathomImportCard } from './FathomImportCard';
 import { TeamPulseWidget } from './widgets/TeamPulseWidget';
+import { WeatherWidget } from './widgets/WeatherWidget';
 
 interface WidgetDef {
   title: string;
@@ -58,4 +59,5 @@ export const WIDGET_REGISTRY: Record<WidgetId, WidgetDef> = {
   change_order_stats: { title: 'Change order win rate', Component: ChangeOrderStatsWidget },
   estimate_win_rate: { title: 'Estimate win rate', Component: EstimateWinRateWidget },
   team_pulse: { title: 'Team pulse', Component: TeamPulseWidget, wide: true },
+  weather: { title: 'Indianapolis weather', Component: WeatherWidget },
 };
