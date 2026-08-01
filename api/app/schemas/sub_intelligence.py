@@ -45,6 +45,9 @@ class SubcontractorCompliance(BaseModel):
     insurance_status: str
     rating: Optional[int] = None
     preferred: bool
+    contracted_total: float = 0
+    paid_total: float = 0
+    on_time_rate: Optional[float] = None
 
 
 class SubIntelligenceSummary(BaseModel):

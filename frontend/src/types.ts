@@ -157,6 +157,9 @@ export interface SubcontractorCompliance {
   insurance_status: 'none' | 'ok' | 'expiring' | 'expired';
   rating: number | null;
   preferred: boolean;
+  contracted_total: number;
+  paid_total: number;
+  on_time_rate: number | null;
 }
 
 export interface SubIntelligenceSummary {

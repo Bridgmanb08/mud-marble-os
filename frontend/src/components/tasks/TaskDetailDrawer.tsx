@@ -1,5 +1,5 @@
-import { useEffect, useState, type FormEvent } from 'react';
-import { IconTrash, IconLock, IconPlus } from '@tabler/icons-react';
+import { useEffect, useMemo, useState, type FormEvent } from 'react';
+import { IconTrash, IconLock, IconPlus, IconAlertTriangle } from '@tabler/icons-react';
 import { api, ApiError } from '../../api/client';
 import { Modal } from '../ui/Modal';
 import { useToast } from '../ui/Toast';
@@ -46,6 +46,23 @@ export function TaskDetailDrawer({ task, allTasks, onClose, onSaved, onDeleted, 
   const [isPunchList, setIsPunchList] = useState(task.is_punch_list);
   const [showNewSub, setShowNewSub] = useState(false);
   const [error, setError] = useState('');
+
+  const subcontractorRisk = useMemo(() => {
+    if (!subcontractorId) return null;
+    const sub = subcontractors.find((s) => s.id === subcontractorId);
+    if (!sub) return null;
+    const warnings: string[] = [];
+    if (!sub.w9_on_file) warnings.push('W9 missing');
+    if (sub.insurance_expiry) {
+      const expiryTime = new Date(sub.insurance_expiry).getTime();
+      if (expiryTime < Date.now()) warnings.push('insurance expired');
+      else if (expiryTime < Date.now() + 30 * 86400000) warnings.push('insurance expiring soon');
+    } else {
+      warnings.push('no insurance on file');
+    }
+    if (sub.rating && sub.rating <= 2) warnings.push(`low rating (${sub.rating}/5)`);
+    return warnings.length ? warnings.join(', ') : null;
+  }, [subcontractorId, subcontractors]);
   const [saving, setSaving] = useState(false);
 
   const [subtasks, setSubtasks] = useState<TaskSubtask[]>([]);
@@ -263,6 +280,11 @@ export function TaskDetailDrawer({ task, allTasks, onClose, onSaved, onDeleted, 
                 <IconPlus size={14} />
               </button>
             </div>
+            {subcontractorRisk && (
+              <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 11.5, color: 'var(--atx)', marginTop: 6 }}>
+                <IconAlertTriangle size={13} /> {subcontractorRisk}
+              </div>
+            )}
           </div>
           <div className="fg">
             <label className="fl">Needs clarity from</label>

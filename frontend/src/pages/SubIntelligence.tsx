@@ -228,6 +228,9 @@ export default function SubIntelligence() {
                 <th style={{ textAlign: 'center' }}>Insurance</th>
                 <th style={{ textAlign: 'center' }}>Rating</th>
                 <th style={{ textAlign: 'center' }}>Preferred</th>
+                <th style={{ textAlign: 'right' }}>Contracted</th>
+                <th style={{ textAlign: 'right' }}>Paid</th>
+                <th style={{ textAlign: 'center' }}>On-time</th>
               </tr>
             </thead>
             <tbody>
@@ -249,6 +252,17 @@ export default function SubIntelligence() {
                   </td>
                   <td style={{ textAlign: 'center' }}>{s.rating ? '★'.repeat(s.rating) + '☆'.repeat(5 - s.rating) : '—'}</td>
                   <td style={{ textAlign: 'center' }}>{s.preferred ? <span className="badge bg-green">Yes</span> : '—'}</td>
+                  <td style={{ textAlign: 'right', fontSize: 12 }}>{s.contracted_total ? fmt(s.contracted_total) : '—'}</td>
+                  <td style={{ textAlign: 'right', fontSize: 12 }}>{s.paid_total ? fmt(s.paid_total) : '—'}</td>
+                  <td style={{ textAlign: 'center', fontSize: 12 }}>
+                    {s.on_time_rate === null ? (
+                      <span style={{ color: 'var(--t3)' }}>—</span>
+                    ) : (
+                      <span style={{ color: s.on_time_rate >= 80 ? 'var(--green)' : s.on_time_rate >= 50 ? 'var(--amber)' : 'var(--red)' }}>
+                        {s.on_time_rate}%
+                      </span>
+                    )}
+                  </td>
                 </tr>
               ))}
             </tbody>

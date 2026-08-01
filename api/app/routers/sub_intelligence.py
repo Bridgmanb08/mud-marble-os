@@ -28,11 +28,17 @@ PROJECT_PERFORMANCE_STATUSES = {"active", "complete", "punch_list"}
 
 @router.get("", response_model=SubIntelligenceSummary)
 async def get_sub_intelligence(_: CurrentUser = Depends(get_current_user)):
-    subs, transactions, change_orders, projects = await asyncio.gather(
+    subs, transactions, change_orders, projects, sub_transactions, sub_items, sub_tasks = await asyncio.gather(
         db_get("subcontractors", "?order=company_name.asc"),
         db_get("transactions", "?select=amount,transaction_type,cost_codes(code)"),
         db_get("change_orders", "?select=id,co_type,owner_price,status,project_id"),
         db_get("projects", "?is_archived=eq.false&select=id,name,contract_value,status"),
+        db_get("transactions", "?subcontractor_id=not.is.null&select=amount,subcontractor_id"),
+        db_get("project_subcontractor_items", "?select=amount,subcontractor_id"),
+        db_get(
+            "schedule_items",
+            "?subcontractor_id=not.is.null&status=eq.complete&select=subcontractor_id,scheduled_end,completed_at",
+        ),
     )
 
     total_contract_value = sum(p.get("contract_value") or 0 for p in projects)
@@ -124,6 +130,31 @@ async def get_sub_intelligence(_: CurrentUser = Depends(get_current_user)):
         ),
     ]
 
+    paid_by_sub: dict = defaultdict(float)
+    for t in sub_transactions:
+        sid = t.get("subcontractor_id")
+        if sid:
+            paid_by_sub[sid] += abs(t.get("amount") or 0)
+
+    contracted_by_sub: dict = defaultdict(float)
+    for i in sub_items:
+        sid = i.get("subcontractor_id")
+        if sid:
+            contracted_by_sub[sid] += i.get("amount") or 0
+
+    on_time_by_sub: dict = defaultdict(lambda: [0, 0])  # [on_time_count, total_with_due_date]
+    for t in sub_tasks:
+        sid = t.get("subcontractor_id")
+        due = t.get("scheduled_end")
+        completed = t.get("completed_at")
+        if not sid or not due or not completed:
+            continue
+        due_dt = datetime.fromisoformat(due.replace("Z", "+00:00")) if "T" in due else datetime.fromisoformat(due + "T00:00:00+00:00")
+        completed_dt = datetime.fromisoformat(completed.replace("Z", "+00:00"))
+        on_time_by_sub[sid][1] += 1
+        if completed_dt <= due_dt:
+            on_time_by_sub[sid][0] += 1
+
     now = datetime.now(timezone.utc)
     soon = now + timedelta(days=30)
     subcontractors = []
@@ -138,6 +169,7 @@ async def get_sub_intelligence(_: CurrentUser = Depends(get_current_user)):
                 insurance_status = "expiring"
             else:
                 insurance_status = "ok"
+        on_time_count, on_time_total = on_time_by_sub.get(s["id"], (0, 0))
         subcontractors.append(
             SubcontractorCompliance(
                 id=s["id"],
@@ -150,6 +182,9 @@ async def get_sub_intelligence(_: CurrentUser = Depends(get_current_user)):
                 insurance_status=insurance_status,
                 rating=s.get("rating"),
                 preferred=s.get("preferred") or False,
+                contracted_total=round(contracted_by_sub.get(s["id"], 0.0), 2),
+                paid_total=round(paid_by_sub.get(s["id"], 0.0), 2),
+                on_time_rate=round(on_time_count / on_time_total * 100) if on_time_total > 0 else None,
             )
         )
 
