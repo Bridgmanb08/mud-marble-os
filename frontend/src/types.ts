@@ -457,6 +457,8 @@ export interface FinancialSummary {
   contracted_to_subs: number;
   paid_to_subs: number;
   left_to_pay: number;
+  invoiced_to_date: number;
+  remaining_to_invoice: number;
   checking_balance: number | null;
   credit_card_balance: number | null;
   pending_invoices_manual: number | null;

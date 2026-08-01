@@ -82,6 +82,8 @@ class FinancialSummaryOut(BaseModel):
     contracted_to_subs: float = 0
     paid_to_subs: float = 0
     left_to_pay: float = 0
+    invoiced_to_date: float = 0
+    remaining_to_invoice: float = 0
     checking_balance: Optional[float] = None
     credit_card_balance: Optional[float] = None
     pending_invoices_manual: Optional[float] = None

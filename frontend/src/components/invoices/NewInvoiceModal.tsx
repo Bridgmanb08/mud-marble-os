@@ -2,7 +2,8 @@ import { useEffect, useState, type FormEvent } from 'react';
 import { api, ApiError } from '../../api/client';
 import { Modal } from '../ui/Modal';
 import { openDatePicker } from '../../lib/datePicker';
-import type { Project } from '../../types';
+import { fmt } from '../../lib/format';
+import type { FinancialSummary, Project } from '../../types';
 
 interface NewInvoiceModalProps {
   onClose: () => void;
@@ -16,6 +17,8 @@ export function NewInvoiceModal({ onClose, onCreated, defaultProjectId }: NewInv
   const [invoiceNumber, setInvoiceNumber] = useState('');
   const [invoiceType, setInvoiceType] = useState('progress');
   const [amountDue, setAmountDue] = useState('');
+  const [amountTouched, setAmountTouched] = useState(false);
+  const [remainingToInvoice, setRemainingToInvoice] = useState<number | null>(null);
   const [dueDate, setDueDate] = useState('');
   const [notes, setNotes] = useState('');
   const [error, setError] = useState('');
@@ -24,6 +27,21 @@ export function NewInvoiceModal({ onClose, onCreated, defaultProjectId }: NewInv
   useEffect(() => {
     api.get<Project[]>('/projects').then(setProjects).catch(() => {});
   }, []);
+
+  useEffect(() => {
+    if (!projectId) {
+      setRemainingToInvoice(null);
+      return;
+    }
+    api
+      .get<FinancialSummary>(`/projects/${projectId}/financial-summary`)
+      .then((s) => {
+        setRemainingToInvoice(s.remaining_to_invoice);
+        if (!amountTouched) setAmountDue(s.remaining_to_invoice > 0 ? String(s.remaining_to_invoice) : '');
+      })
+      .catch(() => setRemainingToInvoice(null));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [projectId]);
 
   async function handleSubmit(e: FormEvent) {
     e.preventDefault();
@@ -82,7 +100,18 @@ export function NewInvoiceModal({ onClose, onCreated, defaultProjectId }: NewInv
         <div className="fr">
           <div className="fg">
             <label className="fl">Amount due ($)</label>
-            <input className="fi" type="number" value={amountDue} onChange={(e) => setAmountDue(e.target.value)} />
+            <input
+              className="fi"
+              type="number"
+              value={amountDue}
+              onChange={(e) => {
+                setAmountTouched(true);
+                setAmountDue(e.target.value);
+              }}
+            />
+            {remainingToInvoice !== null && (
+              <div className="m-sub">Remaining to invoice: {fmt(remainingToInvoice)}</div>
+            )}
           </div>
           <div className="fg">
             <label className="fl">Due date</label>

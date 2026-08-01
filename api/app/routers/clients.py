@@ -21,10 +21,35 @@ async def _attach_referrers(rows: list[dict]) -> list[dict]:
     return rows
 
 
+async def _attach_lifetime_values(rows: list[dict]) -> list[dict]:
+    # lifetime_value is computed live from actual paid invoices across a
+    # client's projects rather than a manually-maintained number -- the
+    # stored column is never written to, so this is the only thing that
+    # makes the field mean anything.
+    client_ids = [r["id"] for r in rows]
+    if not client_ids:
+        return rows
+    id_filter = ",".join(client_ids)
+    projects = await db_get("projects", f"?client_id=in.({id_filter})&select=id,client_id")
+    totals = {cid: 0.0 for cid in client_ids}
+    if projects:
+        project_to_client = {p["id"]: p["client_id"] for p in projects}
+        pid_filter = ",".join(project_to_client.keys())
+        invoices = await db_get("invoices", f"?project_id=in.({pid_filter})&select=project_id,amount_paid")
+        for inv in invoices:
+            cid = project_to_client.get(inv["project_id"])
+            if cid:
+                totals[cid] = totals.get(cid, 0.0) + (inv.get("amount_paid") or 0)
+    for r in rows:
+        r["lifetime_value"] = round(totals.get(r["id"], 0.0), 2)
+    return rows
+
+
 @router.get("", response_model=list[ClientOut])
 async def list_clients(_: CurrentUser = Depends(get_current_user)):
     rows = await db_get("clients", "?order=last_name.asc")
-    return await _attach_referrers(rows)
+    rows = await _attach_referrers(rows)
+    return await _attach_lifetime_values(rows)
 
 
 @router.get("/{client_id}", response_model=ClientOut)
@@ -47,7 +72,7 @@ async def get_client(client_id: str, _: CurrentUser = Depends(get_current_user))
     )
     client["referred"] = [ClientBrief(**r) for r in referred_rows]
 
-    return client
+    return (await _attach_lifetime_values([client]))[0]
 
 
 @router.post("", response_model=ClientOut)
@@ -55,7 +80,7 @@ async def create_client(body: ClientCreate, _: CurrentUser = Depends(get_current
     rows = await db_post("clients", body.model_dump(exclude_none=True))
     created = (await _attach_referrers(rows))[0]
     created["referred"] = []
-    return created
+    return (await _attach_lifetime_values([created]))[0]
 
 
 @router.patch("/{client_id}", response_model=ClientOut)
@@ -69,4 +94,4 @@ async def update_client(client_id: str, body: ClientUpdate, _: CurrentUser = Dep
         "clients", f"?referred_by_client_id=eq.{client_id}&select=id,first_name,last_name&order=first_name.asc"
     )
     updated["referred"] = [ClientBrief(**r) for r in referred_rows]
-    return updated
+    return (await _attach_lifetime_values([updated]))[0]
