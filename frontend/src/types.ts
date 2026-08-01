@@ -446,6 +446,8 @@ export interface FinancialSummary {
   owner_price: number;
   builder_cost: number;
   profit: number;
+  change_order_owner_price: number;
+  change_order_builder_cost: number;
   contracted_to_subs: number;
   paid_to_subs: number;
   left_to_pay: number;
@@ -551,8 +553,17 @@ export interface Lead {
   budget_range_min: number | null;
   budget_range_max: number | null;
   referral_name: string | null;
+  referred_by_client_id: string | null;
+  referred_by: ClientBrief | null;
+  converted_client_id: string | null;
+  converted_project_id: string | null;
   last_contacted_at: string | null;
   created_at: string;
+}
+
+export interface LeadConvertResponse {
+  client_id: string;
+  project_id: string;
 }
 
 export interface WorkloadTaskBrief {

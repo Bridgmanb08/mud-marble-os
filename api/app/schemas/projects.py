@@ -77,6 +77,8 @@ class FinancialSummaryOut(BaseModel):
     owner_price: float = 0
     builder_cost: float = 0
     profit: float = 0
+    change_order_owner_price: float = 0
+    change_order_builder_cost: float = 0
     contracted_to_subs: float = 0
     paid_to_subs: float = 0
     left_to_pay: float = 0

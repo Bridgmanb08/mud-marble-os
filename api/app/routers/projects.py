@@ -70,7 +70,16 @@ async def get_financial_summary(project_id: str, _: CurrentUser = Depends(get_cu
         line_items = await db_get(
             "estimate_line_items", f"?estimate_id=eq.{estimates[0]['id']}&select=builder_cost"
         )
-    builder_cost = sum(i.get("builder_cost") or 0 for i in line_items)
+    base_builder_cost = sum(i.get("builder_cost") or 0 for i in line_items)
+
+    approved_cos = await db_get(
+        "change_orders", f"?project_id=eq.{project_id}&status=eq.approved&select=owner_price,builder_cost"
+    )
+    co_owner_price = sum(c.get("owner_price") or 0 for c in approved_cos)
+    co_builder_cost = sum(c.get("builder_cost") or 0 for c in approved_cos)
+
+    owner_price += co_owner_price
+    builder_cost = base_builder_cost + co_builder_cost
     profit = owner_price - builder_cost
 
     sub_items = await db_get("project_subcontractor_items", f"?project_id=eq.{project_id}&select=amount")
@@ -85,6 +94,8 @@ async def get_financial_summary(project_id: str, _: CurrentUser = Depends(get_cu
         owner_price=round(owner_price, 2),
         builder_cost=round(builder_cost, 2),
         profit=round(profit, 2),
+        change_order_owner_price=round(co_owner_price, 2),
+        change_order_builder_cost=round(co_builder_cost, 2),
         contracted_to_subs=round(contracted_to_subs, 2),
         paid_to_subs=round(paid_to_subs, 2),
         left_to_pay=round(contracted_to_subs - paid_to_subs, 2),
