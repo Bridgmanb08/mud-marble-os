@@ -347,3 +347,54 @@ async def summarize_team_workload(members: list[TeamMemberBrief]) -> dict[str, s
     if not isinstance(parsed, dict):
         raise ProviderError("Response JSON was not an object mapping names to summaries")
     return {str(k): str(v) for k, v in parsed.items()}
+
+
+class SubInfoEmailDraft(BaseModel):
+    subject: str
+    body: str
+
+
+SUB_INFO_EMAIL_PROMPT = """Write a short, friendly, professional email from a residential construction \
+general contractor (Mud & Marble) to a subcontractor, requesting the following missing or outdated paperwork:
+{missing_items}
+
+Subcontractor: {company_name}{contact_line}{trade_line}
+
+Keep it warm and low-friction -- these are trade partners we want to keep working with, not a compliance \
+lecture. One short paragraph is enough. Sign off as "Mud & Marble".
+
+Return ONLY a JSON object with exactly two keys, "subject" and "body" -- no markdown, no explanation. \
+Example shape: {{"subject": "...", "body": "..."}}"""
+
+
+async def draft_sub_info_email(
+    company_name: str,
+    contact_name: Optional[str],
+    trade: Optional[str],
+    missing_items: list[str],
+) -> SubInfoEmailDraft:
+    client = _client()
+    message = await client.messages.create(
+        model=MODEL,
+        max_tokens=512,
+        messages=[
+            {
+                "role": "user",
+                "content": SUB_INFO_EMAIL_PROMPT.format(
+                    missing_items="\n".join(f"- {item}" for item in missing_items),
+                    company_name=company_name,
+                    contact_line=f", attn: {contact_name}" if contact_name else "",
+                    trade_line=f" ({trade})" if trade else "",
+                ),
+            }
+        ],
+    )
+    raw = message.content[0].text if message.content else "{}"
+    raw = raw.replace("```json", "").replace("```", "").strip()
+    try:
+        parsed = json.loads(raw)
+    except json.JSONDecodeError as e:
+        raise ProviderError(f"Response couldn't be parsed as JSON: {e}") from e
+    if not isinstance(parsed, dict) or "subject" not in parsed or "body" not in parsed:
+        raise ProviderError("Response JSON did not contain subject/body")
+    return SubInfoEmailDraft(subject=str(parsed["subject"]), body=str(parsed["body"]))

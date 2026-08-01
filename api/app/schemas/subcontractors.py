@@ -35,6 +35,12 @@ class SubcontractorUpdate(BaseModel):
     is_active: Optional[bool] = None
 
 
+class SubEmailDraftOut(BaseModel):
+    subject: str
+    body: str
+    to_email: Optional[str] = None
+
+
 class SubcontractorOut(BaseModel):
     id: str
     company_name: str
