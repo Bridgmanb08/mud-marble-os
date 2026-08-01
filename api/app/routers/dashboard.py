@@ -579,6 +579,8 @@ async def get_dashboard(_: CurrentUser = Depends(get_current_user)):
                     f"{p['clients']['first_name']} {p['clients']['last_name']}" if p.get("clients") else None
                 ),
                 health_status=p.get("health_status"),
+                start_date=p.get("start_date"),
+                estimated_completion=p.get("estimated_completion"),
             )
             for p in active
         ],

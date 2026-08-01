@@ -616,6 +616,8 @@ export interface DashboardSummary {
     name: string;
     client_name: string | null;
     health_status: string | null;
+    start_date: string | null;
+    estimated_completion: string | null;
   }[];
   upcoming_tasks: {
     id: string;
@@ -775,7 +777,8 @@ export type WidgetId =
   | 'change_order_stats'
   | 'estimate_win_rate'
   | 'team_pulse'
-  | 'weather';
+  | 'weather'
+  | 'project_timeline';
 
 export interface WidgetItem {
   id: WidgetId | string;
