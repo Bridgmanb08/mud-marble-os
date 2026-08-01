@@ -10,11 +10,13 @@ import {
   IconSunrise,
   IconBriefcase,
   IconClockHour3,
+  IconSparkles,
 } from '@tabler/icons-react';
 import { api } from '../../api/client';
 import { useAuth } from '../../auth/AuthContext';
 import { DashboardTaskDrawer } from '../dashboard/DashboardTaskDrawer';
 import { PulseCheckinModal } from '../dashboard/PulseCheckinModal';
+import { RYAN_HOLIDAY_QUOTES } from '../../data/ryanHolidayQuotes';
 import type { Task, PulseCheckinOut, DashboardSummary } from '../../types';
 
 /**
@@ -34,7 +36,8 @@ type Category =
   | 'risk_nudge'
   | 'morning_briefing'
   | 'job_context'
-  | 'closeout_briefing';
+  | 'closeout_briefing'
+  | 'greeting';
 
 interface ReminderToast {
   id: string;
@@ -85,7 +88,14 @@ const CATEGORY_META: Record<Category, { Icon: typeof IconFlame; color: string }>
   morning_briefing: { Icon: IconSunrise, color: 'var(--amber)' },
   job_context: { Icon: IconBriefcase, color: 'var(--blue)' },
   closeout_briefing: { Icon: IconClockHour3, color: 'var(--accent)' },
+  greeting: { Icon: IconSparkles, color: 'var(--accent)' },
 };
+
+function dayOfYear(date: Date = new Date()): number {
+  const start = new Date(date.getFullYear(), 0, 0);
+  const diff = date.getTime() - start.getTime();
+  return Math.floor(diff / 86400000);
+}
 
 function pick<T>(arr: T[]): T {
   return arr[Math.floor(Math.random() * arr.length)];
@@ -241,6 +251,7 @@ export function TeamReminders() {
         setTimeout(() => queueToast(c.category, messageFor(c.category, c.task.title), c.key, c.task.id), i * STAGGER_MS)
       );
     }
+    pollGreeting();
     await pollPulse();
     await pollRisks();
     await pollMorningBriefing();
@@ -280,6 +291,22 @@ export function TeamReminders() {
     const message = buildRiskMessage(summary);
     if (!message) return;
     queueToast('risk_nudge', message, key);
+  }
+
+  function pollGreeting() {
+    if (!user) return;
+    const key = `${todayStr()}:greeting`;
+    if (shownRef.current.has(key)) return;
+    // Marked synchronously up front for the same StrictMode-double-invoke reason
+    // as every other poll function in this file -- see pollPulse above. This one
+    // is synchronous (no fetch) since it's just a fixed local quote list, but the
+    // ordering rule still applies since a second effect invocation could still
+    // race the state update otherwise.
+    shownRef.current.add(key);
+    saveShown(shownRef.current);
+    const firstName = user.name.split(' ')[0] || user.name;
+    const quote = RYAN_HOLIDAY_QUOTES[dayOfYear() % RYAN_HOLIDAY_QUOTES.length];
+    queueToast('greeting', `Hi ${firstName}! "${quote.text}" — Ryan Holiday, ${quote.source}`, key);
   }
 
   async function pollMorningBriefing() {
@@ -378,6 +405,7 @@ export function TeamReminders() {
                 else if (t.category === 'risk_nudge') navigate('/');
                 else if (t.category === 'morning_briefing' || t.category === 'closeout_briefing') navigate('/tasks');
                 else if (t.category === 'job_context') navigate(`/projects/${t.projectId}`);
+                else if (t.category === 'greeting') dismiss(t.id);
                 else setOpenTaskId(t.taskId!);
               }}
             >
