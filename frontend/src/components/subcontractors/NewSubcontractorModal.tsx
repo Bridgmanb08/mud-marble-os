@@ -1,9 +1,11 @@
 import { useEffect, useState, type FormEvent } from 'react';
+import { IconMailForward } from '@tabler/icons-react';
 import { api, ApiError } from '../../api/client';
 import { Modal } from '../ui/Modal';
 import { openDatePicker } from '../../lib/datePicker';
 import { SubcontractorFilesSection } from './SubcontractorFilesSection';
 import { EntityTagList } from '../tags/EntityTagList';
+import { SubEmailDraftModal } from './SubEmailDraftModal';
 import type { PersonTag, Subcontractor } from '../../types';
 
 interface NewSubcontractorModalProps {
@@ -27,6 +29,7 @@ export function NewSubcontractorModal({ onClose, onSaved, sub }: NewSubcontracto
   const [error, setError] = useState('');
   const [saving, setSaving] = useState(false);
   const [allTags, setAllTags] = useState<PersonTag[]>([]);
+  const [showEmailDraft, setShowEmailDraft] = useState(false);
 
   useEffect(() => {
     api.get<PersonTag[]>('/person-tags').then(setAllTags).catch(() => {});
@@ -130,6 +133,16 @@ export function NewSubcontractorModal({ onClose, onSaved, sub }: NewSubcontracto
         {sub && <SubcontractorFilesSection subcontractorId={sub.id} />}
 
         <div className="ma">
+          {sub && (
+            <button
+              type="button"
+              className="btn"
+              style={{ marginRight: 'auto' }}
+              onClick={() => setShowEmailDraft(true)}
+            >
+              <IconMailForward size={14} /> Draft request email
+            </button>
+          )}
           <button type="button" className="btn" onClick={onClose}>
             Cancel
           </button>
@@ -138,6 +151,8 @@ export function NewSubcontractorModal({ onClose, onSaved, sub }: NewSubcontracto
           </button>
         </div>
       </form>
+
+      {sub && showEmailDraft && <SubEmailDraftModal sub={sub} onClose={() => setShowEmailDraft(false)} />}
     </Modal>
   );
 }

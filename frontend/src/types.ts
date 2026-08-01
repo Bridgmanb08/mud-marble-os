@@ -103,6 +103,12 @@ export interface Subcontractor {
   sms_contacts: SmsContactBrief[];
 }
 
+export interface SubEmailDraft {
+  subject: string;
+  body: string;
+  to_email: string | null;
+}
+
 export interface SmsContactBrief {
   id: string;
   phone_number: string;
