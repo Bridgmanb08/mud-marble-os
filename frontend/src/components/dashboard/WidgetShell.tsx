@@ -1,7 +1,7 @@
 import type { ReactNode } from 'react';
 import { useSortable } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
-import { IconGripVertical, IconEye, IconEyeOff } from '@tabler/icons-react';
+import { IconGripVertical, IconEye, IconEyeOff, IconTrash } from '@tabler/icons-react';
 
 interface WidgetShellProps {
   id: string;
@@ -9,11 +9,12 @@ interface WidgetShellProps {
   editMode: boolean;
   visible: boolean;
   onToggleVisible: () => void;
+  onRemove: () => void;
   wide?: boolean;
   children: ReactNode;
 }
 
-export function WidgetShell({ id, title, editMode, visible, onToggleVisible, wide, children }: WidgetShellProps) {
+export function WidgetShell({ id, title, editMode, visible, onToggleVisible, onRemove, wide, children }: WidgetShellProps) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id });
 
   const style = {
@@ -40,9 +41,22 @@ export function WidgetShell({ id, title, editMode, visible, onToggleVisible, wid
           {title}
         </div>
         {editMode && (
-          <button className="btn btn-ghost btn-sm" onClick={onToggleVisible} title={visible ? 'Hide' : 'Show'}>
-            {visible ? <IconEye size={14} /> : <IconEyeOff size={14} />}
-          </button>
+          <>
+            <button className="btn btn-ghost btn-sm" onClick={onToggleVisible} title={visible ? 'Hide' : 'Show'}>
+              {visible ? <IconEye size={14} /> : <IconEyeOff size={14} />}
+            </button>
+            <button
+              className="btn btn-ghost btn-sm"
+              onClick={() => {
+                if (confirm(`Remove "${title}" from your dashboard? You can add it back later from "Add widget".`)) {
+                  onRemove();
+                }
+              }}
+              title="Remove"
+            >
+              <IconTrash size={14} />
+            </button>
+          </>
         )}
       </div>
       <div style={{ padding: 20, opacity: editMode && !visible ? 0.4 : 1 }}>{children}</div>
