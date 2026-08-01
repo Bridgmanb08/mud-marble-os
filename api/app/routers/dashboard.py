@@ -615,13 +615,25 @@ async def get_team_workload_insights(_: CurrentUser = Depends(get_current_user))
         raise HTTPException(status_code=503, detail="ANTHROPIC_API_KEY is not configured")
 
     now = datetime.now(timezone.utc)
-    schedule_items, users = await asyncio.gather(
+    schedule_items, users, pulse_checkins = await asyncio.gather(
         db_get("schedule_items", "?order=scheduled_end.asc&select=*,projects(name)"),
         db_get("app_users", "?select=id,name&order=name.asc"),
+        db_get(
+            "pulse_checkins",
+            "?order=created_at.desc&limit=200&select=user_id,workload_rating,feeling_stuck",
+        ),
     )
     entries = _build_team_workload(schedule_items, users, now)
     if not entries:
         return TeamWorkloadInsightsResponse(summaries={})
+
+    # Most recent check-in per user -- pulse_checkins is already sorted
+    # newest-first, so the first one seen per user_id wins.
+    latest_pulse_by_user: dict = {}
+    for c in pulse_checkins:
+        uid = c.get("user_id")
+        if uid and uid not in latest_pulse_by_user:
+            latest_pulse_by_user[uid] = c
 
     members = [
         TeamMemberBrief(
@@ -630,6 +642,8 @@ async def get_team_workload_insights(_: CurrentUser = Depends(get_current_user))
             completed_this_week=e.completed_this_week,
             overdue_count=e.overdue_count,
             top_task_titles=[t.title for t in e.top_tasks],
+            pulse_workload_rating=(latest_pulse_by_user.get(e.user_id) or {}).get("workload_rating") if e.user_id else None,
+            pulse_feeling_stuck=bool((latest_pulse_by_user.get(e.user_id) or {}).get("feeling_stuck")) if e.user_id else False,
         )
         for e in entries
     ]

@@ -170,6 +170,45 @@ async def search_change_orders(
     return await db_get("change_orders", "?" + "&".join(parts))
 
 
+async def search_leads(
+    status: Optional[str] = None,
+    name_contains: Optional[str] = None,
+    limit: int = 20,
+) -> list[dict]:
+    parts = []
+    if status:
+        parts.append(f"status=eq.{_q(status)}")
+    if name_contains:
+        needle = _q(name_contains)
+        parts.append(f"or=(first_name.ilike.*{needle}*,last_name.ilike.*{needle}*,title.ilike.*{needle}*)")
+    parts.append("order=created_at.desc")
+    parts.append(f"limit={_limit(limit)}")
+    parts.append(
+        "select=id,first_name,last_name,title,status,confidence,estimated_revenue_min,"
+        "estimated_revenue_max,project_type,project_address,created_at"
+    )
+    return await db_get("leads", "?" + "&".join(parts))
+
+
+async def search_estimates(
+    project_name: Optional[str] = None,
+    status: Optional[str] = None,
+    limit: int = 20,
+) -> list[dict]:
+    parts = []
+    if project_name:
+        project_ids = await _resolve_project_ids(project_name)
+        if not project_ids:
+            return []
+        parts.append(f"project_id=in.({','.join(project_ids)})")
+    if status:
+        parts.append(f"status=eq.{_q(status)}")
+    parts.append("order=version.desc")
+    parts.append(f"limit={_limit(limit)}")
+    parts.append("select=id,project_id,version,status,grand_total_owner_price,created_at,projects(name)")
+    return await db_get("estimates", "?" + "&".join(parts))
+
+
 async def get_dashboard_summary(current_user) -> dict:
     from .routers.dashboard import get_dashboard
 
@@ -355,6 +394,30 @@ TOOLS: list[dict] = [
         },
     },
     {
+        "name": "search_leads",
+        "description": "Search the sales pipeline (Lead Opportunities) by status or name/title substring. Returns name, title, status, confidence, estimated revenue range, project type/address. Use this for questions about incoming inquiries, the pipeline, or leads that haven't converted yet -- search_projects/search_clients won't see these.",
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "status": {"type": "string", "description": "e.g. new, contacted, qualified, converted, disqualified"},
+                "name_contains": {"type": "string", "description": "Substring of the lead's first/last name or title"},
+                "limit": {"type": "integer", "description": "Max rows (default 20, max 50)"},
+            },
+        },
+    },
+    {
+        "name": "search_estimates",
+        "description": "Search estimates/proposals by project or status. Returns version, status, and grand total owner price. Use this for questions about a job's estimate/proposal status or value.",
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "project_name": {"type": "string", "description": "Substring of the project name to scope to"},
+                "status": {"type": "string", "description": "e.g. draft, sent, approved, rejected"},
+                "limit": {"type": "integer", "description": "Max rows (default 20, max 50)"},
+            },
+        },
+    },
+    {
         "name": "get_dashboard_summary",
         "description": "Get the company-wide CFO/owner dashboard snapshot: active project count, total contract value, collected/outstanding AR, open change orders, AR aging buckets, project profitability, cash position. Takes no arguments -- use this for high-level 'how are we doing' questions before drilling into individual searches.",
         "input_schema": {"type": "object", "properties": {}},
@@ -418,6 +481,8 @@ _HANDLERS = {
     "search_transactions": search_transactions,
     "search_invoices": search_invoices,
     "search_change_orders": search_change_orders,
+    "search_leads": search_leads,
+    "search_estimates": search_estimates,
     "add_client_note": add_client_note,
 }
 
