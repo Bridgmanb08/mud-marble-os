@@ -90,6 +90,9 @@ async def get_financial_summary(project_id: str, _: CurrentUser = Depends(get_cu
     )
     paid_to_subs = sum(abs(t.get("amount") or 0) for t in sub_transactions)
 
+    existing_invoices = await db_get("invoices", f"?project_id=eq.{project_id}&select=amount_due")
+    invoiced_to_date = sum(i.get("amount_due") or 0 for i in existing_invoices)
+
     return FinancialSummaryOut(
         owner_price=round(owner_price, 2),
         builder_cost=round(builder_cost, 2),
@@ -99,6 +102,8 @@ async def get_financial_summary(project_id: str, _: CurrentUser = Depends(get_cu
         contracted_to_subs=round(contracted_to_subs, 2),
         paid_to_subs=round(paid_to_subs, 2),
         left_to_pay=round(contracted_to_subs - paid_to_subs, 2),
+        invoiced_to_date=round(invoiced_to_date, 2),
+        remaining_to_invoice=round(owner_price - invoiced_to_date, 2),
         checking_balance=project.get("checking_balance"),
         credit_card_balance=project.get("credit_card_balance"),
         pending_invoices_manual=project.get("pending_invoices_manual"),
