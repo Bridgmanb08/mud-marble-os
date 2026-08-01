@@ -17,6 +17,7 @@ import { useAuth } from '../../auth/AuthContext';
 import { DashboardTaskDrawer } from '../dashboard/DashboardTaskDrawer';
 import { PulseCheckinModal } from '../dashboard/PulseCheckinModal';
 import { RYAN_HOLIDAY_QUOTES } from '../../data/ryanHolidayQuotes';
+import { addReminderHistoryEntry } from '../../lib/reminderHistory';
 import type { Task, PulseCheckinOut, DashboardSummary } from '../../types';
 
 /**
@@ -28,7 +29,7 @@ import type { Task, PulseCheckinOut, DashboardSummary } from '../../types';
  * fires once per day (tracked in localStorage) so it nudges without nagging.
  */
 
-type Category =
+export type Category =
   | 'overdue'
   | 'due_today'
   | 'starting_today'
@@ -79,7 +80,7 @@ const PULSE_NUDGE_MESSAGES = [
   () => `A quick pulse check-in helps leadership have your back. Got a beat?`,
 ];
 
-const CATEGORY_META: Record<Category, { Icon: typeof IconFlame; color: string }> = {
+export const CATEGORY_META: Record<Category, { Icon: typeof IconFlame; color: string }> = {
   overdue: { Icon: IconFlame, color: 'var(--red)' },
   due_today: { Icon: IconTarget, color: 'var(--amber)' },
   starting_today: { Icon: IconRocket, color: 'var(--blue)' },
@@ -216,6 +217,10 @@ export function TeamReminders() {
     const id = `tr-${nextIdRef.current++}`;
     const toast: ReminderToast = { id, key, category, message, taskId, projectId, phase: 'enter' };
     setToasts((prev) => [...prev, toast]);
+    // Recorded separately from the shownRef dedupe-key set so the bell can show
+    // "what fired today" -- clearing an entry there never affects this toast's
+    // own once-per-day dedupe, and never touches the underlying task.
+    addReminderHistoryEntry({ key, category, message, taskId, projectId });
 
     // Flip to 'shown' on the next frame so the enter transition actually animates
     // instead of the toast just appearing already in its resting position.
