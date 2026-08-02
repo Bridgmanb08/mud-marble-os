@@ -6,6 +6,7 @@ import { fmt, fmtD } from '../lib/format';
 import { useToast } from '../components/ui/Toast';
 import { NewInvoiceModal } from '../components/invoices/NewInvoiceModal';
 import { NewChangeOrderModal } from '../components/change-orders/NewChangeOrderModal';
+import { EstimateImportSection } from '../components/job-import/EstimateImportSection';
 import type { ChangeOrder, Invoice, Project } from '../types';
 
 const INVOICE_STATUS_BADGE: Record<string, string> = { draft: 'bg-gray', sent: 'bg-amber', paid: 'bg-green', overdue: 'bg-red', void: 'bg-gray' };
@@ -60,7 +61,7 @@ export default function JobImportWizard() {
         <div className="ibt" style={{ fontSize: 13, textTransform: 'none', letterSpacing: 0, border: 'none', padding: 0, marginBottom: 14 }}>
           Estimate
         </div>
-        <div style={{ fontSize: 13, color: 'var(--t2)' }}>Estimate import coming in the next update.</div>
+        <EstimateImportSection projectId={projectId} />
       </div>
 
       <div className="card" style={{ padding: 20, marginBottom: 16 }}>
