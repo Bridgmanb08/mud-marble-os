@@ -31,6 +31,7 @@ const Reports = lazy(() => import('./pages/Reports'));
 const Users = lazy(() => import('./pages/Users'));
 const Review = lazy(() => import('./pages/Review'));
 const Messages = lazy(() => import('./pages/Messages'));
+const JobImportWizard = lazy(() => import('./pages/JobImportWizard'));
 
 function PageLoader() {
   return (
@@ -77,6 +78,7 @@ export default function App() {
               <Route path="sub-intelligence" element={<SubIntelligence />} />
               <Route path="settings" element={<Settings />} />
               <Route path="reports" element={<Reports />} />
+              <Route path="job-import/:projectId" element={<JobImportWizard />} />
               <Route
                 path="users"
                 element={
