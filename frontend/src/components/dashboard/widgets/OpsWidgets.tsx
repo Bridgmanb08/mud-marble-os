@@ -21,38 +21,62 @@ export function TaskManagementWidget({ data }: { data: DashboardSummary }) {
   }
 
   if (!items.length) return <div style={{ fontSize: 13, color: 'var(--t2)' }}>No milestones scheduled.</div>;
+
+  const groups = new Map<string, typeof items>();
+  for (const t of items) {
+    const key = t.project_name || 'No project';
+    if (!groups.has(key)) groups.set(key, []);
+    groups.get(key)!.push(t);
+  }
+  const groupNames = Array.from(groups.keys()).sort((a, b) => {
+    if (a === 'No project') return 1;
+    if (b === 'No project') return -1;
+    return a.localeCompare(b);
+  });
+
   return (
     <>
-      {items.map((t) => (
-        <div key={t.id} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '7px 0', borderBottom: '1px solid var(--border)' }}>
-          <input
-            type="checkbox"
-            title="Mark complete"
-            onChange={() => markComplete(t.id)}
-            style={{ cursor: 'pointer', flexShrink: 0 }}
-          />
-          <button
-            type="button"
-            className="btn-reset"
-            onClick={() => setOpenTaskId(t.id)}
-            style={{ display: 'flex', flex: 1, minWidth: 0, textAlign: 'left', alignItems: 'center', gap: 10, cursor: 'pointer' }}
+      {groupNames.map((project) => (
+        <div key={project} style={{ marginBottom: 4 }}>
+          <div
+            style={{
+              fontSize: 11,
+              fontWeight: 600,
+              color: 'var(--t2)',
+              textTransform: 'uppercase',
+              letterSpacing: 0.3,
+              margin: '10px 0 2px',
+            }}
           >
-            <span className={`dot ${t.overdue ? 'dot-r' : 'dot-g'}`} />
-            <div style={{ flex: 1, minWidth: 0 }}>
-              <div style={{ fontSize: 12, fontWeight: 500 }}>{t.title}</div>
-              <div style={{ fontSize: 11, color: 'var(--t2)' }}>
-                {t.project_name || ''}
-                {t.assigned_to ? ` · ${t.assigned_to}` : ''}
-              </div>
+            {project} ({groups.get(project)!.length})
+          </div>
+          {groups.get(project)!.map((t) => (
+            <div key={t.id} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '6px 0', borderBottom: '1px solid var(--border)' }}>
+              <input
+                type="checkbox"
+                title="Mark complete"
+                onChange={() => markComplete(t.id)}
+                style={{ cursor: 'pointer', flexShrink: 0 }}
+              />
+              <button
+                type="button"
+                className="btn-reset"
+                onClick={() => setOpenTaskId(t.id)}
+                style={{ display: 'flex', flex: 1, minWidth: 0, textAlign: 'left', alignItems: 'center', gap: 10, cursor: 'pointer' }}
+              >
+                <span className={`dot ${t.overdue ? 'dot-r' : 'dot-g'}`} />
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <div style={{ fontSize: 12, fontWeight: 500 }}>{t.title}</div>
+                  {t.assigned_to && <div style={{ fontSize: 11, color: 'var(--t2)' }}>{t.assigned_to}</div>}
+                </div>
+                {(t.overdue || t.days_until_due !== null) && (
+                  <span className={`badge ${t.overdue ? 'bg-red' : 'bg-gray'}`}>
+                    {t.overdue ? `${Math.abs(t.days_until_due ?? 0)}d overdue` : `${t.days_until_due}d left`}
+                  </span>
+                )}
+              </button>
             </div>
-            <span className={`badge ${t.overdue ? 'bg-red' : 'bg-gray'}`}>
-              {t.overdue
-                ? `${Math.abs(t.days_until_due ?? 0)}d overdue`
-                : t.days_until_due !== null
-                  ? `${t.days_until_due}d left`
-                  : fmtD(t.scheduled_end)}
-            </span>
-          </button>
+          ))}
         </div>
       ))}
       {openTaskId && <DashboardTaskDrawer taskId={openTaskId} onClose={() => setOpenTaskId(null)} />}
