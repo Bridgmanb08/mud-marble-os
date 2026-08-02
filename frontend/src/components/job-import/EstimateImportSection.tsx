@@ -1,6 +1,7 @@
-import { useState, type ChangeEvent } from 'react';
+import { useState } from 'react';
 import { api, ApiError } from '../../api/client';
 import { useToast } from '../ui/Toast';
+import { FileDropzone } from '../ui/FileDropzone';
 import type { Estimate, EstimateSheetPreview, EstimateSheetRow } from '../../types';
 
 type RowAction = 'add' | 'skip' | 'update';
@@ -15,8 +16,8 @@ export function EstimateImportSection({ projectId }: { projectId: string }) {
   const [error, setError] = useState('');
   const [importedCount, setImportedCount] = useState<number | null>(null);
 
-  function handleFileChange(e: ChangeEvent<HTMLInputElement>) {
-    setFile(e.target.files?.[0] || null);
+  function handleFileChange(selected: File | null) {
+    setFile(selected);
     setPreview(null);
     setError('');
     setImportedCount(null);
@@ -105,14 +106,21 @@ export function EstimateImportSection({ projectId }: { projectId: string }) {
   return (
     <div>
       {!preview ? (
-        <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-          <input type="file" accept=".xlsx,.xlsm,.xls" onChange={handleFileChange} />
-          <button className="btn btn-sm" onClick={handlePreview} disabled={!file || loadingPreview}>
-            {loadingPreview ? 'Reading…' : 'Preview'}
-          </button>
-          {importedCount !== null && (
-            <span style={{ fontSize: 12, color: 'var(--green)' }}>Imported {importedCount} line item(s).</span>
-          )}
+        <div>
+          <FileDropzone
+            accept=".xlsx,.xlsm,.xls"
+            file={file}
+            onFileSelected={handleFileChange}
+            label="Drag and drop your Estimate sheet here, or click to browse"
+          />
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginTop: 10 }}>
+            <button className="btn btn-sm" onClick={handlePreview} disabled={!file || loadingPreview}>
+              {loadingPreview ? 'Reading…' : 'Preview'}
+            </button>
+            {importedCount !== null && (
+              <span style={{ fontSize: 12, color: 'var(--green)' }}>Imported {importedCount} line item(s).</span>
+            )}
+          </div>
         </div>
       ) : (
         <div>
