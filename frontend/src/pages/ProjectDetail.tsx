@@ -178,6 +178,19 @@ export default function ProjectDetail() {
     }
   }
 
+  async function handleDateChange(field: 'start_date' | 'estimated_completion', value: string) {
+    if (!id || !project) return;
+    const previous = project[field];
+    const nextValue = value || null;
+    setProject({ ...project, [field]: nextValue });
+    try {
+      await api.patch(`/projects/${id}`, { [field]: nextValue });
+    } catch (e) {
+      setProject((p) => (p ? { ...p, [field]: previous } : p));
+      toast(e instanceof Error ? e.message : 'Failed to update date', true);
+    }
+  }
+
   return (
     <>
       <button className="btn btn-sm" style={{ marginBottom: 12 }} onClick={() => navigate('/projects')}>
@@ -249,11 +262,23 @@ export default function ProjectDetail() {
               </div>
               <div className="ir">
                 <span className="ik">Start date</span>
-                <span className="iv">{fmtD(project.start_date)}</span>
+                <input
+                  type="date"
+                  className="fi"
+                  style={{ width: 'auto', padding: '3px 6px', fontSize: 12, textAlign: 'right' }}
+                  value={project.start_date ? project.start_date.slice(0, 10) : ''}
+                  onChange={(e) => handleDateChange('start_date', e.target.value)}
+                />
               </div>
               <div className="ir">
                 <span className="ik">Est. completion</span>
-                <span className="iv">{fmtD(project.estimated_completion)}</span>
+                <input
+                  type="date"
+                  className="fi"
+                  style={{ width: 'auto', padding: '3px 6px', fontSize: 12, textAlign: 'right' }}
+                  value={project.estimated_completion ? project.estimated_completion.slice(0, 10) : ''}
+                  onChange={(e) => handleDateChange('estimated_completion', e.target.value)}
+                />
               </div>
               <div className="ir">
                 <span className="ik">Contract value</span>
