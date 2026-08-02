@@ -14,9 +14,32 @@ from ..schemas.job_import import (
     JobImportStatus,
     TransactionSheetRow,
 )
-from ..supabase_client import db_get
+from ..supabase_client import db_get, db_post
 
 router = APIRouter(prefix="/job-import", tags=["job-import"])
+
+
+async def _notify_conflicts(user_id: str, project_id: str, project_name: str, count: int, section: str) -> None:
+    """Surfaces a review prompt in the recipient's notification bell whenever a
+    re-imported row doesn't match what's already on record -- Shannon (or
+    whoever's running the import) gets a durable pointer back to the wizard
+    even if she doesn't resolve it in the moment."""
+    if count <= 0:
+        return
+    await db_post(
+        "notifications",
+        {
+            "user_id": user_id,
+            "type": "job_import_conflict",
+            "source_type": "job_import",
+            "source_id": project_id,
+            "project_id": project_id,
+            "message": (
+                f"{project_name}: {count} {section} row(s) from this import don't match what's already "
+                f"on file. Which values are correct?"
+            ),
+        },
+    )
 
 
 def _find_sheet(wb, name: str):
@@ -62,7 +85,7 @@ async def get_status(_: CurrentUser = Depends(get_current_user)):
 
 @router.post("/{project_id}/estimate-sheet/preview", response_model=EstimateSheetPreview)
 async def preview_estimate_sheet(
-    project_id: str, file: UploadFile = File(...), _: CurrentUser = Depends(get_current_user)
+    project_id: str, file: UploadFile = File(...), current_user: CurrentUser = Depends(get_current_user)
 ):
     content = await file.read()
     try:
@@ -74,37 +97,46 @@ async def preview_estimate_sheet(
     if ws is None:
         raise HTTPException(status_code=400, detail="No sheet named 'Estimate' found in that file")
 
-    existing_estimates, cost_codes = await asyncio.gather(
+    project_rows, existing_estimates, cost_codes = await asyncio.gather(
+        db_get("projects", f"?id=eq.{project_id}&select=name"),
         db_get("estimates", f"?project_id=eq.{project_id}&order=version.desc&limit=1"),
         db_get("cost_codes", "?is_active=eq.true&select=id,code"),
     )
+    if not project_rows:
+        raise HTTPException(status_code=404, detail="Project not found")
+    project_name = project_rows[0]["name"].split("|")[0].strip()
     codes_by_code = {c["code"].strip().lower(): c["id"] for c in cost_codes if c.get("code")}
 
     existing_estimate_id = None
-    existing_keys: set = set()
+    existing_by_key: dict = {}
     if existing_estimates:
         existing_estimate_id = existing_estimates[0]["id"]
         existing_items = await db_get(
-            "estimate_line_items", f"?estimate_id=eq.{existing_estimate_id}&select=title,unit_cost"
+            "estimate_line_items",
+            f"?estimate_id=eq.{existing_estimate_id}&select=id,title,unit_cost,quantity,markup_type,markup_value,description,notes_internal,bucket",
         )
-        existing_keys = {(i["title"], i["unit_cost"]) for i in existing_items}
+        existing_by_key = {(i["title"], i["unit_cost"]): i for i in existing_items}
 
-    parsed = parse_estimate_sheet(ws, existing_keys)
+    parsed = parse_estimate_sheet(ws, existing_by_key)
     rows = []
+    conflict_count = 0
     for row in parsed:
         code = row.get("cost_code")
+        if row.get("conflict"):
+            conflict_count += 1
         rows.append(
             EstimateSheetRow(
                 **row,
                 matched_cost_code_id=codes_by_code.get(code.lower()) if code else None,
             )
         )
+    await _notify_conflicts(current_user.id, project_id, project_name, conflict_count, "estimate line item")
     return EstimateSheetPreview(rows=rows, existing_estimate_id=existing_estimate_id)
 
 
 @router.post("/{project_id}/inhouse-sheet/preview", response_model=InHouseSheetPreview)
 async def preview_inhouse_sheet(
-    project_id: str, file: UploadFile = File(...), _: CurrentUser = Depends(get_current_user)
+    project_id: str, file: UploadFile = File(...), current_user: CurrentUser = Depends(get_current_user)
 ):
     content = await file.read()
     try:
@@ -119,35 +151,48 @@ async def preview_inhouse_sheet(
             status_code=400, detail="No sheet named 'Quickbooks' or 'Contractors' found in that file"
         )
 
-    existing_tx, cost_codes, subcontractors = await asyncio.gather(
-        db_get("transactions", f"?project_id=eq.{project_id}&select=transaction_date,amount,description"),
+    project_rows, existing_tx, cost_codes, subcontractors, existing_sub_items = await asyncio.gather(
+        db_get("projects", f"?id=eq.{project_id}&select=name"),
+        db_get(
+            "transactions",
+            f"?project_id=eq.{project_id}&select=id,transaction_date,amount,description,vendor,transaction_type,payment_source",
+        ),
         db_get("cost_codes", "?is_active=eq.true&select=id,code"),
         db_get("subcontractors", "?select=id,company_name"),
+        db_get("project_subcontractor_items", f"?project_id=eq.{project_id}&select=id,subcontractor_id,description,amount"),
     )
+    if not project_rows:
+        raise HTTPException(status_code=404, detail="Project not found")
+    project_name = project_rows[0]["name"].split("|")[0].strip()
     codes_by_code = {c["code"].strip().lower(): c["id"] for c in cost_codes if c.get("code")}
     subs_by_name = {s["company_name"].strip().lower(): s["id"] for s in subcontractors if s.get("company_name")}
-    existing_tx_keys = {
-        (t["transaction_date"][:10], round(t["amount"], 2), (t.get("description") or "")[:60]) for t in existing_tx
+    existing_tx_by_key = {
+        (t["transaction_date"][:10], round(t["amount"], 2), (t.get("description") or "")[:60]): t for t in existing_tx
     }
+    existing_tx_keys = set(existing_tx_by_key.keys())
+
+    existing_items_by_sub: dict = {}
+    for item in existing_sub_items:
+        existing_items_by_sub.setdefault(item["subcontractor_id"], {})[item["description"]] = item
 
     transactions: list[TransactionSheetRow] = []
+    conflict_count = 0
     if qb_ws is not None:
-        parsed_tx = parse_quickbooks_sheet(qb_ws, existing_tx_keys)
+        parsed_tx = parse_quickbooks_sheet(qb_ws, existing_tx_by_key)
         for row in parsed_tx:
             code = row.get("cost_code")
+            if row.get("conflict"):
+                conflict_count += 1
             transactions.append(
                 TransactionSheetRow(**row, matched_cost_code_id=codes_by_code.get(code.lower()) if code else None)
             )
 
     contractors: list[ContractorBlock] = []
     if contractors_ws is not None:
-        parsed_blocks = parse_contractors_sheet(contractors_ws)
+        parsed_blocks = parse_contractors_sheet(contractors_ws, subs_by_name, existing_items_by_sub, existing_tx_keys)
         for block in parsed_blocks:
-            contractors.append(
-                ContractorBlock(
-                    **block,
-                    matched_subcontractor_id=subs_by_name.get(block["subcontractor_name"].strip().lower()),
-                )
-            )
+            contractors.append(ContractorBlock(**block))
+            conflict_count += sum(1 for item in block["contract_items"] if item.get("conflict"))
 
+    await _notify_conflicts(current_user.id, project_id, project_name, conflict_count, "in-house sheet")
     return InHouseSheetPreview(transactions=transactions, contractors=contractors)

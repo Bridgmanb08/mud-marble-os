@@ -1,14 +1,17 @@
 import { useState, type ChangeEvent } from 'react';
 import { api, ApiError } from '../../api/client';
 import { useToast } from '../ui/Toast';
-import type { ContractorBlock, InHouseSheetPreview, Subcontractor, TransactionSheetRow } from '../../types';
+import type { ContractItemRow, ContractorBlock, InHouseSheetPreview, Subcontractor, TransactionSheetRow } from '../../types';
+
+type RowAction = 'add' | 'skip' | 'update';
 
 export function InHouseImportSection({ projectId }: { projectId: string }) {
   const toast = useToast();
   const [file, setFile] = useState<File | null>(null);
   const [preview, setPreview] = useState<InHouseSheetPreview | null>(null);
-  const [txChecked, setTxChecked] = useState<boolean[]>([]);
+  const [txActions, setTxActions] = useState<RowAction[]>([]);
   const [blockChecked, setBlockChecked] = useState<boolean[]>([]);
+  const [itemActions, setItemActions] = useState<RowAction[][]>([]);
   const [loadingPreview, setLoadingPreview] = useState(false);
   const [importing, setImporting] = useState(false);
   const [error, setError] = useState('');
@@ -33,8 +36,13 @@ export function InHouseImportSection({ projectId }: { projectId: string }) {
       formData.append('file', file);
       const result = await api.postForm<InHouseSheetPreview>(`/job-import/${projectId}/inhouse-sheet/preview`, formData);
       setPreview(result);
-      setTxChecked(result.transactions.map((r) => !r.already_present));
+      // Conflicting/duplicate rows default to "skip" -- Shannon has to actively
+      // opt into overwriting a record with the imported values.
+      setTxActions(result.transactions.map((r) => (r.already_present ? 'skip' : 'add')));
       setBlockChecked(result.contractors.map(() => true));
+      setItemActions(
+        result.contractors.map((block) => block.contract_items.map((item) => (item.already_present ? 'skip' : 'add')))
+      );
     } catch (err) {
       setError(err instanceof ApiError ? err.message : 'Failed to read that file');
     } finally {
@@ -47,11 +55,13 @@ export function InHouseImportSection({ projectId }: { projectId: string }) {
     setImporting(true);
     setError('');
     try {
-      let txCount = 0;
+      let txAdded = 0;
+      let txUpdated = 0;
       for (let i = 0; i < preview.transactions.length; i++) {
-        if (!txChecked[i]) continue;
         const row: TransactionSheetRow = preview.transactions[i];
-        await api.post('/transactions', {
+        const action = txActions[i];
+        if (action === 'skip') continue;
+        const body = {
           project_id: projectId,
           transaction_date: row.date,
           vendor: row.vendor,
@@ -60,12 +70,19 @@ export function InHouseImportSection({ projectId }: { projectId: string }) {
           payment_source: row.payment_source,
           cost_code_id: row.matched_cost_code_id,
           description: row.description,
-        });
-        txCount++;
+        };
+        if (action === 'update' && row.existing_id) {
+          await api.patch(`/transactions/${row.existing_id}`, body);
+          txUpdated++;
+        } else {
+          await api.post('/transactions', body);
+          txAdded++;
+        }
       }
 
       let subsCount = 0;
-      let itemsCount = 0;
+      let itemsAdded = 0;
+      let itemsUpdated = 0;
       let paymentsCount = 0;
       for (let i = 0; i < preview.contractors.length; i++) {
         if (!blockChecked[i]) continue;
@@ -76,15 +93,24 @@ export function InHouseImportSection({ projectId }: { projectId: string }) {
           subcontractorId = created.id;
         }
         subsCount++;
-        for (const item of block.contract_items) {
-          await api.post(`/projects/${projectId}/subcontractor-items`, {
-            subcontractor_id: subcontractorId,
-            description: item.description,
-            amount: item.amount,
-          });
-          itemsCount++;
+        for (let j = 0; j < block.contract_items.length; j++) {
+          const item: ContractItemRow = block.contract_items[j];
+          const action = itemActions[i]?.[j];
+          if (action === 'skip') continue;
+          if (action === 'update' && item.existing_id) {
+            await api.patch(`/subcontractor-items/${item.existing_id}`, { amount: item.amount });
+            itemsUpdated++;
+          } else {
+            await api.post(`/projects/${projectId}/subcontractor-items`, {
+              subcontractor_id: subcontractorId,
+              description: item.description,
+              amount: item.amount,
+            });
+            itemsAdded++;
+          }
         }
         for (const payment of block.payments) {
+          if (payment.already_present) continue;
           await api.post('/transactions', {
             project_id: projectId,
             transaction_date: payment.date,
@@ -99,8 +125,14 @@ export function InHouseImportSection({ projectId }: { projectId: string }) {
         }
       }
 
+      const txParts = [];
+      if (txAdded) txParts.push(`${txAdded} added`);
+      if (txUpdated) txParts.push(`${txUpdated} updated`);
+      const itemParts = [];
+      if (itemsAdded) itemParts.push(`${itemsAdded} added`);
+      if (itemsUpdated) itemParts.push(`${itemsUpdated} updated`);
       setImportedSummary(
-        `Imported ${txCount} transaction(s), ${subsCount} subcontractor(s) (${itemsCount} contract item(s), ${paymentsCount} payment(s)).`
+        `Transactions: ${txParts.join(', ') || 'none'} · ${subsCount} subcontractor(s) (items: ${itemParts.join(', ') || 'none'}, ${paymentsCount} payment(s)).`
       );
       setPreview(null);
       setFile(null);
@@ -112,7 +144,7 @@ export function InHouseImportSection({ projectId }: { projectId: string }) {
     }
   }
 
-  const txCheckedCount = txChecked.filter(Boolean).length;
+  const txToImportCount = txActions.filter((a) => a !== 'skip').length;
   const blockCheckedCount = blockChecked.filter(Boolean).length;
 
   return (
@@ -138,9 +170,9 @@ export function InHouseImportSection({ projectId }: { projectId: string }) {
               <button
                 className="btn btn-p btn-sm"
                 onClick={handleImport}
-                disabled={importing || (txCheckedCount === 0 && blockCheckedCount === 0)}
+                disabled={importing || (txToImportCount === 0 && blockCheckedCount === 0)}
               >
-                {importing ? 'Importing…' : `Import ${txCheckedCount} transaction(s), ${blockCheckedCount} sub(s)`}
+                {importing ? 'Importing…' : `Import ${txToImportCount} transaction(s), ${blockCheckedCount} sub(s)`}
               </button>
             </div>
           </div>
@@ -148,36 +180,76 @@ export function InHouseImportSection({ projectId }: { projectId: string }) {
           {preview.transactions.length > 0 && (
             <>
               <div style={{ fontSize: 11, fontWeight: 600, color: 'var(--t2)', textTransform: 'uppercase', margin: '10px 0 4px' }}>
-                Transactions ({txCheckedCount} checked)
+                Transactions ({txToImportCount} to import)
               </div>
               <div style={{ maxHeight: 220, overflowY: 'auto', border: '1px solid var(--border)', borderRadius: 'var(--r)' }}>
-                {preview.transactions.map((row, i) => (
-                  <label
-                    key={i}
-                    style={{
-                      display: 'flex',
-                      alignItems: 'center',
-                      gap: 10,
-                      padding: '6px 10px',
-                      borderBottom: '1px solid var(--border)',
-                      fontSize: 12.5,
-                      opacity: row.already_present ? 0.5 : 1,
-                      cursor: 'pointer',
-                    }}
-                  >
-                    <input
-                      type="checkbox"
-                      checked={txChecked[i] || false}
-                      onChange={(e) => setTxChecked((prev) => prev.map((c, idx) => (idx === i ? e.target.checked : c)))}
-                    />
-                    <span style={{ width: 90, color: 'var(--t2)' }}>{row.date}</span>
-                    <span style={{ flex: 1 }}>{row.vendor || row.description || '—'}</span>
-                    <span style={{ color: row.transaction_type === 'income' ? 'var(--green)' : 'var(--t2)' }}>
-                      ${row.amount.toLocaleString()}
-                    </span>
-                    {row.already_present && <span style={{ color: 'var(--t3)' }}>already imported</span>}
-                  </label>
-                ))}
+                {preview.transactions.map((row, i) =>
+                  row.conflict ? (
+                    <div
+                      key={i}
+                      style={{ padding: '8px 10px', borderBottom: '1px solid var(--border)', fontSize: 12.5, background: 'var(--amber-bg, rgba(217,119,6,0.08))' }}
+                    >
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                        <span>{row.date} · {row.vendor || row.description || '—'} · ${row.amount.toLocaleString()}</span>
+                        <span style={{ color: 'var(--amber)', fontSize: 11 }}>doesn't match existing record</span>
+                      </div>
+                      <div style={{ color: 'var(--t2)', margin: '4px 0' }}>
+                        {row.diff.map((d) => (
+                          <div key={d.field}>
+                            {d.field}: {d.existing ?? '—'} → {d.incoming ?? '—'}
+                          </div>
+                        ))}
+                      </div>
+                      <label style={{ display: 'inline-flex', alignItems: 'center', gap: 5, marginRight: 14, cursor: 'pointer' }}>
+                        <input
+                          type="radio"
+                          name={`tx-action-${i}`}
+                          checked={txActions[i] === 'skip'}
+                          onChange={() => setTxActions((prev) => prev.map((a, idx) => (idx === i ? 'skip' : a)))}
+                        />
+                        Keep existing
+                      </label>
+                      <label style={{ display: 'inline-flex', alignItems: 'center', gap: 5, cursor: 'pointer' }}>
+                        <input
+                          type="radio"
+                          name={`tx-action-${i}`}
+                          checked={txActions[i] === 'update'}
+                          onChange={() => setTxActions((prev) => prev.map((a, idx) => (idx === i ? 'update' : a)))}
+                        />
+                        Update with imported values
+                      </label>
+                    </div>
+                  ) : (
+                    <label
+                      key={i}
+                      style={{
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: 10,
+                        padding: '6px 10px',
+                        borderBottom: '1px solid var(--border)',
+                        fontSize: 12.5,
+                        opacity: row.already_present ? 0.5 : 1,
+                        cursor: row.already_present ? 'default' : 'pointer',
+                      }}
+                    >
+                      <input
+                        type="checkbox"
+                        checked={txActions[i] === 'add'}
+                        disabled={row.already_present}
+                        onChange={(e) =>
+                          setTxActions((prev) => prev.map((a, idx) => (idx === i ? (e.target.checked ? 'add' : 'skip') : a)))
+                        }
+                      />
+                      <span style={{ width: 90, color: 'var(--t2)' }}>{row.date}</span>
+                      <span style={{ flex: 1 }}>{row.vendor || row.description || '—'}</span>
+                      <span style={{ color: row.transaction_type === 'income' ? 'var(--green)' : 'var(--t2)' }}>
+                        ${row.amount.toLocaleString()}
+                      </span>
+                      {row.already_present && <span style={{ color: 'var(--t3)' }}>already imported</span>}
+                    </label>
+                  )
+                )}
               </div>
             </>
           )}
@@ -201,8 +273,66 @@ export function InHouseImportSection({ projectId }: { projectId: string }) {
                         <span style={{ color: 'var(--amber)', fontSize: 11 }}>will create new subcontractor</span>
                       )}
                     </label>
-                    <div style={{ paddingLeft: 24, color: 'var(--t2)', fontSize: 11.5 }}>
-                      {block.contract_items.length} contract item(s), {block.payments.length} payment(s)
+                    <div style={{ paddingLeft: 24 }}>
+                      {block.contract_items.map((item, j) => {
+                        const action = itemActions[i]?.[j];
+                        return item.conflict ? (
+                          <div key={j} style={{ padding: '4px 0', color: 'var(--t2)', fontSize: 11.5 }}>
+                            <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                              <span>{item.description || '—'}</span>
+                              <span style={{ color: 'var(--amber)' }}>doesn't match existing contract item</span>
+                            </div>
+                            {item.diff.map((d) => (
+                              <div key={d.field}>
+                                {d.field}: {d.existing ?? '—'} → {d.incoming ?? '—'}
+                              </div>
+                            ))}
+                            <label style={{ display: 'inline-flex', alignItems: 'center', gap: 5, marginRight: 14, cursor: 'pointer' }}>
+                              <input
+                                type="radio"
+                                name={`item-action-${i}-${j}`}
+                                checked={action === 'skip'}
+                                onChange={() =>
+                                  setItemActions((prev) => prev.map((row, ri) => (ri === i ? row.map((a, ci) => (ci === j ? 'skip' : a)) : row)))
+                                }
+                              />
+                              Keep existing
+                            </label>
+                            <label style={{ display: 'inline-flex', alignItems: 'center', gap: 5, cursor: 'pointer' }}>
+                              <input
+                                type="radio"
+                                name={`item-action-${i}-${j}`}
+                                checked={action === 'update'}
+                                onChange={() =>
+                                  setItemActions((prev) => prev.map((row, ri) => (ri === i ? row.map((a, ci) => (ci === j ? 'update' : a)) : row)))
+                                }
+                              />
+                              Update with imported value
+                            </label>
+                          </div>
+                        ) : (
+                          <label key={j} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '2px 0', fontSize: 11.5, opacity: item.already_present ? 0.5 : 1, cursor: item.already_present ? 'default' : 'pointer' }}>
+                            <input
+                              type="checkbox"
+                              checked={action === 'add'}
+                              disabled={item.already_present}
+                              onChange={(e) =>
+                                setItemActions((prev) =>
+                                  prev.map((row, ri) => (ri === i ? row.map((a, ci) => (ci === j ? (e.target.checked ? 'add' : 'skip') : a)) : row))
+                                )
+                              }
+                            />
+                            <span style={{ flex: 1 }}>{item.description || '—'}</span>
+                            <span>${item.amount.toLocaleString()}</span>
+                            {item.already_present && <span style={{ color: 'var(--t3)' }}>already on contract</span>}
+                          </label>
+                        );
+                      })}
+                    </div>
+                    <div style={{ paddingLeft: 24, color: 'var(--t2)', fontSize: 11.5, marginTop: 2 }}>
+                      {block.payments.filter((p) => !p.already_present).length} payment(s) to import
+                      {block.payments.some((p) => p.already_present) &&
+                        ` (${block.payments.filter((p) => p.already_present).length} already recorded)`}
                     </div>
                   </div>
                 ))}
