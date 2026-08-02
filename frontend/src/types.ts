@@ -778,7 +778,8 @@ export type WidgetId =
   | 'estimate_win_rate'
   | 'team_pulse'
   | 'weather'
-  | 'project_timeline';
+  | 'project_timeline'
+  | 'job_import';
 
 export interface WidgetItem {
   id: WidgetId | string;
@@ -1026,4 +1027,67 @@ export interface ToolCallLog {
 export interface AskResponse {
   reply: string;
   tool_calls: ToolCallLog[];
+}
+
+export interface JobImportStatus {
+  project_id: string;
+  project_name: string;
+  has_estimate: boolean;
+  has_financials: boolean;
+  has_inhouse: boolean;
+}
+
+export interface EstimateSheetRow {
+  title: string;
+  category: string | null;
+  cost_code: string | null;
+  quantity: number;
+  unit_cost: number;
+  markup_type: string;
+  markup_value: number;
+  description: string | null;
+  internal_notes: string | null;
+  bucket: string;
+  matched_cost_code_id: string | null;
+  already_present: boolean;
+}
+
+export interface EstimateSheetPreview {
+  rows: EstimateSheetRow[];
+  existing_estimate_id: string | null;
+}
+
+export interface TransactionSheetRow {
+  date: string;
+  vendor: string | null;
+  transaction_type: string;
+  amount: number;
+  payment_source: string | null;
+  cost_code: string | null;
+  matched_cost_code_id: string | null;
+  description: string | null;
+  already_present: boolean;
+}
+
+export interface ContractItemRow {
+  description: string | null;
+  amount: number;
+}
+
+export interface ContractPaymentRow {
+  date: string;
+  amount: number;
+  category: string | null;
+}
+
+export interface ContractorBlock {
+  subcontractor_name: string;
+  matched_subcontractor_id: string | null;
+  contract_items: ContractItemRow[];
+  payments: ContractPaymentRow[];
+}
+
+export interface InHouseSheetPreview {
+  transactions: TransactionSheetRow[];
+  contractors: ContractorBlock[];
 }

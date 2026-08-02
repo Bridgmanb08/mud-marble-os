@@ -2,10 +2,11 @@ import { useState, type FormEvent } from 'react';
 import { api, ApiError } from '../../api/client';
 import { Modal } from '../ui/Modal';
 import { openDatePicker } from '../../lib/datePicker';
+import type { Project } from '../../types';
 
 interface NewProjectModalProps {
   onClose: () => void;
-  onCreated: () => void;
+  onCreated: (project: Project) => void;
 }
 
 const STATUS_OPTIONS = ['lead', 'vetting', 'estimating', 'proposed', 'pre_construction', 'active'];
@@ -31,7 +32,7 @@ export function NewProjectModal({ onClose, onCreated }: NewProjectModalProps) {
     setSaving(true);
     setError('');
     try {
-      await api.post('/projects', {
+      const created = await api.post<Project>('/projects', {
         name: name.trim(),
         address: address.trim() || null,
         zip: zip.trim() || null,
@@ -41,7 +42,7 @@ export function NewProjectModal({ onClose, onCreated }: NewProjectModalProps) {
         estimated_completion: estimatedCompletion || null,
         internal_notes: notes.trim() || null,
       });
-      onCreated();
+      onCreated(created);
     } catch (err) {
       setError(err instanceof ApiError ? err.message : 'Failed to create project');
     } finally {

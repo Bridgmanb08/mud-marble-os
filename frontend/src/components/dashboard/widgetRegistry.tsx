@@ -27,6 +27,7 @@ import { FathomImportCard } from './FathomImportCard';
 import { TeamPulseWidget } from './widgets/TeamPulseWidget';
 import { WeatherWidget } from './widgets/WeatherWidget';
 import { ProjectTimelineWidget } from './widgets/ProjectTimelineWidget';
+import { JobImportWidget } from './widgets/JobImportWidget';
 
 interface WidgetDef {
   title: string;
@@ -62,4 +63,5 @@ export const WIDGET_REGISTRY: Record<WidgetId, WidgetDef> = {
   team_pulse: { title: 'Team pulse', Component: TeamPulseWidget, wide: true },
   weather: { title: 'Indianapolis weather', Component: WeatherWidget },
   project_timeline: { title: 'Project timeline', Component: ProjectTimelineWidget, wide: true },
+  job_import: { title: 'Job import portal', Component: JobImportWidget, wide: true },
 };
