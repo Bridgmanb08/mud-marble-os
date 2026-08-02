@@ -45,6 +45,7 @@ export function NotificationBell() {
     }
     setOpen(false);
     if (n.type === 'unclaimed_media') navigate('/review');
+    else if (n.type === 'job_import_conflict' && n.project_id) navigate(`/job-import/${n.project_id}`);
     else if (n.project_id) navigate(`/projects/${n.project_id}`);
   }
 

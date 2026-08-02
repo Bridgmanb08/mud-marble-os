@@ -1037,6 +1037,12 @@ export interface JobImportStatus {
   has_inhouse: boolean;
 }
 
+export interface FieldDiff {
+  field: string;
+  existing: string | null;
+  incoming: string | null;
+}
+
 export interface EstimateSheetRow {
   title: string;
   category: string | null;
@@ -1050,6 +1056,9 @@ export interface EstimateSheetRow {
   bucket: string;
   matched_cost_code_id: string | null;
   already_present: boolean;
+  existing_id: string | null;
+  conflict: boolean;
+  diff: FieldDiff[];
 }
 
 export interface EstimateSheetPreview {
@@ -1067,17 +1076,25 @@ export interface TransactionSheetRow {
   matched_cost_code_id: string | null;
   description: string | null;
   already_present: boolean;
+  existing_id: string | null;
+  conflict: boolean;
+  diff: FieldDiff[];
 }
 
 export interface ContractItemRow {
   description: string | null;
   amount: number;
+  already_present: boolean;
+  existing_id: string | null;
+  conflict: boolean;
+  diff: FieldDiff[];
 }
 
 export interface ContractPaymentRow {
   date: string;
   amount: number;
   category: string | null;
+  already_present: boolean;
 }
 
 export interface ContractorBlock {

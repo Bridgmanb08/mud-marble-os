@@ -4,16 +4,40 @@ instead of the local-only scripts/import_inhouse_sheets.py script. The parsing
 logic here is a direct port of that script's proven behavior against real
 files -- only the output shape changed (structured preview rows instead of
 firing HTTP requests), so the frontend can show a human-review-before-commit
-checklist rather than trusting-and-going like the script does."""
+checklist rather than trusting-and-going like the script does.
+
+Re-importing the same (or an updated) file is expected -- Shannon will revisit
+a job's workbook more than once as real numbers firm up. A row whose dedupe key
+matches an existing record is never silently re-inserted: if every compared
+field is identical it's flagged `already_present` (nothing to do); if any
+field differs it's flagged `conflict` with a per-field diff, so the reviewer
+can choose to update the existing record in place instead of creating a
+duplicate or silently overwriting it."""
 
 from typing import Optional
 
 from .estimate_import import bucket_for, parse_cost_code
 
 
-def parse_estimate_sheet(ws, existing_keys: set) -> list[dict]:
-    """existing_keys: set of (title, unit_cost) tuples already on the project's
-    estimate, so already-imported rows can be flagged instead of re-added."""
+def _diff_fields(existing: dict, incoming: dict, fields: list[tuple]) -> list[dict]:
+    """fields: list of (label, existing_key, incoming_key) triples. Returns a
+    FieldDiff-shaped dict per field whose stringified values differ."""
+    diffs = []
+    for label, existing_key, incoming_key in fields:
+        old = existing.get(existing_key)
+        new = incoming.get(incoming_key)
+        old_norm = round(old, 2) if isinstance(old, float) else old
+        new_norm = round(new, 2) if isinstance(new, float) else new
+        if old_norm != new_norm and not (old_norm in (None, "") and new_norm in (None, "")):
+            diffs.append({"field": label, "existing": str(old) if old is not None else None, "incoming": str(new) if new is not None else None})
+    return diffs
+
+
+def parse_estimate_sheet(ws, existing_by_key: dict) -> list[dict]:
+    """existing_by_key: dict of (title, unit_cost) -> existing line item row
+    (id, quantity, markup_type, markup_value, description, notes_internal,
+    bucket), so a re-imported row can be compared field-by-field instead of
+    just flagged present/absent."""
     header_row = next(ws.iter_rows(min_row=1, max_row=1))
     col = {cell.value: i for i, cell in enumerate(header_row) if cell.value}
 
@@ -41,27 +65,52 @@ def parse_estimate_sheet(ws, existing_keys: set) -> list[dict]:
         description = cell(row, "Description")
         internal_notes = cell(row, "Internal Notes")
         markup_type, markup_value = ("percent", markup_raw) if markup_type_raw == "%" else ("flat", markup_raw)
+        incoming = {
+            "quantity": quantity,
+            "markup_type": markup_type,
+            "markup_value": markup_value,
+            "description": description,
+            "internal_notes": internal_notes,
+            "bucket": bucket_for(category, title),
+        }
+        existing = existing_by_key.get((title, unit_cost))
+        diff = (
+            _diff_fields(
+                existing,
+                incoming,
+                [
+                    ("Quantity", "quantity", "quantity"),
+                    ("Markup type", "markup_type", "markup_type"),
+                    ("Markup value", "markup_value", "markup_value"),
+                    ("Description", "description", "description"),
+                    ("Internal notes", "notes_internal", "internal_notes"),
+                    ("Bucket", "bucket", "bucket"),
+                ],
+            )
+            if existing
+            else []
+        )
         rows.append(
             {
                 "title": title,
                 "category": category,
                 "cost_code": parse_cost_code(raw_cost_code),
-                "quantity": quantity,
+                **incoming,
                 "unit_cost": unit_cost,
-                "markup_type": markup_type,
-                "markup_value": markup_value,
-                "description": description,
-                "internal_notes": internal_notes,
-                "bucket": bucket_for(category, title),
-                "already_present": (title, unit_cost) in existing_keys,
+                "already_present": existing is not None,
+                "existing_id": existing["id"] if existing else None,
+                "conflict": bool(diff),
+                "diff": diff,
             }
         )
     return rows
 
 
-def parse_quickbooks_sheet(ws, existing_keys: set) -> list[dict]:
-    """existing_keys: set of (date, amount, description[:60]) tuples already on
-    the project's transactions."""
+def parse_quickbooks_sheet(ws, existing_by_key: dict) -> list[dict]:
+    """existing_by_key: dict of (date, amount, description[:60]) -> existing
+    transaction row (id, vendor, transaction_type, payment_source), so a
+    re-imported row can be compared field-by-field instead of just flagged
+    present/absent."""
     rows: list[dict] = []
     section: Optional[str] = None
     for row in ws.iter_rows(min_row=1):
@@ -81,22 +130,55 @@ def parse_quickbooks_sheet(ws, existing_keys: set) -> list[dict]:
         signed_amount = abs(amount) if is_income else -abs(amount)
         description = memo_val or None
         key = (tx_date, round(signed_amount, 2), (description or "")[:60])
+        existing = existing_by_key.get(key)
+        incoming = {
+            "vendor": name_val or None,
+            "transaction_type": "income" if is_income else "expense",
+            "payment_source": section,
+        }
+        diff = (
+            _diff_fields(
+                existing,
+                incoming,
+                [
+                    ("Vendor", "vendor", "vendor"),
+                    ("Type", "transaction_type", "transaction_type"),
+                    ("Payment source", "payment_source", "payment_source"),
+                ],
+            )
+            if existing
+            else []
+        )
         rows.append(
             {
                 "date": tx_date,
-                "vendor": name_val or None,
-                "transaction_type": "income" if is_income else "expense",
                 "amount": signed_amount,
-                "payment_source": section,
+                **incoming,
                 "cost_code": parse_cost_code(code_val) if code_val else None,
                 "description": description,
-                "already_present": key in existing_keys,
+                "already_present": existing is not None,
+                "existing_id": existing["id"] if existing else None,
+                "conflict": bool(diff),
+                "diff": diff,
             }
         )
     return rows
 
 
-def parse_contractors_sheet(ws) -> list[dict]:
+def parse_contractors_sheet(
+    ws,
+    subs_by_name: dict,
+    existing_items_by_sub: dict,
+    existing_payment_keys: set,
+) -> list[dict]:
+    """subs_by_name: company_name.lower() -> subcontractor_id, for matching a
+    block to an existing subcontractor. existing_items_by_sub: subcontractor_id
+    -> {description: existing project_subcontractor_items row}, for flagging
+    already-present/conflicting contract line items instead of re-adding them
+    every time the sheet is re-imported. existing_payment_keys: the same
+    (date, amount, description[:60]) key space used for top-level transactions
+    (payments are inserted as transactions too), so a re-imported payment is
+    flagged present rather than duplicated."""
     blocks: list[dict] = []
     rows = list(ws.iter_rows(min_row=1))
     i = 0
@@ -149,11 +231,35 @@ def parse_contractors_sheet(ws) -> list[dict]:
                 i += 1
             i += 1  # past "Total Contract" row
             if contract_items or payments:
+                matched_id = subs_by_name.get(name.strip().lower())
+                existing_items = existing_items_by_sub.get(matched_id, {}) if matched_id else {}
+
+                items_out = []
+                for item in contract_items:
+                    existing = existing_items.get(item["description"])
+                    diff = _diff_fields(existing, item, [("Amount", "amount", "amount")]) if existing else []
+                    items_out.append(
+                        {
+                            **item,
+                            "already_present": existing is not None,
+                            "existing_id": existing["id"] if existing else None,
+                            "conflict": bool(diff),
+                            "diff": diff,
+                        }
+                    )
+
+                payments_out = []
+                for payment in payments:
+                    pay_desc = f"Payment to {name}"
+                    key = (payment["date"], round(-abs(payment["amount"]), 2), pay_desc[:60])
+                    payments_out.append({**payment, "already_present": key in existing_payment_keys})
+
                 blocks.append(
                     {
                         "subcontractor_name": name,
-                        "contract_items": contract_items,
-                        "payments": payments,
+                        "matched_subcontractor_id": matched_id,
+                        "contract_items": items_out,
+                        "payments": payments_out,
                     }
                 )
         else:
