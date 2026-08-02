@@ -15,6 +15,7 @@ from .routers import (
     estimates,
     files,
     invoices,
+    job_import,
     leads,
     messages,
     notification_settings,
@@ -83,3 +84,4 @@ app.include_router(pulse.router, prefix="/api")
 app.include_router(notification_settings.router, prefix="/api")
 app.include_router(smart_nudges.router, prefix="/api")
 app.include_router(weather.router, prefix="/api")
+app.include_router(job_import.router, prefix="/api")
