@@ -23,11 +23,13 @@ import { fmtD } from '../../lib/format';
 import type { Task, TaskSubtask, Project, UserDirectoryEntry } from '../../types';
 
 const COLUMNS = [
-  { id: 'upcoming', label: 'To Do' },
+  { id: 'upcoming', label: 'Recently Imported Tasks' },
   { id: 'in_progress', label: 'In Progress' },
   { id: 'delayed', label: 'Delayed / Blocked' },
   { id: 'complete', label: 'Done' },
 ];
+
+const DONE_COLLAPSED_KEY = 'mm.tasks.doneCollapsed';
 
 const PRIORITY_COLOR: Record<string, string> = {
   low: 'var(--green)',
@@ -361,6 +363,9 @@ function Column({
   onChanged,
   projects,
   directory,
+  collapsible,
+  collapsed,
+  onToggleCollapse,
 }: {
   id: string;
   label: string;
@@ -372,34 +377,49 @@ function Column({
   onChanged: () => void;
   projects: Project[];
   directory: UserDirectoryEntry[];
+  collapsible?: boolean;
+  collapsed?: boolean;
+  onToggleCollapse?: () => void;
 }) {
   const { setNodeRef } = useDroppable({ id });
   return (
     <div className="col" ref={setNodeRef}>
-      <div className="col-hd">
-        <span>{label}</span>
+      <div
+        className="col-hd"
+        style={collapsible ? { cursor: 'pointer' } : undefined}
+        onClick={collapsible ? onToggleCollapse : undefined}
+      >
+        <span style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+          {collapsible && (collapsed ? <IconChevronRight size={14} /> : <IconChevronDown size={14} />)}
+          {label}
+        </span>
         <span style={{ background: 'var(--border)', padding: '1px 7px', borderRadius: 10, fontSize: 11 }}>{taskIds.length}</span>
       </div>
-      <SortableContext items={taskIds} strategy={verticalListSortingStrategy}>
-        {taskIds.map((id) => {
-          const t = tasksById.get(id);
-          if (!t) return null;
-          return (
-            <TaskCard
-              key={id}
-              task={t}
-              onClick={() => onTaskClick(id)}
-              dragDisabled={dragDisabled}
-              onChanged={onChanged}
-              projects={projects}
-              directory={directory}
-            />
-          );
-        })}
-      </SortableContext>
-      <button className="btn btn-ghost btn-sm" style={{ width: '100%', marginTop: 6, color: 'var(--t2)', justifyContent: 'center' }} onClick={onAddTask}>
-        + Add
-      </button>
+      {/* Kept mounted (just hidden) rather than unmounted while collapsed, so
+          dnd-kit's SortableContext doesn't lose track of these items and drag-
+          and-drop into this column keeps working without expanding it first. */}
+      <div style={{ display: collapsed ? 'none' : undefined }}>
+        <SortableContext items={taskIds} strategy={verticalListSortingStrategy}>
+          {taskIds.map((id) => {
+            const t = tasksById.get(id);
+            if (!t) return null;
+            return (
+              <TaskCard
+                key={id}
+                task={t}
+                onClick={() => onTaskClick(id)}
+                dragDisabled={dragDisabled}
+                onChanged={onChanged}
+                projects={projects}
+                directory={directory}
+              />
+            );
+          })}
+        </SortableContext>
+        <button className="btn btn-ghost btn-sm" style={{ width: '100%', marginTop: 6, color: 'var(--t2)', justifyContent: 'center' }} onClick={onAddTask}>
+          + Add
+        </button>
+      </div>
     </div>
   );
 }
@@ -421,8 +441,23 @@ export function KanbanBoard({
   const [columns, setColumns] = useState<Record<string, string[]>>({});
   const [projects, setProjects] = useState<Project[]>([]);
   const [directory, setDirectory] = useState<UserDirectoryEntry[]>([]);
+  const [doneCollapsed, setDoneCollapsed] = useState(() => {
+    try {
+      return localStorage.getItem(DONE_COLLAPSED_KEY) === '1';
+    } catch {
+      return false;
+    }
+  });
   const tasksById = new Map(tasks.map((t) => [t.id, t]));
   const snapshotRef = useRef<Record<string, string[]> | null>(null);
+
+  useEffect(() => {
+    try {
+      localStorage.setItem(DONE_COLLAPSED_KEY, doneCollapsed ? '1' : '0');
+    } catch {
+      // ignore (e.g. private browsing / storage disabled)
+    }
+  }, [doneCollapsed]);
 
   useEffect(() => {
     const grouped: Record<string, string[]> = { upcoming: [], in_progress: [], delayed: [], complete: [] };
@@ -592,6 +627,9 @@ export function KanbanBoard({
               onChanged={onChanged}
               projects={projects}
               directory={directory}
+              collapsible={col.id === 'complete'}
+              collapsed={col.id === 'complete' && doneCollapsed}
+              onToggleCollapse={col.id === 'complete' ? () => setDoneCollapsed((v) => !v) : undefined}
             />
           ))}
         </div>
