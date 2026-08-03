@@ -5,7 +5,7 @@ import { NotificationTicker } from './NotificationTicker';
 import { TeamReminders } from './TeamReminders';
 import { CommandPalette } from './CommandPalette';
 import { AskAIWidget } from '../ai/AskAIWidget';
-import { QuickReminderWidget } from '../reminders/QuickReminderWidget';
+import { QuickTaskWidget } from '../reminders/QuickTaskWidget';
 
 export function AppLayout() {
   return (
@@ -19,7 +19,7 @@ export function AppLayout() {
         <Outlet />
       </div>
       <AskAIWidget />
-      <QuickReminderWidget />
+      <QuickTaskWidget />
       <TeamReminders />
       <CommandPalette />
     </>
