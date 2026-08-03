@@ -180,7 +180,11 @@ export default function Tasks() {
   const total = filtered.length;
   const inProgress = filtered.filter((t) => t.status === 'in_progress').length;
   const delayed = filtered.filter((t) => ['delayed', 'blocked'].includes(t.status)).length;
-  const done = filtered.filter((t) => t.status === 'complete').length;
+  const oneWeekAgo = new Date();
+  oneWeekAgo.setDate(oneWeekAgo.getDate() - 7);
+  const completedThisWeek = filtered.filter(
+    (t) => t.status === 'complete' && t.completed_at && new Date(t.completed_at) >= oneWeekAgo
+  ).length;
 
   return (
     <>
@@ -296,11 +300,10 @@ export default function Tasks() {
               </div>
             </div>
             <div className="metric">
-              <div className="m-label">Completed</div>
+              <div className="m-label">Completed this week</div>
               <div className="m-val" style={{ color: 'var(--green)' }}>
-                {done}/{total}
+                {completedThisWeek}
               </div>
-              <div className="m-sub">{total > 0 ? Math.round((done / total) * 100) : 0}% done</div>
             </div>
           </div>
 

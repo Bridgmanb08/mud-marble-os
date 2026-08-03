@@ -87,6 +87,7 @@ class TaskOut(BaseModel):
     clarify_from: Optional[str] = None
     version: int = 1
     created_at: str
+    completed_at: Optional[str] = None
     projects: Optional[ProjectBrief] = None
     subcontractors: Optional[SubcontractorBrief] = None
     subtask_total: int = 0

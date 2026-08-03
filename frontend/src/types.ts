@@ -29,6 +29,7 @@ export interface Task {
   clarify_from: string | null;
   version: number;
   created_at: string;
+  completed_at: string | null;
   projects: ProjectBrief | null;
   subcontractors: SubcontractorBrief | null;
   subtask_total: number;
