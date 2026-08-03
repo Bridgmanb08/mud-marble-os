@@ -44,6 +44,9 @@ export function InHouseImportSection({ projectId }: { projectId: string }) {
       setItemActions(
         result.contractors.map((block) => block.contract_items.map((item) => (item.already_present ? 'skip' : 'add')))
       );
+      if (result.dropped_count > 0) {
+        toast(`${result.dropped_count} row(s) couldn't be read clearly and were skipped`, true);
+      }
     } catch (err) {
       setError(err instanceof ApiError ? err.message : 'Failed to read that file');
     } finally {
@@ -153,10 +156,10 @@ export function InHouseImportSection({ projectId }: { projectId: string }) {
       {!preview ? (
         <div>
           <FileDropzone
-            accept=".xlsx,.xlsm,.xls"
+            accept=".xlsx,.xlsm,.xls,.pdf,.jpg,.jpeg,.png"
             file={file}
             onFileSelected={handleFileChange}
-            label="Drag and drop your In-House sheet here, or click to browse"
+            label="Drag and drop your In-House sheet (Excel, PDF, or photo) here, or click to browse"
           />
           <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginTop: 10 }}>
             <button className="btn btn-sm" onClick={handlePreview} disabled={!file || loadingPreview}>

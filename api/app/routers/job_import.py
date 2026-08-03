@@ -4,8 +4,15 @@ import io
 import openpyxl
 from fastapi import APIRouter, Depends, File, HTTPException, UploadFile
 
+from ..ai_provider import ProviderError, build_scan_content_block, extract_estimate_from_scan, extract_transactions_from_scan
 from ..deps import CurrentUser, get_current_user
-from ..inhouse_import import parse_contractors_sheet, parse_estimate_sheet, parse_quickbooks_sheet
+from ..inhouse_import import (
+    diff_estimate_scan_items,
+    diff_transaction_scan_items,
+    parse_contractors_sheet,
+    parse_estimate_sheet,
+    parse_quickbooks_sheet,
+)
 from ..schemas.job_import import (
     ContractorBlock,
     EstimateSheetPreview,
@@ -17,6 +24,13 @@ from ..schemas.job_import import (
 from ..supabase_client import db_get, db_post
 
 router = APIRouter(prefix="/job-import", tags=["job-import"])
+
+EXCEL_EXTS = (".xlsx", ".xlsm", ".xls")
+SCAN_EXTS = (".pdf", ".jpg", ".jpeg", ".png")
+
+
+def _ext(filename: str) -> str:
+    return ("." + filename.rsplit(".", 1)[-1].lower()) if filename and "." in filename else ""
 
 
 async def _notify_conflicts(user_id: str, project_id: str, project_name: str, count: int, section: str) -> None:
@@ -88,14 +102,9 @@ async def preview_estimate_sheet(
     project_id: str, file: UploadFile = File(...), current_user: CurrentUser = Depends(get_current_user)
 ):
     content = await file.read()
-    try:
-        wb = openpyxl.load_workbook(io.BytesIO(content), data_only=True)
-    except Exception as e:
-        raise HTTPException(status_code=400, detail=f"Could not read that file: {e}") from e
-
-    ws = _find_sheet(wb, "Estimate")
-    if ws is None:
-        raise HTTPException(status_code=400, detail="No sheet named 'Estimate' found in that file")
+    ext = _ext(file.filename or "")
+    if ext not in EXCEL_EXTS and ext not in SCAN_EXTS:
+        raise HTTPException(status_code=400, detail="Unsupported file type -- use an Excel workbook, JPEG, PNG, or PDF")
 
     project_rows, existing_estimates, cost_codes = await asyncio.gather(
         db_get("projects", f"?id=eq.{project_id}&select=name"),
@@ -117,7 +126,24 @@ async def preview_estimate_sheet(
         )
         existing_by_key = {(i["title"], i["unit_cost"]): i for i in existing_items}
 
-    parsed = parse_estimate_sheet(ws, existing_by_key)
+    dropped_count = 0
+    if ext in EXCEL_EXTS:
+        try:
+            wb = openpyxl.load_workbook(io.BytesIO(content), data_only=True)
+        except Exception as e:
+            raise HTTPException(status_code=400, detail=f"Could not read that file: {e}") from e
+        ws = _find_sheet(wb, "Estimate")
+        if ws is None:
+            raise HTTPException(status_code=400, detail="No sheet named 'Estimate' found in that file")
+        parsed = parse_estimate_sheet(ws, existing_by_key)
+    else:
+        try:
+            block = build_scan_content_block(content, file.filename or "", file.content_type)
+            items, dropped_count = await extract_estimate_from_scan(block)
+        except ProviderError as e:
+            raise HTTPException(status_code=502, detail=str(e)) from e
+        parsed = diff_estimate_scan_items(items, existing_by_key)
+
     rows = []
     conflict_count = 0
     for row in parsed:
@@ -131,7 +157,7 @@ async def preview_estimate_sheet(
             )
         )
     await _notify_conflicts(current_user.id, project_id, project_name, conflict_count, "estimate line item")
-    return EstimateSheetPreview(rows=rows, existing_estimate_id=existing_estimate_id)
+    return EstimateSheetPreview(rows=rows, existing_estimate_id=existing_estimate_id, dropped_count=dropped_count)
 
 
 @router.post("/{project_id}/inhouse-sheet/preview", response_model=InHouseSheetPreview)
@@ -139,17 +165,9 @@ async def preview_inhouse_sheet(
     project_id: str, file: UploadFile = File(...), current_user: CurrentUser = Depends(get_current_user)
 ):
     content = await file.read()
-    try:
-        wb = openpyxl.load_workbook(io.BytesIO(content), data_only=True)
-    except Exception as e:
-        raise HTTPException(status_code=400, detail=f"Could not read that file: {e}") from e
-
-    qb_ws = _find_sheet(wb, "Quickbooks")
-    contractors_ws = _find_sheet(wb, "Contractors")
-    if qb_ws is None and contractors_ws is None:
-        raise HTTPException(
-            status_code=400, detail="No sheet named 'Quickbooks' or 'Contractors' found in that file"
-        )
+    ext = _ext(file.filename or "")
+    if ext not in EXCEL_EXTS and ext not in SCAN_EXTS:
+        raise HTTPException(status_code=400, detail="Unsupported file type -- use an Excel workbook, JPEG, PNG, or PDF")
 
     project_rows, existing_tx, cost_codes, subcontractors, existing_sub_items = await asyncio.gather(
         db_get("projects", f"?id=eq.{project_id}&select=name"),
@@ -176,9 +194,46 @@ async def preview_inhouse_sheet(
         existing_items_by_sub.setdefault(item["subcontractor_id"], {})[item["description"]] = item
 
     transactions: list[TransactionSheetRow] = []
+    contractors: list[ContractorBlock] = []
     conflict_count = 0
-    if qb_ws is not None:
-        parsed_tx = parse_quickbooks_sheet(qb_ws, existing_tx_by_key)
+    dropped_count = 0
+
+    if ext in EXCEL_EXTS:
+        try:
+            wb = openpyxl.load_workbook(io.BytesIO(content), data_only=True)
+        except Exception as e:
+            raise HTTPException(status_code=400, detail=f"Could not read that file: {e}") from e
+        qb_ws = _find_sheet(wb, "Quickbooks")
+        contractors_ws = _find_sheet(wb, "Contractors")
+        if qb_ws is None and contractors_ws is None:
+            raise HTTPException(
+                status_code=400, detail="No sheet named 'Quickbooks' or 'Contractors' found in that file"
+            )
+        if qb_ws is not None:
+            parsed_tx = parse_quickbooks_sheet(qb_ws, existing_tx_by_key)
+            for row in parsed_tx:
+                code = row.get("cost_code")
+                if row.get("conflict"):
+                    conflict_count += 1
+                transactions.append(
+                    TransactionSheetRow(**row, matched_cost_code_id=codes_by_code.get(code.lower()) if code else None)
+                )
+        if contractors_ws is not None:
+            parsed_blocks = parse_contractors_sheet(contractors_ws, subs_by_name, existing_items_by_sub, existing_tx_keys)
+            for block in parsed_blocks:
+                contractors.append(ContractorBlock(**block))
+                conflict_count += sum(1 for item in block["contract_items"] if item.get("conflict"))
+    else:
+        # A photographed/scanned in-house sheet realistically only captures a
+        # bank statement or receipt page -- transactions only. The
+        # "Contractors" sheet (subcontractor blocks with contract items +
+        # payments) stays Excel-only; `contractors` is intentionally left empty.
+        try:
+            block = build_scan_content_block(content, file.filename or "", file.content_type)
+            items, dropped_count = await extract_transactions_from_scan(block)
+        except ProviderError as e:
+            raise HTTPException(status_code=502, detail=str(e)) from e
+        parsed_tx = diff_transaction_scan_items(items, existing_tx_by_key)
         for row in parsed_tx:
             code = row.get("cost_code")
             if row.get("conflict"):
@@ -187,12 +242,5 @@ async def preview_inhouse_sheet(
                 TransactionSheetRow(**row, matched_cost_code_id=codes_by_code.get(code.lower()) if code else None)
             )
 
-    contractors: list[ContractorBlock] = []
-    if contractors_ws is not None:
-        parsed_blocks = parse_contractors_sheet(contractors_ws, subs_by_name, existing_items_by_sub, existing_tx_keys)
-        for block in parsed_blocks:
-            contractors.append(ContractorBlock(**block))
-            conflict_count += sum(1 for item in block["contract_items"] if item.get("conflict"))
-
     await _notify_conflicts(current_user.id, project_id, project_name, conflict_count, "in-house sheet")
-    return InHouseSheetPreview(transactions=transactions, contractors=contractors)
+    return InHouseSheetPreview(transactions=transactions, contractors=contractors, dropped_count=dropped_count)

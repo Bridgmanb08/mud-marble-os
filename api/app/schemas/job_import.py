@@ -38,6 +38,7 @@ class EstimateSheetRow(BaseModel):
 class EstimateSheetPreview(BaseModel):
     rows: list[EstimateSheetRow]
     existing_estimate_id: Optional[str] = None
+    dropped_count: int = 0
 
 
 class TransactionSheetRow(BaseModel):
@@ -81,3 +82,4 @@ class ContractorBlock(BaseModel):
 class InHouseSheetPreview(BaseModel):
     transactions: list[TransactionSheetRow]
     contractors: list[ContractorBlock]
+    dropped_count: int = 0

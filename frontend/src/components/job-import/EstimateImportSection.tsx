@@ -38,6 +38,9 @@ export function EstimateImportSection({ projectId }: { projectId: string }) {
       // Conflicting rows default to "skip" (keep the existing record) -- Shannon
       // has to actively opt into overwriting a record with the imported values.
       setActions(result.rows.map((r) => (r.already_present ? 'skip' : 'add')));
+      if (result.dropped_count > 0) {
+        toast(`${result.dropped_count} row(s) couldn't be read clearly and were skipped`, true);
+      }
     } catch (err) {
       setError(err instanceof ApiError ? err.message : 'Failed to read that file');
     } finally {
@@ -108,10 +111,10 @@ export function EstimateImportSection({ projectId }: { projectId: string }) {
       {!preview ? (
         <div>
           <FileDropzone
-            accept=".xlsx,.xlsm,.xls"
+            accept=".xlsx,.xlsm,.xls,.pdf,.jpg,.jpeg,.png"
             file={file}
             onFileSelected={handleFileChange}
-            label="Drag and drop your Estimate sheet here, or click to browse"
+            label="Drag and drop your Estimate sheet (Excel, PDF, or photo) here, or click to browse"
           />
           <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginTop: 10 }}>
             <button className="btn btn-sm" onClick={handlePreview} disabled={!file || loadingPreview}>
