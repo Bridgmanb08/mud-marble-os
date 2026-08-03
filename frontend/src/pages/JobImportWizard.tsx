@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
-import { IconArrowLeft, IconPlus } from '@tabler/icons-react';
+import { IconArrowLeft, IconPlus, IconUpload } from '@tabler/icons-react';
 import { api } from '../api/client';
 import { fmt, fmtD } from '../lib/format';
 import { useToast } from '../components/ui/Toast';
@@ -8,6 +8,7 @@ import { NewInvoiceModal } from '../components/invoices/NewInvoiceModal';
 import { NewChangeOrderModal } from '../components/change-orders/NewChangeOrderModal';
 import { EstimateImportSection } from '../components/job-import/EstimateImportSection';
 import { InHouseImportSection } from '../components/job-import/InHouseImportSection';
+import { InvoiceImportSection } from '../components/job-import/InvoiceImportSection';
 import type { ChangeOrder, Invoice, Project } from '../types';
 
 const INVOICE_STATUS_BADGE: Record<string, string> = { draft: 'bg-gray', sent: 'bg-amber', paid: 'bg-green', overdue: 'bg-red', void: 'bg-gray' };
@@ -22,6 +23,7 @@ export default function JobImportWizard() {
   const [changeOrders, setChangeOrders] = useState<ChangeOrder[]>([]);
   const [showNewInvoice, setShowNewInvoice] = useState(false);
   const [showNewCO, setShowNewCO] = useState(false);
+  const [showInvoiceScan, setShowInvoiceScan] = useState(false);
 
   function loadFinancials() {
     if (!projectId) return;
@@ -71,13 +73,31 @@ export default function JobImportWizard() {
             Invoices &amp; Change Orders
           </div>
           <div style={{ display: 'flex', gap: 8 }}>
-            <button className="btn btn-sm" onClick={() => setShowNewInvoice(true)}>
-              <IconPlus size={14} /> Add invoice
-            </button>
-            <button className="btn btn-sm" onClick={() => setShowNewCO(true)}>
-              <IconPlus size={14} /> Add change order
+            <button className="btn btn-sm" onClick={() => setShowInvoiceScan((v) => !v)}>
+              <IconUpload size={14} /> Upload invoice scan
             </button>
           </div>
+        </div>
+
+        {showInvoiceScan && (
+          <div style={{ padding: 14, border: '1px solid var(--border)', borderRadius: 'var(--r)', marginBottom: 14 }}>
+            <InvoiceImportSection
+              projectId={projectId}
+              onImported={() => {
+                setShowInvoiceScan(false);
+                loadFinancials();
+              }}
+            />
+          </div>
+        )}
+
+        <div style={{ display: 'flex', gap: 8, marginBottom: 14 }}>
+          <button className="btn btn-sm" onClick={() => setShowNewInvoice(true)}>
+            <IconPlus size={14} /> Add invoice
+          </button>
+          <button className="btn btn-sm" onClick={() => setShowNewCO(true)}>
+            <IconPlus size={14} /> Add change order
+          </button>
         </div>
 
         {invoices.length === 0 && changeOrders.length === 0 ? (
