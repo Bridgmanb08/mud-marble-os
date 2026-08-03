@@ -180,6 +180,14 @@ async def import_tasks(body: ImportTasksRequest, _: CurrentUser = Depends(get_cu
     )
     notes = _import_note(body.meeting_date, body.attendees)
 
+    # Imported tasks should land at the top of "To Do" (same reasoning as a
+    # manually-created task -- see create_task in routers/tasks.py), with the
+    # batch keeping its own extraction order above whatever was already there.
+    existing_min = await db_get(
+        "schedule_items", "?status=eq.upcoming&order=position.asc&limit=1&select=position"
+    )
+    next_position = (existing_min[0]["position"] - len(body.tasks)) if existing_min else 0
+
     imported = 0
     for task in body.tasks:
         matched = None
@@ -207,8 +215,10 @@ async def import_tasks(body: ImportTasksRequest, _: CurrentUser = Depends(get_cu
                 "assigned_to": task.assigned_to or "shannon",
                 "status": "upcoming",
                 "notes": notes,
+                "position": next_position,
             },
         )
+        next_position += 1
         imported += 1
 
     return ImportTasksResponse(imported=imported)

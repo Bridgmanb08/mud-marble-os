@@ -106,10 +106,14 @@ async def create_task(body: TaskCreate, _: CurrentUser = Depends(get_current_use
     data = body.model_dump(exclude_none=True)
     if data.get("assignees"):
         data["assigned_to"] = data["assignees"][0]
+    # A freshly-created task should land at the top of its column, not the
+    # bottom -- it's the thing that just came up, so it should be visible
+    # without scrolling. Lower position sorts first (list_tasks orders
+    # position.asc), so go one below the current minimum.
     siblings = await db_get(
-        "schedule_items", f"?status=eq.{body.status}&order=position.desc&limit=1&select=position"
+        "schedule_items", f"?status=eq.{body.status}&order=position.asc&limit=1&select=position"
     )
-    data["position"] = (siblings[0]["position"] + 1) if siblings else 0
+    data["position"] = (siblings[0]["position"] - 1) if siblings else 0
     rows = await db_post("schedule_items", data)
     full = await db_get("schedule_items", f"?id=eq.{rows[0]['id']}&select=*,projects(name),subcontractors(company_name,trade)")
     enriched = await _enrich(full)
