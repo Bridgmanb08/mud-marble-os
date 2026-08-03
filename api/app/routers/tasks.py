@@ -28,6 +28,7 @@ from ..schemas.tasks import (
     TaskUpdate,
 )
 from ..supabase_client import db_delete, db_get, db_patch, db_patch_query, db_post
+from ..team_roster import normalize_assignee_name
 
 router = APIRouter(prefix="/tasks", tags=["tasks"])
 
@@ -105,7 +106,10 @@ async def list_tasks(
 async def create_task(body: TaskCreate, _: CurrentUser = Depends(get_current_user)):
     data = body.model_dump(exclude_none=True)
     if data.get("assignees"):
+        data["assignees"] = [normalize_assignee_name(a) for a in data["assignees"]]
         data["assigned_to"] = data["assignees"][0]
+    elif data.get("assigned_to"):
+        data["assigned_to"] = normalize_assignee_name(data["assigned_to"])
     # A freshly-created task should land at the top of its column, not the
     # bottom -- it's the thing that just came up, so it should be visible
     # without scrolling. Lower position sorts first (list_tasks orders
@@ -181,8 +185,9 @@ async def bulk_update_tasks(body: BulkUpdateRequest, _: CurrentUser = Depends(ge
     if body.status is not None:
         updates["status"] = body.status
     if body.assigned_to is not None:
-        updates["assigned_to"] = body.assigned_to
-        updates["assignees"] = [body.assigned_to] if body.assigned_to else []
+        normalized = normalize_assignee_name(body.assigned_to)
+        updates["assigned_to"] = normalized
+        updates["assignees"] = [normalized] if normalized else []
     if not updates:
         raise HTTPException(status_code=400, detail="No fields to update")
 
@@ -373,7 +378,10 @@ async def update_task(task_id: str, body: TaskUpdate, _: CurrentUser = Depends(g
 
     updates = body.model_dump(exclude_none=True, exclude={"expected_version"})
     if "assignees" in updates:
+        updates["assignees"] = [normalize_assignee_name(a) for a in updates["assignees"]]
         updates["assigned_to"] = updates["assignees"][0] if updates["assignees"] else None
+    elif "assigned_to" in updates:
+        updates["assigned_to"] = normalize_assignee_name(updates["assigned_to"])
     if target_status == "complete" and current[0]["status"] != "complete":
         updates["completed_at"] = datetime.now(timezone.utc).isoformat()
     elif target_status != "complete" and current[0]["status"] == "complete":

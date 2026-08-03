@@ -19,6 +19,7 @@ from ..schemas.ai import (
     ToolCallLog,
 )
 from ..supabase_client import db_get, db_post
+from ..team_roster import normalize_assignee_name
 
 router = APIRouter(prefix="/ai", tags=["ai"])
 
@@ -73,7 +74,7 @@ as a project note. Use null for either if the transcript is too thin to summariz
 Return ONLY a JSON object with this structure (no markdown, no explanation):
 {{
   "tasks": [
-    {{"title": "task description", "assigned_to": "brent|shannon|alex|faith", "project": "exact project name from the list above, or null", "priority": "high|normal"}}
+    {{"title": "task description", "assigned_to": "Brent Bridgman|Shannon Ingram|Alex Peralta|Faith Wyatt", "project": "exact project name from the list above, or null", "priority": "high|normal"}}
   ],
   "project_updates": [
     {{"project": "exact project name from the list above", "update": "what was discussed"}}
@@ -212,7 +213,7 @@ async def import_tasks(body: ImportTasksRequest, _: CurrentUser = Depends(get_cu
             {
                 "project_id": matched["id"] if matched else None,
                 "title": task.title,
-                "assigned_to": task.assigned_to or "shannon",
+                "assigned_to": normalize_assignee_name(task.assigned_to) or "Shannon Ingram",
                 "status": "upcoming",
                 "notes": notes,
                 "position": next_position,
