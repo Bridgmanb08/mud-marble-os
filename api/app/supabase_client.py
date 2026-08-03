@@ -32,10 +32,11 @@ def _get_client() -> httpx.AsyncClient:
     return _client
 
 
-async def _request(method: str, url: str, **kwargs) -> httpx.Response:
+async def _request(method: str, url: str, extra_headers: Optional[dict] = None, **kwargs) -> httpx.Response:
     try:
         client = _get_client()
-        r = await client.request(method, url, headers=_headers(), **kwargs)
+        headers = {**_headers(), **(extra_headers or {})}
+        r = await client.request(method, url, headers=headers, **kwargs)
     except httpx.HTTPError as exc:
         raise HTTPException(status_code=502, detail=f"Could not reach Supabase: {exc}") from exc
     if not r.is_success:
@@ -43,9 +44,49 @@ async def _request(method: str, url: str, **kwargs) -> httpx.Response:
     return r
 
 
+_PAGE_SIZE = 1000
+
+
 async def db_get(table: str, query: str = "") -> list[dict]:
-    r = await _request("GET", f"{_base_url()}/{table}{query}")
-    return r.json()
+    """A table that grows past whatever row cap PostgREST enforces
+    (db-max-rows) gets silently truncated on a plain GET -- PostgREST returns
+    206 Partial Content, which still counts as a "success" response, so a
+    caller with no idea the cap exists just gets fewer rows back than
+    actually exist (this is exactly what happened to schedule_items once the
+    historical-data backfill pushed it past whatever the configured cap is).
+    Page through with Range/Content-Range and an exact count until every row
+    has been fetched, unless the caller already specified their own `limit=`
+    -- that's an intentional bound, not something to paginate past."""
+    if "limit=" in query:
+        r = await _request("GET", f"{_base_url()}/{table}{query}")
+        return r.json()
+
+    all_rows: list[dict] = []
+    offset = 0
+    while True:
+        r = await _request(
+            "GET",
+            f"{_base_url()}/{table}{query}",
+            extra_headers={
+                "Range-Unit": "items",
+                "Range": f"{offset}-{offset + _PAGE_SIZE - 1}",
+                "Prefer": "return=representation,count=exact",
+            },
+        )
+        page = r.json()
+        all_rows.extend(page)
+        offset += len(page)
+
+        total = None
+        content_range = r.headers.get("content-range", "")
+        if "/" in content_range:
+            total_part = content_range.rsplit("/", 1)[1]
+            if total_part.isdigit():
+                total = int(total_part)
+
+        if not page or (total is not None and offset >= total) or (total is None and len(page) < _PAGE_SIZE):
+            break
+    return all_rows
 
 
 async def db_post(table: str, data: dict) -> list[dict]:
