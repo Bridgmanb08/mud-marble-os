@@ -1110,3 +1110,21 @@ export interface InHouseSheetPreview {
   contractors: ContractorBlock[];
   dropped_count: number;
 }
+
+export interface InvoiceScanRow {
+  invoice_number: string | null;
+  invoice_type: string;
+  amount_due: number;
+  due_date: string | null;
+  notes_external: string | null;
+  confidence: string;
+  uncertain_fields: string[];
+  already_present: boolean;
+  existing_id: string | null;
+  conflict: boolean;
+  diff: FieldDiff[];
+}
+
+export interface InvoiceScanPreview {
+  row: InvoiceScanRow;
+}
