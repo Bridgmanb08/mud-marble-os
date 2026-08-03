@@ -19,7 +19,7 @@ from typing import Optional
 from .estimate_import import bucket_for, parse_cost_code
 
 
-def _diff_fields(existing: dict, incoming: dict, fields: list[tuple]) -> list[dict]:
+def diff_fields_helper(existing: dict, incoming: dict, fields: list[tuple]) -> list[dict]:
     """fields: list of (label, existing_key, incoming_key) triples. Returns a
     FieldDiff-shaped dict per field whose stringified values differ."""
     diffs = []
@@ -57,7 +57,7 @@ def diff_and_wrap_estimate_row(title: str, unit_cost: float, category: Optional[
     sources is how `incoming` gets built and which fields are worth diffing;
     the dedupe/diff *logic* is identical either way."""
     existing = existing_by_key.get((title, unit_cost))
-    diff = _diff_fields(existing, incoming, diff_fields) if existing else []
+    diff = diff_fields_helper(existing, incoming, diff_fields) if existing else []
     return {
         "title": title,
         "category": category,
@@ -152,7 +152,7 @@ def diff_and_wrap_transaction_row(tx_date: str, signed_amount: float, cost_code_
     (diff_transaction_scan_items)."""
     key = (tx_date, round(signed_amount, 2), (description or "")[:60])
     existing = existing_by_key.get(key)
-    diff = _diff_fields(existing, incoming, diff_fields) if existing else []
+    diff = diff_fields_helper(existing, incoming, diff_fields) if existing else []
     return {
         "date": tx_date,
         "amount": signed_amount,
@@ -282,7 +282,7 @@ def parse_contractors_sheet(
                 items_out = []
                 for item in contract_items:
                     existing = existing_items.get(item["description"])
-                    diff = _diff_fields(existing, item, [("Amount", "amount", "amount")]) if existing else []
+                    diff = diff_fields_helper(existing, item, [("Amount", "amount", "amount")]) if existing else []
                     items_out.append(
                         {
                             **item,

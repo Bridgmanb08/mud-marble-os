@@ -30,6 +30,9 @@ async def create_invoice(body: InvoiceCreate, _: CurrentUser = Depends(get_curre
 
 @router.patch("/{invoice_id}", response_model=InvoiceOut)
 async def update_invoice(invoice_id: str, body: InvoiceUpdate, _: CurrentUser = Depends(get_current_user)):
-    await db_patch("invoices", invoice_id, body.model_dump(exclude_none=True))
+    # exclude_unset (not exclude_none) -- a caller may need to explicitly clear
+    # a field (e.g. an import correction clearing notes_external), and that
+    # null has to reach the database instead of being silently dropped.
+    await db_patch("invoices", invoice_id, body.model_dump(exclude_unset=True))
     full = await db_get("invoices", f"?id=eq.{invoice_id}&select=*,projects(name)")
     return full[0]

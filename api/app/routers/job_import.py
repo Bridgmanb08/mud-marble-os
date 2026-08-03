@@ -1,13 +1,21 @@
 import asyncio
 import io
+import uuid
 
 import openpyxl
 from fastapi import APIRouter, Depends, File, HTTPException, UploadFile
 
-from ..ai_provider import ProviderError, build_scan_content_block, extract_estimate_from_scan, extract_transactions_from_scan
+from ..ai_provider import (
+    ProviderError,
+    build_scan_content_block,
+    extract_estimate_from_scan,
+    extract_invoice_from_document,
+    extract_transactions_from_scan,
+)
 from ..deps import CurrentUser, get_current_user
 from ..inhouse_import import (
     diff_estimate_scan_items,
+    diff_fields_helper,
     diff_transaction_scan_items,
     parse_contractors_sheet,
     parse_estimate_sheet,
@@ -18,12 +26,17 @@ from ..schemas.job_import import (
     EstimateSheetPreview,
     EstimateSheetRow,
     InHouseSheetPreview,
+    InvoiceScanPreview,
+    InvoiceScanRow,
     JobImportStatus,
     TransactionSheetRow,
 )
+from ..storage_client import upload_object
 from ..supabase_client import db_get, db_post
 
 router = APIRouter(prefix="/job-import", tags=["job-import"])
+
+FILES_BUCKET = "project-files"
 
 EXCEL_EXTS = (".xlsx", ".xlsm", ".xls")
 SCAN_EXTS = (".pdf", ".jpg", ".jpeg", ".png")
@@ -244,3 +257,110 @@ async def preview_inhouse_sheet(
 
     await _notify_conflicts(current_user.id, project_id, project_name, conflict_count, "in-house sheet")
     return InHouseSheetPreview(transactions=transactions, contractors=contractors, dropped_count=dropped_count)
+
+
+def _flatten_workbook_to_text(content: bytes) -> str:
+    """No fixed invoice template exists (unlike Estimate/In-House, which mirror
+    Brent's one real template), so an Excel invoice doesn't get a deterministic
+    parser -- every cell gets dumped into a plain-text grid and handed to the
+    same AI extraction function used for images. Claude reads messy tabular
+    text fine."""
+    wb = openpyxl.load_workbook(io.BytesIO(content), data_only=True)
+    lines = []
+    for sheet in wb.worksheets:
+        lines.append(f"[Sheet: {sheet.title}]")
+        for row in sheet.iter_rows():
+            values = [str(c.value) for c in row if c.value not in (None, "")]
+            if values:
+                lines.append(" | ".join(values))
+    return "\n".join(lines)
+
+
+async def _archive_scan(project_id: str, user_id: str, filename: str, content: bytes, content_type: str, label: str) -> None:
+    """Best-effort, non-blocking: saves the original scan into the project's
+    Files tab for later reference. A failed archive copy must never block the
+    actual import -- this runs after a successful preview and swallows its
+    own errors."""
+    try:
+        storage_path = f"{project_id}/{uuid.uuid4()}_{filename or 'scan'}"
+        await upload_object(FILES_BUCKET, storage_path, content, content_type or "application/octet-stream")
+        await db_post(
+            "project_files",
+            {
+                "project_id": project_id,
+                "uploaded_by": user_id,
+                "file_name": f"{label} - {filename or 'scan'}",
+                "file_type": "other",
+                "mime_type": content_type,
+                "size_bytes": len(content),
+                "storage_path": storage_path,
+            },
+        )
+    except Exception:
+        pass
+
+
+_INVOICE_DIFF_FIELDS = [
+    ("Type", "invoice_type", "invoice_type"),
+    ("Amount due", "amount_due", "amount_due"),
+    ("Due date", "due_date", "due_date"),
+    ("Notes", "notes_external", "notes_external"),
+]
+
+
+@router.post("/{project_id}/invoice-scan/preview", response_model=InvoiceScanPreview)
+async def preview_invoice_scan(
+    project_id: str, file: UploadFile = File(...), current_user: CurrentUser = Depends(get_current_user)
+):
+    content = await file.read()
+    filename = file.filename or ""
+    ext = _ext(filename)
+    if ext not in EXCEL_EXTS and ext not in SCAN_EXTS:
+        raise HTTPException(status_code=400, detail="Unsupported file type -- use an Excel workbook, JPEG, PNG, or PDF")
+
+    project_rows, existing_invoices = await asyncio.gather(
+        db_get("projects", f"?id=eq.{project_id}&select=name"),
+        db_get("invoices", f"?project_id=eq.{project_id}&select=id,invoice_number,invoice_type,amount_due,due_date,notes_external"),
+    )
+    if not project_rows:
+        raise HTTPException(status_code=404, detail="Project not found")
+    project_name = project_rows[0]["name"].split("|")[0].strip()
+    existing_by_number = {i["invoice_number"]: i for i in existing_invoices if i.get("invoice_number")}
+
+    try:
+        if ext in EXCEL_EXTS:
+            content_block = {"type": "text", "text": _flatten_workbook_to_text(content)}
+        else:
+            content_block = build_scan_content_block(content, filename, file.content_type)
+        extraction = await extract_invoice_from_document(content_block)
+    except ProviderError as e:
+        raise HTTPException(status_code=502, detail=str(e)) from e
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=f"Could not read that file: {e}") from e
+
+    # No reliable fallback key exists when a scan doesn't show an invoice
+    # number -- rather than risk a silent wrong match on amount/date alone,
+    # an invoice with no number is always treated as new and left to the
+    # reviewer to notice if it's actually a duplicate.
+    existing = existing_by_number.get(extraction.invoice_number) if extraction.invoice_number else None
+    incoming = {
+        "invoice_type": extraction.invoice_type,
+        "amount_due": extraction.amount_due,
+        "due_date": extraction.due_date,
+        "notes_external": extraction.notes_external,
+    }
+    diff = diff_fields_helper(existing, incoming, _INVOICE_DIFF_FIELDS) if existing else []
+
+    row = InvoiceScanRow(
+        invoice_number=extraction.invoice_number,
+        **incoming,
+        confidence=extraction.confidence,
+        uncertain_fields=extraction.uncertain_fields,
+        already_present=existing is not None,
+        existing_id=existing["id"] if existing else None,
+        conflict=bool(diff),
+        diff=diff,
+    )
+    await _notify_conflicts(current_user.id, project_id, project_name, 1 if diff else 0, "invoice")
+    await _archive_scan(project_id, current_user.id, filename, content, file.content_type or "", "Invoice scan")
+    return InvoiceScanPreview(row=row)

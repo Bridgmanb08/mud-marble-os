@@ -15,6 +15,11 @@ class InvoiceCreate(BaseModel):
 class InvoiceUpdate(BaseModel):
     status: Optional[str] = None
     amount_paid: Optional[float] = None
+    invoice_number: Optional[str] = None
+    invoice_type: Optional[str] = None
+    amount_due: Optional[float] = None
+    due_date: Optional[str] = None
+    notes_external: Optional[str] = None
 
 
 class ProjectBrief(BaseModel):
