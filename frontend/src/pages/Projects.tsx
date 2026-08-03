@@ -10,7 +10,8 @@ import { Skeleton } from '../components/ui/Skeleton';
 
 const STATUS_BADGE: Record<string, string> = {
   active: 'bg-green',
-  complete: 'bg-green',
+  closed: 'bg-green',
+  warranty: 'bg-blue',
   estimating: 'bg-amber',
   proposed: 'bg-blue',
   pre_construction: 'bg-purple',
@@ -21,9 +22,9 @@ const STATUS_BADGE: Record<string, string> = {
   lost: 'bg-red',
 };
 
-const STATUS_OPTIONS = ['lead', 'vetting', 'estimating', 'proposed', 'pre_construction', 'active', 'complete', 'on_hold', 'punch_list', 'lost'];
+const STATUS_OPTIONS = ['lead', 'vetting', 'estimating', 'proposed', 'pre_construction', 'active', 'closed', 'warranty', 'on_hold', 'punch_list', 'lost'];
 
-const FILTERS = ['all', 'lead', 'vetting', 'estimating', 'proposed', 'pre_construction', 'active', 'complete', 'on_hold'];
+const FILTERS = ['all', 'lead', 'vetting', 'estimating', 'proposed', 'pre_construction', 'active', 'closed', 'warranty', 'on_hold'];
 
 function projectTitle(name: string) {
   return name.replace(/\|.*/, '').trim();

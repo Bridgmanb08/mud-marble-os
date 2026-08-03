@@ -309,7 +309,7 @@ TOOLS: list[dict] = [
         "input_schema": {
             "type": "object",
             "properties": {
-                "status": {"type": "string", "description": "Exact status, e.g. lead, estimating, proposed, pre_construction, active, complete"},
+                "status": {"type": "string", "description": "Exact status, e.g. lead, estimating, proposed, pre_construction, active, closed, warranty"},
                 "health_status": {"type": "string", "description": "green, yellow, or red"},
                 "name_contains": {"type": "string", "description": "Case-insensitive substring of project name or address"},
                 "limit": {"type": "integer", "description": "Max rows (default 20, max 50)"},

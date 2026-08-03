@@ -23,7 +23,7 @@ CO_TYPES = [
     ("unforeseen", "Unforeseen conditions"),
 ]
 
-PROJECT_PERFORMANCE_STATUSES = {"active", "complete", "punch_list"}
+PROJECT_PERFORMANCE_STATUSES = {"active", "closed", "warranty", "punch_list"}
 
 
 @router.get("", response_model=SubIntelligenceSummary)
