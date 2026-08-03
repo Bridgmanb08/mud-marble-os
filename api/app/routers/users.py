@@ -4,6 +4,7 @@ from ..deps import CurrentUser, get_current_user, require_admin
 from ..schemas.users import PasswordReset, UserCreate, UserDirectoryEntry, UserSummary
 from ..security import hash_password
 from ..supabase_client import db_get, db_patch, db_post
+from ..team_roster import CANONICAL_NAMES
 
 router = APIRouter(prefix="/users", tags=["users"])
 
@@ -43,4 +44,17 @@ async def reset_password(user_id: str, body: PasswordReset, _: CurrentUser = Dep
 
 @router.get("/directory", response_model=list[UserDirectoryEntry])
 async def list_user_directory(_: CurrentUser = Depends(get_current_user)):
-    return await db_get("app_users", "?select=id,name&order=name.asc")
+    """Every logged-in account, plus the rest of the team roster for anyone
+    who's an assignable person but doesn't (or doesn't yet) have a login --
+    e.g. a site foreman who tasks get assigned to but who never signs into
+    the app. Assignment is just a name string, not a foreign key, so this
+    union keeps the assignee picker complete without requiring an account
+    for every real person."""
+    real_users = await db_get("app_users", "?select=id,name&order=name.asc")
+    real_names = {u["name"] for u in real_users}
+    entries = list(real_users)
+    for name in CANONICAL_NAMES:
+        if name not in real_names:
+            entries.append({"id": f"roster:{name}", "name": name})
+    entries.sort(key=lambda u: u["name"])
+    return entries
