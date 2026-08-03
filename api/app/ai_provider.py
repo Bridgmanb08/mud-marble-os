@@ -1,3 +1,4 @@
+import base64
 import json
 from typing import Literal, Optional
 
@@ -520,3 +521,263 @@ async def generate_smart_nudge(ctx: SmartNudgeContext, focus_job: Optional[str] 
     if not isinstance(parsed, dict):
         raise ProviderError("Response JSON was not an object")
     return SmartNudgeResult(message=parsed.get("message"))
+
+
+# -- scanned/photographed document import --------------------------------
+# Everything below reads a document Claude has never seen structured data
+# from before -- a photographed or scanned invoice, change order, estimate
+# page, or bank statement -- and turns it into the same row shapes the
+# deterministic Excel parsers in inhouse_import.py already produce. This is
+# the first place in the codebase that sends an image/PDF content block to
+# Claude rather than plain text.
+
+_SCAN_MIME_BY_EXT = {
+    ".pdf": "application/pdf",
+    ".jpg": "image/jpeg",
+    ".jpeg": "image/jpeg",
+    ".png": "image/png",
+}
+
+
+def build_scan_content_block(content: bytes, filename: str, content_type: Optional[str] = None) -> dict:
+    """An `image` block for jpeg/png, a `document` block for pdf -- Claude reads
+    PDF pages natively, no rasterization needed. Raises ProviderError for
+    anything else (notably HEIC, which iPhones default to for camera photos
+    but which Claude's vision API doesn't accept) rather than sending garbage
+    to the API."""
+    ext = ("." + filename.rsplit(".", 1)[-1].lower()) if filename and "." in filename else ""
+    mime = content_type if content_type in ("application/pdf", "image/jpeg", "image/png") else _SCAN_MIME_BY_EXT.get(ext)
+    if not mime:
+        raise ProviderError(f"Unsupported scan file type for {filename!r} -- use JPEG, PNG, or PDF (not HEIC)")
+    block_type = "document" if mime == "application/pdf" else "image"
+    return {
+        "type": block_type,
+        "source": {"type": "base64", "media_type": mime, "data": base64.b64encode(content).decode()},
+    }
+
+
+def _parse_json_object(raw_text: str) -> dict:
+    raw = raw_text.replace("```json", "").replace("```", "").strip()
+    try:
+        parsed = json.loads(raw)
+    except json.JSONDecodeError as e:
+        raise ProviderError(f"Response couldn't be parsed as JSON: {e}") from e
+    if not isinstance(parsed, dict):
+        raise ProviderError("Response JSON was not an object")
+    return parsed
+
+
+_UNCERTAINTY_INSTRUCTIONS = """Never guess a value and report it as confident. If a field is illegible, cut \
+off, or genuinely absent, use null (or the stated default) for that field and list its name in \
+"uncertain_fields" -- an estimator or bookkeeper will double-check anything flagged there before it's saved, \
+so it's always safer to flag uncertainty than to silently invent a number."""
+
+
+ESTIMATE_SCAN_PROMPT = """You are reading a photographed or scanned page from a construction estimate for \
+Mud & Marble, a luxury residential builder, and extracting it into structured line items.
+
+{uncertainty}
+
+Return ONLY a JSON object with this exact structure (no markdown, no explanation):
+{{
+  "items": [
+    {{"title": "Building Permit", "category": "10 - Sitework", "cost_code": "01.05", "quantity": 1, \
+"unit_cost": 500, "markup_type": "percent", "markup_value": 15, "description": "City permit fee", \
+"confidence": "high", "uncertain_fields": []}}
+  ]
+}}
+`markup_type` is always "percent" or "flat". Default `quantity` to 1 and `markup_type` to "percent" when not \
+shown rather than leaving them null. If nothing readable looks like an estimate line item, return {{"items": []}}."""
+
+
+class EstimateScanItem(BaseModel):
+    title: str
+    category: Optional[str] = None
+    cost_code: Optional[str] = None
+    quantity: float = 1
+    unit_cost: float = 0
+    markup_type: Literal["percent", "flat"] = "percent"
+    markup_value: float = 0
+    description: Optional[str] = None
+    confidence: Literal["high", "low"] = "high"
+    uncertain_fields: list[str] = []
+
+
+async def extract_estimate_from_scan(content_block: dict) -> tuple[list[EstimateScanItem], int]:
+    """Returns (items, dropped_count) -- a malformed item is dropped rather
+    than failing the whole scan, same graceful-degradation convention as
+    extract_estimate_from_transcript."""
+    client = _client()
+    message = await client.messages.create(
+        model=MODEL,
+        max_tokens=4096,
+        messages=[
+            {
+                "role": "user",
+                "content": [content_block, {"type": "text", "text": ESTIMATE_SCAN_PROMPT.format(uncertainty=_UNCERTAINTY_INSTRUCTIONS)}],
+            }
+        ],
+    )
+    raw = message.content[0].text if message.content else "{}"
+    parsed = _parse_json_object(raw)
+    raw_items = parsed.get("items", [])
+    if not isinstance(raw_items, list):
+        raise ProviderError("Response JSON did not contain an items list")
+
+    items: list[EstimateScanItem] = []
+    dropped = 0
+    for raw_item in raw_items:
+        try:
+            items.append(EstimateScanItem(**raw_item))
+        except ValidationError:
+            dropped += 1
+    return items, dropped
+
+
+TRANSACTION_SCAN_PROMPT = """You are reading a photographed or scanned bank statement, receipt, or transaction \
+list for a construction job at Mud & Marble, and extracting each transaction.
+
+{uncertainty}
+
+Return ONLY a JSON object with this exact structure (no markdown, no explanation):
+{{
+  "items": [
+    {{"date": "2026-06-01", "vendor": "City of Indianapolis", "transaction_type": "expense", "amount": 500, \
+"payment_source": "GC Rehab", "description": "Building permit fee", "confidence": "high", "uncertain_fields": []}}
+  ]
+}}
+`date` is always ISO format (YYYY-MM-DD). `transaction_type` is "income" or "expense". `amount` is always \
+positive -- the transaction_type conveys direction. If nothing readable looks like a transaction, return \
+{{"items": []}}."""
+
+
+class TransactionScanItem(BaseModel):
+    date: str
+    vendor: Optional[str] = None
+    transaction_type: Literal["income", "expense"] = "expense"
+    amount: float
+    payment_source: Optional[str] = None
+    description: Optional[str] = None
+    confidence: Literal["high", "low"] = "high"
+    uncertain_fields: list[str] = []
+
+
+async def extract_transactions_from_scan(content_block: dict) -> tuple[list[TransactionScanItem], int]:
+    client = _client()
+    message = await client.messages.create(
+        model=MODEL,
+        max_tokens=4096,
+        messages=[
+            {
+                "role": "user",
+                "content": [content_block, {"type": "text", "text": TRANSACTION_SCAN_PROMPT.format(uncertainty=_UNCERTAINTY_INSTRUCTIONS)}],
+            }
+        ],
+    )
+    raw = message.content[0].text if message.content else "{}"
+    parsed = _parse_json_object(raw)
+    raw_items = parsed.get("items", [])
+    if not isinstance(raw_items, list):
+        raise ProviderError("Response JSON did not contain an items list")
+
+    items: list[TransactionScanItem] = []
+    dropped = 0
+    for raw_item in raw_items:
+        try:
+            items.append(TransactionScanItem(**raw_item))
+        except ValidationError:
+            dropped += 1
+    return items, dropped
+
+
+INVOICE_SCAN_PROMPT = """You are reading a photographed, scanned, or exported invoice for a construction job at \
+Mud & Marble, a luxury residential builder, and extracting it into a single structured record.
+
+{uncertainty}
+
+Return ONLY a JSON object with this exact structure (no markdown, no explanation):
+{{"invoice_number": "1042", "invoice_type": "progress", "amount_due": 12500.00, "due_date": "2026-07-15", \
+"notes_external": "Progress payment 3 of 5", "confidence": "high", "uncertain_fields": []}}
+`invoice_type` is one of "progress", "final", "deposit", "retainage", "other" -- default to "progress" if \
+unclear. `due_date` is ISO format (YYYY-MM-DD) or null if not shown. `invoice_number` is null if the document \
+doesn't clearly show one -- never invent one."""
+
+
+class InvoiceExtraction(BaseModel):
+    invoice_number: Optional[str] = None
+    invoice_type: Literal["progress", "final", "deposit", "retainage", "other"] = "progress"
+    amount_due: float = 0
+    due_date: Optional[str] = None
+    notes_external: Optional[str] = None
+    confidence: Literal["high", "low"] = "high"
+    uncertain_fields: list[str] = []
+
+
+async def extract_invoice_from_document(content_block: dict) -> InvoiceExtraction:
+    """Single object, not a list -- one document produces one row. Unlike the
+    list-shaped extractors above, there's nothing to partially salvage, so a
+    validation failure raises ProviderError instead of silently dropping."""
+    client = _client()
+    message = await client.messages.create(
+        model=MODEL,
+        max_tokens=1024,
+        messages=[
+            {
+                "role": "user",
+                "content": [content_block, {"type": "text", "text": INVOICE_SCAN_PROMPT.format(uncertainty=_UNCERTAINTY_INSTRUCTIONS)}],
+            }
+        ],
+    )
+    raw = message.content[0].text if message.content else "{}"
+    parsed = _parse_json_object(raw)
+    try:
+        return InvoiceExtraction(**parsed)
+    except ValidationError as e:
+        raise ProviderError(f"Extracted invoice data didn't match the expected shape: {e}") from e
+
+
+CHANGE_ORDER_SCAN_PROMPT = """You are reading a photographed, scanned, or exported change order for a \
+construction job at Mud & Marble, a luxury residential builder, and extracting it into a single structured \
+record.
+
+{uncertainty}
+
+Return ONLY a JSON object with this exact structure (no markdown, no explanation):
+{{"title": "Add basement egress window", "co_type": "client_addition", "owner_price": 4200.00, \
+"builder_cost": 3100.00, "description": "Client requested an additional egress window in the basement bedroom", \
+"discovered_by": "Shannon", "confidence": "high", "uncertain_fields": []}}
+`co_type` is one of "client_addition", "selection_upgrade", "field_condition", "other" -- default to \
+"client_addition" if unclear. `builder_cost` is our internal cost, `owner_price` is what the client is charged \
+-- if only one number is shown, put it in `owner_price` and leave `builder_cost` at 0 with "builder_cost" in \
+uncertain_fields. `title` is required -- if no clear title exists, summarize the scope in a few words."""
+
+
+class ChangeOrderExtraction(BaseModel):
+    title: str
+    co_type: Literal["client_addition", "selection_upgrade", "field_condition", "other"] = "client_addition"
+    owner_price: float = 0
+    builder_cost: float = 0
+    description: Optional[str] = None
+    discovered_by: Optional[str] = None
+    confidence: Literal["high", "low"] = "high"
+    uncertain_fields: list[str] = []
+
+
+async def extract_change_order_from_document(content_block: dict) -> ChangeOrderExtraction:
+    client = _client()
+    message = await client.messages.create(
+        model=MODEL,
+        max_tokens=1024,
+        messages=[
+            {
+                "role": "user",
+                "content": [content_block, {"type": "text", "text": CHANGE_ORDER_SCAN_PROMPT.format(uncertainty=_UNCERTAINTY_INSTRUCTIONS)}],
+            }
+        ],
+    )
+    raw = message.content[0].text if message.content else "{}"
+    parsed = _parse_json_object(raw)
+    try:
+        return ChangeOrderExtraction(**parsed)
+    except ValidationError as e:
+        raise ProviderError(f"Extracted change order data didn't match the expected shape: {e}") from e

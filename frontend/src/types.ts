@@ -1064,6 +1064,7 @@ export interface EstimateSheetRow {
 export interface EstimateSheetPreview {
   rows: EstimateSheetRow[];
   existing_estimate_id: string | null;
+  dropped_count: number;
 }
 
 export interface TransactionSheetRow {
@@ -1107,4 +1108,5 @@ export interface ContractorBlock {
 export interface InHouseSheetPreview {
   transactions: TransactionSheetRow[];
   contractors: ContractorBlock[];
+  dropped_count: number;
 }

@@ -33,6 +33,62 @@ def _diff_fields(existing: dict, incoming: dict, fields: list[tuple]) -> list[di
     return diffs
 
 
+_ESTIMATE_DIFF_FIELDS = [
+    ("Quantity", "quantity", "quantity"),
+    ("Markup type", "markup_type", "markup_type"),
+    ("Markup value", "markup_value", "markup_value"),
+    ("Description", "description", "description"),
+    ("Internal notes", "notes_internal", "internal_notes"),
+    ("Bucket", "bucket", "bucket"),
+]
+
+# A scanned/photographed estimate page can't show "Internal Notes" -- that's an
+# internal-only column, not something printed for external review -- so
+# comparing it for scan-sourced rows would flag a false conflict on every
+# existing item that happens to have a note, purely because the scan can
+# never populate it. Scan-sourced diffs skip that one field.
+_ESTIMATE_SCAN_DIFF_FIELDS = [f for f in _ESTIMATE_DIFF_FIELDS if f[2] != "internal_notes"]
+
+
+def diff_and_wrap_estimate_row(title: str, unit_cost: float, category: Optional[str], raw_cost_code, incoming: dict, existing_by_key: dict, diff_fields: list[tuple] = _ESTIMATE_DIFF_FIELDS) -> dict:
+    """incoming: {quantity, markup_type, markup_value, description, internal_notes, bucket}.
+    Shared by the Excel row loop (parse_estimate_sheet) and the AI-scan item
+    loop (diff_estimate_scan_items) -- the only thing that differs between
+    sources is how `incoming` gets built and which fields are worth diffing;
+    the dedupe/diff *logic* is identical either way."""
+    existing = existing_by_key.get((title, unit_cost))
+    diff = _diff_fields(existing, incoming, diff_fields) if existing else []
+    return {
+        "title": title,
+        "category": category,
+        "cost_code": parse_cost_code(raw_cost_code),
+        **incoming,
+        "unit_cost": unit_cost,
+        "already_present": existing is not None,
+        "existing_id": existing["id"] if existing else None,
+        "conflict": bool(diff),
+        "diff": diff,
+    }
+
+
+def diff_estimate_scan_items(items: list, existing_by_key: dict) -> list[dict]:
+    """items: list of EstimateScanItem (ai_provider.py) from a photographed/
+    scanned estimate page. Mirrors parse_estimate_sheet's per-row shape so the
+    router's response is identical regardless of source."""
+    rows: list[dict] = []
+    for item in items:
+        incoming = {
+            "quantity": item.quantity,
+            "markup_type": item.markup_type,
+            "markup_value": item.markup_value,
+            "description": item.description,
+            "internal_notes": None,
+            "bucket": bucket_for(item.category or "", item.title),
+        }
+        rows.append(diff_and_wrap_estimate_row(item.title, item.unit_cost, item.category, item.cost_code, incoming, existing_by_key, _ESTIMATE_SCAN_DIFF_FIELDS))
+    return rows
+
+
 def parse_estimate_sheet(ws, existing_by_key: dict) -> list[dict]:
     """existing_by_key: dict of (title, unit_cost) -> existing line item row
     (id, quantity, markup_type, markup_value, description, notes_internal,
@@ -73,36 +129,52 @@ def parse_estimate_sheet(ws, existing_by_key: dict) -> list[dict]:
             "internal_notes": internal_notes,
             "bucket": bucket_for(category, title),
         }
-        existing = existing_by_key.get((title, unit_cost))
-        diff = (
-            _diff_fields(
-                existing,
-                incoming,
-                [
-                    ("Quantity", "quantity", "quantity"),
-                    ("Markup type", "markup_type", "markup_type"),
-                    ("Markup value", "markup_value", "markup_value"),
-                    ("Description", "description", "description"),
-                    ("Internal notes", "notes_internal", "internal_notes"),
-                    ("Bucket", "bucket", "bucket"),
-                ],
-            )
-            if existing
-            else []
-        )
-        rows.append(
-            {
-                "title": title,
-                "category": category,
-                "cost_code": parse_cost_code(raw_cost_code),
-                **incoming,
-                "unit_cost": unit_cost,
-                "already_present": existing is not None,
-                "existing_id": existing["id"] if existing else None,
-                "conflict": bool(diff),
-                "diff": diff,
-            }
-        )
+        rows.append(diff_and_wrap_estimate_row(title, unit_cost, category, raw_cost_code, incoming, existing_by_key))
+    return rows
+
+
+_TRANSACTION_DIFF_FIELDS = [
+    ("Vendor", "vendor", "vendor"),
+    ("Type", "transaction_type", "transaction_type"),
+    ("Payment source", "payment_source", "payment_source"),
+]
+
+# `payment_source` is an internal categorization (which account/card funded
+# it) -- a photographed bank statement or receipt can't show that, so
+# comparing it for scan-sourced rows would flag a false conflict on every
+# existing transaction that happens to have one set.
+_TRANSACTION_SCAN_DIFF_FIELDS = [f for f in _TRANSACTION_DIFF_FIELDS if f[2] != "payment_source"]
+
+
+def diff_and_wrap_transaction_row(tx_date: str, signed_amount: float, cost_code_raw, description: Optional[str], incoming: dict, existing_by_key: dict, diff_fields: list[tuple] = _TRANSACTION_DIFF_FIELDS) -> dict:
+    """incoming: {vendor, transaction_type, payment_source}. Shared by the
+    Excel row loop (parse_quickbooks_sheet) and the AI-scan item loop
+    (diff_transaction_scan_items)."""
+    key = (tx_date, round(signed_amount, 2), (description or "")[:60])
+    existing = existing_by_key.get(key)
+    diff = _diff_fields(existing, incoming, diff_fields) if existing else []
+    return {
+        "date": tx_date,
+        "amount": signed_amount,
+        **incoming,
+        "cost_code": parse_cost_code(cost_code_raw) if cost_code_raw else None,
+        "description": description,
+        "already_present": existing is not None,
+        "existing_id": existing["id"] if existing else None,
+        "conflict": bool(diff),
+        "diff": diff,
+    }
+
+
+def diff_transaction_scan_items(items: list, existing_by_key: dict) -> list[dict]:
+    """items: list of TransactionScanItem (ai_provider.py) from a photographed/
+    scanned bank statement or receipt. Mirrors parse_quickbooks_sheet's
+    per-row shape so the router's response is identical regardless of source."""
+    rows: list[dict] = []
+    for item in items:
+        signed_amount = abs(item.amount) if item.transaction_type == "income" else -abs(item.amount)
+        incoming = {"vendor": item.vendor, "transaction_type": item.transaction_type, "payment_source": None}
+        rows.append(diff_and_wrap_transaction_row(item.date, signed_amount, None, item.description, incoming, existing_by_key, _TRANSACTION_SCAN_DIFF_FIELDS))
     return rows
 
 
@@ -129,39 +201,12 @@ def parse_quickbooks_sheet(ws, existing_by_key: dict) -> list[dict]:
         is_income = section == "Income"
         signed_amount = abs(amount) if is_income else -abs(amount)
         description = memo_val or None
-        key = (tx_date, round(signed_amount, 2), (description or "")[:60])
-        existing = existing_by_key.get(key)
         incoming = {
             "vendor": name_val or None,
             "transaction_type": "income" if is_income else "expense",
             "payment_source": section,
         }
-        diff = (
-            _diff_fields(
-                existing,
-                incoming,
-                [
-                    ("Vendor", "vendor", "vendor"),
-                    ("Type", "transaction_type", "transaction_type"),
-                    ("Payment source", "payment_source", "payment_source"),
-                ],
-            )
-            if existing
-            else []
-        )
-        rows.append(
-            {
-                "date": tx_date,
-                "amount": signed_amount,
-                **incoming,
-                "cost_code": parse_cost_code(code_val) if code_val else None,
-                "description": description,
-                "already_present": existing is not None,
-                "existing_id": existing["id"] if existing else None,
-                "conflict": bool(diff),
-                "diff": diff,
-            }
-        )
+        rows.append(diff_and_wrap_transaction_row(tx_date, signed_amount, code_val, description, incoming, existing_by_key))
     return rows
 
 
