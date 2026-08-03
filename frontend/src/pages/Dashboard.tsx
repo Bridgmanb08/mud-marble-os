@@ -59,40 +59,58 @@ export default function Dashboard() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [viewingUserId]);
 
+  // Every mutation below persists immediately -- Shannon kept losing widgets
+  // she'd added because she navigated away before hitting the old explicit
+  // Save button. Auto-saving on each change means there's never an unsaved
+  // edit sitting in memory to lose.
+  async function persist(next: WidgetItem[]) {
+    setSaving(true);
+    try {
+      const body: { user_id?: string; widgets: WidgetItem[] } = { widgets: next };
+      if (viewingUserId !== user?.id) body.user_id = viewingUserId;
+      await api.put('/dashboard/layout', body);
+    } catch (e) {
+      toast(e instanceof Error ? e.message : 'Failed to save dashboard changes', true);
+    } finally {
+      setSaving(false);
+    }
+  }
+
   function handleDragEnd(event: DragEndEvent) {
     const { active, over } = event;
     if (!over || active.id === over.id || !widgets) return;
     const oldIndex = widgets.findIndex((w) => w.id === active.id);
     const newIndex = widgets.findIndex((w) => w.id === over.id);
-    setWidgets(arrayMove(widgets, oldIndex, newIndex));
+    const next = arrayMove(widgets, oldIndex, newIndex);
+    setWidgets(next);
+    persist(next);
   }
 
   function toggleVisible(id: string) {
-    setWidgets((prev) => prev && prev.map((w) => (w.id === id ? { ...w, visible: !w.visible } : w)));
+    setWidgets((prev) => {
+      if (!prev) return prev;
+      const next = prev.map((w) => (w.id === id ? { ...w, visible: !w.visible } : w));
+      persist(next);
+      return next;
+    });
   }
 
   function addWidget(id: string) {
-    setWidgets((prev) => (prev ? [...prev, { id, visible: true }] : prev));
+    setWidgets((prev) => {
+      if (!prev) return prev;
+      const next = [...prev, { id, visible: true }];
+      persist(next);
+      return next;
+    });
   }
 
   function removeWidget(id: string) {
-    setWidgets((prev) => prev && prev.filter((w) => w.id !== id));
-  }
-
-  async function handleSave() {
-    if (!widgets) return;
-    setSaving(true);
-    try {
-      const body: { user_id?: string; widgets: WidgetItem[] } = { widgets };
-      if (viewingUserId !== user?.id) body.user_id = viewingUserId;
-      await api.put('/dashboard/layout', body);
-      toast('Dashboard saved');
-      setEditMode(false);
-    } catch (e) {
-      toast(e instanceof Error ? e.message : 'Failed to save layout', true);
-    } finally {
-      setSaving(false);
-    }
+    setWidgets((prev) => {
+      if (!prev) return prev;
+      const next = prev.filter((w) => w.id !== id);
+      persist(next);
+      return next;
+    });
   }
 
   const dateStr = new Date().toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' });
@@ -134,11 +152,9 @@ export default function Dashboard() {
               <button className="btn btn-sm" onClick={() => setShowAddWidget(true)}>
                 <IconPlus size={14} /> Add widget
               </button>
-              <button className="btn btn-sm" onClick={() => setEditMode(false)} disabled={saving}>
-                Cancel
-              </button>
-              <button className="btn btn-p btn-sm" onClick={handleSave} disabled={saving}>
-                {saving ? 'Saving…' : 'Save'}
+              {saving && <span style={{ fontSize: 12, color: 'var(--t2)' }}>Saving…</span>}
+              <button className="btn btn-p btn-sm" onClick={() => setEditMode(false)}>
+                Done
               </button>
             </>
           )}
