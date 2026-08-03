@@ -12,12 +12,22 @@ interface MasterJobFilterProps {
 
 export function MasterJobFilter({ projects, selected, onChange, onProjectColorChanged }: MasterJobFilterProps) {
   const [search, setSearch] = useState('');
+  const [statusFilter, setStatusFilter] = useState('');
+
+  // Derived from whatever statuses actually exist on real projects, rather
+  // than a hardcoded list -- stays correct as project statuses evolve.
+  const statuses = useMemo(() => {
+    const set = new Set(projects.map((p) => p.status));
+    return Array.from(set).sort();
+  }, [projects]);
 
   const filtered = useMemo(() => {
+    let list = projects;
+    if (statusFilter) list = list.filter((p) => p.status === statusFilter);
     const q = search.trim().toLowerCase();
-    if (!q) return projects;
-    return projects.filter((p) => p.name.toLowerCase().includes(q));
-  }, [projects, search]);
+    if (!q) return list;
+    return list.filter((p) => p.name.toLowerCase().includes(q));
+  }, [projects, search, statusFilter]);
 
   function toggle(id: string) {
     const next = new Set(selected);
@@ -34,6 +44,19 @@ export function MasterJobFilter({ projects, selected, onChange, onProjectColorCh
         <IconSearch size={13} />
         <input className="fi" placeholder="Search jobs…" value={search} onChange={(e) => setSearch(e.target.value)} />
       </div>
+      <select
+        className="fi job-sidebar-status"
+        style={{ textTransform: 'capitalize' }}
+        value={statusFilter}
+        onChange={(e) => setStatusFilter(e.target.value)}
+      >
+        <option value="">All statuses</option>
+        {statuses.map((s) => (
+          <option key={s} value={s} style={{ textTransform: 'capitalize' }}>
+            {s.replace(/_/g, ' ')}
+          </option>
+        ))}
+      </select>
       <button
         type="button"
         className="job-sidebar-item"
