@@ -83,3 +83,21 @@ class InHouseSheetPreview(BaseModel):
     transactions: list[TransactionSheetRow]
     contractors: list[ContractorBlock]
     dropped_count: int = 0
+
+
+class InvoiceScanRow(BaseModel):
+    invoice_number: Optional[str] = None
+    invoice_type: str = "progress"
+    amount_due: float = 0
+    due_date: Optional[str] = None
+    notes_external: Optional[str] = None
+    confidence: str = "high"
+    uncertain_fields: list[str] = []
+    already_present: bool = False
+    existing_id: Optional[str] = None
+    conflict: bool = False
+    diff: list[FieldDiff] = []
+
+
+class InvoiceScanPreview(BaseModel):
+    row: InvoiceScanRow
