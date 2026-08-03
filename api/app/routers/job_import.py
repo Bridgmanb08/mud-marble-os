@@ -3,6 +3,7 @@ import io
 import uuid
 
 import openpyxl
+import xlrd
 from fastapi import APIRouter, Depends, File, HTTPException, UploadFile
 
 from ..ai_provider import (
@@ -44,6 +45,36 @@ SCAN_EXTS = (".pdf", ".jpg", ".jpeg", ".png")
 
 def _ext(filename: str) -> str:
     return ("." + filename.rsplit(".", 1)[-1].lower()) if filename and "." in filename else ""
+
+
+def _load_workbook(content: bytes, filename: str):
+    """openpyxl only understands the zip-based .xlsx/.xlsm container -- a legacy
+    .xls file is a different, non-zip binary format and openpyxl raises "File is
+    not a zip file" if handed one directly. For .xls, read it with xlrd and
+    reconstruct an equivalent in-memory openpyxl Workbook so every downstream
+    parser (which expects openpyxl's Worksheet/cell API) works unchanged."""
+    if _ext(filename) == ".xls":
+        return _xls_to_openpyxl(content)
+    return openpyxl.load_workbook(io.BytesIO(content), data_only=True)
+
+
+def _xls_to_openpyxl(content: bytes):
+    src = xlrd.open_workbook(file_contents=content)
+    wb = openpyxl.Workbook()
+    wb.remove(wb.active)
+    for sheet_name in src.sheet_names():
+        sheet = src.sheet_by_name(sheet_name)
+        ws = wb.create_sheet(title=sheet_name[:31])
+        for r in range(sheet.nrows):
+            for c in range(sheet.ncols):
+                cell = sheet.cell(r, c)
+                value = cell.value
+                if cell.ctype == xlrd.XL_CELL_DATE:
+                    value = xlrd.xldate.xldate_as_datetime(value, src.datemode)
+                elif cell.ctype == xlrd.XL_CELL_EMPTY:
+                    value = None
+                ws.cell(row=r + 1, column=c + 1, value=value)
+    return wb
 
 
 async def _notify_conflicts(user_id: str, project_id: str, project_name: str, count: int, section: str) -> None:
@@ -142,7 +173,7 @@ async def preview_estimate_sheet(
     dropped_count = 0
     if ext in EXCEL_EXTS:
         try:
-            wb = openpyxl.load_workbook(io.BytesIO(content), data_only=True)
+            wb = _load_workbook(content, file.filename or "")
         except Exception as e:
             raise HTTPException(status_code=400, detail=f"Could not read that file: {e}") from e
         ws = _find_sheet(wb, "Estimate")
@@ -213,7 +244,7 @@ async def preview_inhouse_sheet(
 
     if ext in EXCEL_EXTS:
         try:
-            wb = openpyxl.load_workbook(io.BytesIO(content), data_only=True)
+            wb = _load_workbook(content, file.filename or "")
         except Exception as e:
             raise HTTPException(status_code=400, detail=f"Could not read that file: {e}") from e
         qb_ws = _find_sheet(wb, "Quickbooks")
@@ -259,13 +290,13 @@ async def preview_inhouse_sheet(
     return InHouseSheetPreview(transactions=transactions, contractors=contractors, dropped_count=dropped_count)
 
 
-def _flatten_workbook_to_text(content: bytes) -> str:
+def _flatten_workbook_to_text(content: bytes, filename: str = "") -> str:
     """No fixed invoice template exists (unlike Estimate/In-House, which mirror
     Brent's one real template), so an Excel invoice doesn't get a deterministic
     parser -- every cell gets dumped into a plain-text grid and handed to the
     same AI extraction function used for images. Claude reads messy tabular
     text fine."""
-    wb = openpyxl.load_workbook(io.BytesIO(content), data_only=True)
+    wb = _load_workbook(content, filename)
     lines = []
     for sheet in wb.worksheets:
         lines.append(f"[Sheet: {sheet.title}]")
@@ -329,7 +360,7 @@ async def preview_invoice_scan(
 
     try:
         if ext in EXCEL_EXTS:
-            content_block = {"type": "text", "text": _flatten_workbook_to_text(content)}
+            content_block = {"type": "text", "text": _flatten_workbook_to_text(content, filename)}
         else:
             content_block = build_scan_content_block(content, filename, file.content_type)
         extraction = await extract_invoice_from_document(content_block)
