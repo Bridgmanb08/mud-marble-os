@@ -177,6 +177,13 @@ async def preview_estimate_sheet(
         except Exception as e:
             raise HTTPException(status_code=400, detail=f"Could not read that file: {e}") from e
         ws = _find_sheet(wb, "Estimate")
+        if ws is None and len(wb.sheetnames) == 1:
+            # A raw BuilderTrend "Estimate Report" export (as opposed to
+            # Brent's multi-sheet In-House workbook, which has a sheet
+            # literally named "Estimate") is a single sheet under whatever
+            # name BuilderTrend gave it -- there's nothing ambiguous about
+            # which sheet to use when it's the only one.
+            ws = wb[wb.sheetnames[0]]
         if ws is None:
             raise HTTPException(status_code=400, detail="No sheet named 'Estimate' found in that file")
         parsed = parse_estimate_sheet(ws, existing_by_key)
