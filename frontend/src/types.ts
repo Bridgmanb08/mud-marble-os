@@ -1199,6 +1199,19 @@ export interface RentalWorkOrder {
   unit_label: string | null;
 }
 
+export interface RentalFile {
+  id: string;
+  property_id: string | null;
+  lease_id: string | null;
+  uploaded_by: string | null;
+  file_name: string;
+  file_type: string;
+  mime_type: string | null;
+  size_bytes: number | null;
+  storage_path: string;
+  created_at: string;
+}
+
 export interface RentalPayment {
   id: string;
   lease_id: string;

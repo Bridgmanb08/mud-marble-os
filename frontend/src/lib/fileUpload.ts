@@ -1,5 +1,5 @@
 import { api } from '../api/client';
-import type { ProjectFile, SubcontractorFile, UploadUrlResponse } from '../types';
+import type { ProjectFile, RentalFile, SubcontractorFile, UploadUrlResponse } from '../types';
 
 const SUPABASE_ANON_KEY = import.meta.env.VITE_SUPABASE_ANON_KEY as string | undefined;
 
@@ -55,6 +55,23 @@ export async function uploadSubcontractorFile(subId: string, file: File): Promis
   return api.post<SubcontractorFile>(`/subcontractors/${subId}/files`, {
     file_name: file.name,
     file_type: fileType,
+    mime_type: file.type || null,
+    size_bytes: file.size,
+    storage_path,
+  });
+}
+
+export async function uploadRentalFile(leaseId: string, file: File): Promise<RentalFile> {
+  const { upload_url, storage_path } = await api.post<UploadUrlResponse>('/rental-files/upload-url', {
+    file_name: file.name,
+    file_type: 'lease',
+    mime_type: file.type || null,
+  });
+  await putToSignedUrl(upload_url, file);
+  return api.post<RentalFile>('/rental-files', {
+    lease_id: leaseId,
+    file_name: file.name,
+    file_type: 'lease',
     mime_type: file.type || null,
     size_bytes: file.size,
     storage_path,

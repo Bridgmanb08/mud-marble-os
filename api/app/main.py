@@ -25,6 +25,7 @@ from .routers import (
     projects,
     pulse,
     quick_reminders,
+    rental_files,
     rental_leases,
     rental_properties,
     rental_tenants,
@@ -93,3 +94,4 @@ app.include_router(rental_properties.router, prefix="/api")
 app.include_router(rental_tenants.router, prefix="/api")
 app.include_router(rental_leases.router, prefix="/api")
 app.include_router(rental_work_orders.router, prefix="/api")
+app.include_router(rental_files.router, prefix="/api")
