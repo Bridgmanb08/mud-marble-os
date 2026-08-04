@@ -22,7 +22,12 @@ async function putToSignedUrl(uploadUrl: string, file: File): Promise<void> {
   if (!res.ok) throw new Error('File upload failed');
 }
 
-export async function uploadProjectFile(projectId: string, file: File, taskIds: string[] = []): Promise<ProjectFile> {
+export async function uploadProjectFile(
+  projectId: string,
+  file: File,
+  taskIds: string[] = [],
+  subitemIds: string[] = []
+): Promise<ProjectFile> {
   const fileType = inferFileType(file.type);
   const { upload_url, storage_path } = await api.post<UploadUrlResponse>(
     `/projects/${projectId}/files/upload-url`,
@@ -36,6 +41,7 @@ export async function uploadProjectFile(projectId: string, file: File, taskIds: 
     size_bytes: file.size,
     storage_path,
     task_ids: taskIds,
+    subitem_ids: subitemIds,
   });
 }
 

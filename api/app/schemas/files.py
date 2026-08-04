@@ -21,6 +21,7 @@ class FileCreate(BaseModel):
     size_bytes: Optional[int] = None
     storage_path: str
     task_ids: list[str] = []
+    subitem_ids: list[str] = []
 
 
 class FileOut(BaseModel):
@@ -34,6 +35,7 @@ class FileOut(BaseModel):
     storage_path: str
     created_at: str
     task_ids: list[str] = []
+    subitem_ids: list[str] = []
 
 
 class DownloadUrlResponse(BaseModel):
