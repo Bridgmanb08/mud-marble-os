@@ -138,7 +138,7 @@ export function LineItemGroupCard<T extends LineItemLike>({
       </div>
       {!collapsed && (
         <div className="tbl-scroll">
-          <table className="tbl">
+          <table className="tbl tbl-sticky-head">
             <thead>
               <tr>
                 <th style={{ width: 24 }} />
