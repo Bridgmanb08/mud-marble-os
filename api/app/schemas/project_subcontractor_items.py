@@ -16,6 +16,8 @@ class SubItemUpdate(BaseModel):
     description: Optional[str] = None
     amount: Optional[float] = None
     sort_order: Optional[int] = None
+    confirmed: Optional[bool] = None
+    confirmed_at: Optional[str] = None
 
 
 class SubcontractorBrief(BaseModel):
@@ -32,5 +34,7 @@ class SubItemOut(BaseModel):
     sort_order: int
     source_line_item_id: Optional[str] = None
     builder_cost: Optional[float] = None
+    confirmed: bool = False
+    confirmed_at: Optional[str] = None
     created_at: str
     subcontractors: Optional[SubcontractorBrief] = None

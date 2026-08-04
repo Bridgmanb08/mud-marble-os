@@ -1,3 +1,4 @@
+import asyncio
 import uuid
 from typing import Optional
 
@@ -22,11 +23,21 @@ async def _enrich(rows: list[dict]) -> list[FileOut]:
     if not rows:
         return []
     ids = [r["id"] for r in rows]
-    links = await db_get("file_task_links", f"?file_id=in.({','.join(ids)})&select=file_id,task_id")
+    id_filter = ",".join(ids)
+    links, subitem_links = await asyncio.gather(
+        db_get("file_task_links", f"?file_id=in.({id_filter})&select=file_id,task_id"),
+        db_get("file_subitem_links", f"?file_id=in.({id_filter})&select=file_id,subitem_id"),
+    )
     task_ids_by_file: dict[str, list[str]] = {}
     for link in links:
         task_ids_by_file.setdefault(link["file_id"], []).append(link["task_id"])
-    return [FileOut(**r, task_ids=task_ids_by_file.get(r["id"], [])) for r in rows]
+    subitem_ids_by_file: dict[str, list[str]] = {}
+    for link in subitem_links:
+        subitem_ids_by_file.setdefault(link["file_id"], []).append(link["subitem_id"])
+    return [
+        FileOut(**r, task_ids=task_ids_by_file.get(r["id"], []), subitem_ids=subitem_ids_by_file.get(r["id"], []))
+        for r in rows
+    ]
 
 
 @router.post("/projects/{project_id}/files/upload-url", response_model=UploadUrlResponse)
@@ -63,6 +74,11 @@ async def create_file(
         await db_post_many(
             "file_task_links", [{"file_id": file_row["id"], "task_id": task_id} for task_id in body.task_ids]
         )
+    if body.subitem_ids:
+        await db_post_many(
+            "file_subitem_links",
+            [{"file_id": file_row["id"], "subitem_id": subitem_id} for subitem_id in body.subitem_ids],
+        )
     enriched = await _enrich([file_row])
     return enriched[0]
 
@@ -72,10 +88,17 @@ async def list_files(
     project_id: str,
     file_type: Optional[str] = None,
     task_id: Optional[str] = None,
+    subitem_id: Optional[str] = None,
     _: CurrentUser = Depends(get_current_user),
 ):
     if task_id:
         links = await db_get("file_task_links", f"?task_id=eq.{task_id}&select=file_id")
+        file_ids = [link["file_id"] for link in links]
+        if not file_ids:
+            return []
+        query = f"?id=in.({','.join(file_ids)})&order=created_at.desc"
+    elif subitem_id:
+        links = await db_get("file_subitem_links", f"?subitem_id=eq.{subitem_id}&select=file_id")
         file_ids = [link["file_id"] for link in links]
         if not file_ids:
             return []
@@ -118,4 +141,18 @@ async def unlink_task(file_id: str, task_id: str, _: CurrentUser = Depends(get_c
     links = await db_get("file_task_links", f"?file_id=eq.{file_id}&task_id=eq.{task_id}&select=id")
     for link in links:
         await db_delete("file_task_links", link["id"])
+    return {"ok": True}
+
+
+@router.post("/files/{file_id}/subitems/{subitem_id}")
+async def link_subitem(file_id: str, subitem_id: str, _: CurrentUser = Depends(get_current_user)):
+    await db_post("file_subitem_links", {"file_id": file_id, "subitem_id": subitem_id})
+    return {"ok": True}
+
+
+@router.delete("/files/{file_id}/subitems/{subitem_id}")
+async def unlink_subitem(file_id: str, subitem_id: str, _: CurrentUser = Depends(get_current_user)):
+    links = await db_get("file_subitem_links", f"?file_id=eq.{file_id}&subitem_id=eq.{subitem_id}&select=id")
+    for link in links:
+        await db_delete("file_subitem_links", link["id"])
     return {"ok": True}

@@ -490,6 +490,8 @@ export interface ProjectSubItem {
   sort_order: number;
   source_line_item_id: string | null;
   builder_cost: number | null;
+  confirmed: boolean;
+  confirmed_at: string | null;
   created_at: string;
   subcontractors: { company_name: string; trade: string | null } | null;
 }
@@ -505,6 +507,7 @@ export interface ProjectFile {
   storage_path: string;
   created_at: string;
   task_ids: string[];
+  subitem_ids: string[];
 }
 
 export interface SubcontractorFile {

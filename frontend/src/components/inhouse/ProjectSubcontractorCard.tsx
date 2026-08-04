@@ -1,12 +1,18 @@
-import { useRef, useState, type KeyboardEvent } from 'react';
+import { useEffect, useRef, useState, type KeyboardEvent } from 'react';
 import { DndContext, PointerSensor, useSensor, useSensors, type DragEndEvent } from '@dnd-kit/core';
 import { SortableContext, verticalListSortingStrategy, useSortable, arrayMove } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
-import { IconTrash, IconChevronDown, IconChevronRight, IconGripVertical } from '@tabler/icons-react';
+import { IconTrash, IconChevronDown, IconChevronRight, IconGripVertical, IconPaperclip, IconX } from '@tabler/icons-react';
 import { api, ApiError } from '../../api/client';
 import { useToast } from '../ui/Toast';
 import { fmt } from '../../lib/format';
-import type { EstimateLineItem, ProjectSubItem, Subcontractor } from '../../types';
+import { uploadProjectFile } from '../../lib/fileUpload';
+import { FilePreviewModal } from '../projects/FilePreviewModal';
+import type { EstimateLineItem, ProjectFile, ProjectSubItem, Subcontractor } from '../../types';
+
+function todayIso(): string {
+  return new Date().toISOString().slice(0, 10);
+}
 
 interface ProjectSubcontractorCardProps {
   projectId: string;
@@ -81,12 +87,145 @@ function DescriptionInput({ item, onSaved }: { item: ProjectSubItem; onSaved: ()
   );
 }
 
+function ConfirmationRow({ item, projectId, onSaved }: { item: ProjectSubItem; projectId: string; onSaved: () => void }) {
+  const toast = useToast();
+  const [confirmed, setConfirmed] = useState(item.confirmed);
+  const [confirmedAt, setConfirmedAt] = useState(item.confirmed_at || '');
+  const [files, setFiles] = useState<ProjectFile[]>([]);
+  const [uploading, setUploading] = useState(false);
+  const [preview, setPreview] = useState<ProjectFile | null>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  async function loadFiles() {
+    setFiles(await api.get<ProjectFile[]>(`/projects/${projectId}/files?subitem_id=${item.id}`).catch(() => []));
+  }
+
+  useEffect(() => {
+    loadFiles();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [item.id]);
+
+  async function toggleConfirmed() {
+    const next = !confirmed;
+    const nextDate = next && !confirmedAt ? todayIso() : confirmedAt;
+    setConfirmed(next);
+    setConfirmedAt(nextDate);
+    try {
+      await api.patch(`/subcontractor-items/${item.id}`, { confirmed: next, confirmed_at: nextDate || undefined });
+      onSaved();
+    } catch (err) {
+      setConfirmed(!next);
+      toast(err instanceof ApiError ? err.message : 'Failed to update confirmation', true);
+    }
+  }
+
+  async function commitDate() {
+    if (confirmedAt === (item.confirmed_at || '')) return;
+    try {
+      await api.patch(`/subcontractor-items/${item.id}`, { confirmed_at: confirmedAt || undefined });
+      onSaved();
+    } catch (err) {
+      toast(err instanceof ApiError ? err.message : 'Failed to update confirmation date', true);
+    }
+  }
+
+  async function handleUpload(fileList: FileList | null) {
+    if (!fileList || !fileList.length) return;
+    setUploading(true);
+    try {
+      for (const file of Array.from(fileList)) {
+        await uploadProjectFile(projectId, file, [], [item.id]);
+      }
+      await loadFiles();
+    } catch (err) {
+      toast(err instanceof Error ? err.message : 'Upload failed', true);
+    } finally {
+      setUploading(false);
+    }
+  }
+
+  async function removeFile(fileId: string) {
+    try {
+      await api.delete(`/files/${fileId}/subitems/${item.id}`);
+      setFiles((prev) => prev.filter((f) => f.id !== fileId));
+    } catch (err) {
+      toast(err instanceof ApiError ? err.message : 'Failed to remove file', true);
+    }
+  }
+
+  return (
+    <div
+      style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap', paddingLeft: 22, paddingBottom: 8 }}
+      onClick={(e) => e.stopPropagation()}
+    >
+      <label style={{ display: 'flex', alignItems: 'center', gap: 5, fontSize: 12, color: 'var(--t2)', cursor: 'pointer' }}>
+        <input type="checkbox" checked={confirmed} onChange={toggleConfirmed} />
+        Confirmed with subcontractor
+      </label>
+      <input
+        type="date"
+        className="fi"
+        style={{ width: 140, fontSize: 12, padding: '3px 6px' }}
+        value={confirmedAt}
+        onChange={(e) => setConfirmedAt(e.target.value)}
+        onBlur={commitDate}
+      />
+      {files.map((f) => (
+        <span
+          key={f.id}
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            gap: 4,
+            fontSize: 11.5,
+            background: 'var(--bg)',
+            border: '1px solid var(--border)',
+            borderRadius: 12,
+            padding: '2px 4px 2px 8px',
+          }}
+        >
+          <span style={{ cursor: 'pointer' }} onClick={() => setPreview(f)} title="Click to preview">
+            {f.file_name}
+          </span>
+          <button
+            type="button"
+            className="btn-reset"
+            style={{ display: 'flex', color: 'var(--t3)' }}
+            onClick={() => removeFile(f.id)}
+            title="Remove"
+          >
+            <IconX size={11} />
+          </button>
+        </span>
+      ))}
+      <button
+        type="button"
+        className="btn btn-ghost btn-sm"
+        onClick={() => fileInputRef.current?.click()}
+        disabled={uploading}
+      >
+        <IconPaperclip size={12} /> {uploading ? 'Uploading…' : 'Attach screenshot'}
+      </button>
+      <input
+        ref={fileInputRef}
+        type="file"
+        accept="image/*"
+        style={{ display: 'none' }}
+        onChange={(e) => handleUpload(e.target.files)}
+      />
+      {preview && <FilePreviewModal file={preview} onClose={() => setPreview(null)} />}
+    </div>
+  );
+}
+
 function SortableSubItemRow({
   item,
+  projectId,
   onSaved,
   onDelete,
 }: {
   item: ProjectSubItem;
+  projectId: string;
   onSaved: () => void;
   onDelete: (id: string) => void;
 }) {
@@ -95,9 +234,6 @@ function SortableSubItemRow({
     <div
       ref={setNodeRef}
       style={{
-        display: 'flex',
-        alignItems: 'center',
-        gap: 8,
         padding: '6px 0',
         borderBottom: '1px solid var(--border)',
         transform: CSS.Transform.toString(transform),
@@ -106,26 +242,29 @@ function SortableSubItemRow({
         background: isDragging ? 'var(--surface)' : undefined,
       }}
     >
-      <button
-        type="button"
-        className="btn-reset"
-        {...attributes}
-        {...listeners}
-        style={{ display: 'flex', flexShrink: 0, cursor: 'grab', color: 'var(--t3)', touchAction: 'none' }}
-        title="Drag to reorder"
-      >
-        <IconGripVertical size={14} />
-      </button>
-      <div style={{ flex: 1 }}>
-        <DescriptionInput item={item} onSaved={onSaved} />
-        {item.builder_cost != null && (
-          <div style={{ fontSize: 11, color: 'var(--t2)', marginTop: 2 }}>Est. builder cost: {fmt(item.builder_cost)}</div>
-        )}
+      <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+        <button
+          type="button"
+          className="btn-reset"
+          {...attributes}
+          {...listeners}
+          style={{ display: 'flex', flexShrink: 0, cursor: 'grab', color: 'var(--t3)', touchAction: 'none' }}
+          title="Drag to reorder"
+        >
+          <IconGripVertical size={14} />
+        </button>
+        <div style={{ flex: 1 }}>
+          <DescriptionInput item={item} onSaved={onSaved} />
+          {item.builder_cost != null && (
+            <div style={{ fontSize: 11, color: 'var(--t2)', marginTop: 2 }}>Est. builder cost: {fmt(item.builder_cost)}</div>
+          )}
+        </div>
+        <AmountInput item={item} onSaved={onSaved} />
+        <button type="button" className="btn btn-ghost btn-sm" onClick={() => onDelete(item.id)}>
+          <IconTrash size={13} />
+        </button>
       </div>
-      <AmountInput item={item} onSaved={onSaved} />
-      <button type="button" className="btn btn-ghost btn-sm" onClick={() => onDelete(item.id)}>
-        <IconTrash size={13} />
-      </button>
+      <ConfirmationRow item={item} projectId={projectId} onSaved={onSaved} />
     </div>
   );
 }
@@ -248,7 +387,7 @@ export function ProjectSubcontractorCard({ projectId, subcontractor, items, line
         <DndContext sensors={sensors} onDragEnd={handleReorder}>
           <SortableContext items={items.map((i) => i.id)} strategy={verticalListSortingStrategy}>
             {items.map((item) => (
-              <SortableSubItemRow key={item.id} item={item} onSaved={onChanged} onDelete={deleteItem} />
+              <SortableSubItemRow key={item.id} item={item} projectId={projectId} onSaved={onChanged} onDelete={deleteItem} />
             ))}
           </SortableContext>
         </DndContext>
