@@ -25,6 +25,9 @@ from .routers import (
     projects,
     pulse,
     quick_reminders,
+    rental_leases,
+    rental_properties,
+    rental_tenants,
     reports,
     smart_nudges,
     sub_intelligence,
@@ -85,3 +88,6 @@ app.include_router(notification_settings.router, prefix="/api")
 app.include_router(smart_nudges.router, prefix="/api")
 app.include_router(weather.router, prefix="/api")
 app.include_router(job_import.router, prefix="/api")
+app.include_router(rental_properties.router, prefix="/api")
+app.include_router(rental_tenants.router, prefix="/api")
+app.include_router(rental_leases.router, prefix="/api")
