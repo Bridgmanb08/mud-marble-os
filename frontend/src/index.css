@@ -98,6 +98,12 @@ body{font-family:var(--font);background:var(--bg);color:var(--text);font-size:14
 .tbl-scroll{overflow-x:auto;}
 .tbl td.sticky-col,.tbl th.sticky-col{position:sticky;left:0;z-index:1;background:var(--surface);}
 .tbl tbody tr:hover td.sticky-col{background:var(--border);}
+
+/* Pins the column-title row below the fixed topbar as a group's rows scroll
+   past -- add alongside .tbl on tables with long, per-group scrolling lists
+   (e.g. the Estimate worksheet). Each group's own <thead> sticks while its
+   rows are in view, then hands off to the next group's header naturally. */
+.tbl-sticky-head thead th{position:sticky;top:var(--tb);z-index:2;}
 .confidence-bar{width:60px;height:6px;background:var(--border);border-radius:3px;overflow:hidden;display:inline-block;vertical-align:middle;}
 .confidence-fill{height:100%;background:var(--border-md);border-radius:3px;}
 
