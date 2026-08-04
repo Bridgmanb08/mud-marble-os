@@ -183,4 +183,27 @@ class RentalWorkOrderOut(BaseModel):
     unit_label: Optional[str] = None
 
 
+class RentalFileCreate(BaseModel):
+    property_id: Optional[str] = None
+    lease_id: Optional[str] = None
+    file_name: str
+    file_type: str = "lease"
+    mime_type: Optional[str] = None
+    size_bytes: Optional[int] = None
+    storage_path: str
+
+
+class RentalFileOut(BaseModel):
+    id: str
+    property_id: Optional[str] = None
+    lease_id: Optional[str] = None
+    uploaded_by: Optional[str] = None
+    file_name: str
+    file_type: str
+    mime_type: Optional[str] = None
+    size_bytes: Optional[int] = None
+    storage_path: str
+    created_at: str
+
+
 RentalPropertyOut.model_rebuild()
