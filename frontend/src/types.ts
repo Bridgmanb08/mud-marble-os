@@ -1183,6 +1183,22 @@ export interface RentalLease {
   rental_units: RentalUnit | null;
 }
 
+export interface RentalWorkOrder {
+  id: string;
+  property_id: string;
+  unit_id: string | null;
+  title: string;
+  description: string | null;
+  status: string;
+  priority: string;
+  assigned_to: string | null;
+  task_id: string | null;
+  created_at: string;
+  resolved_at: string | null;
+  property_address: string | null;
+  unit_label: string | null;
+}
+
 export interface RentalPayment {
   id: string;
   lease_id: string;
