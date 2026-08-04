@@ -206,4 +206,15 @@ class RentalFileOut(BaseModel):
     created_at: str
 
 
+class RentalDashboardSummary(BaseModel):
+    # Percentage of rent due in the trailing N days paid on or before its due
+    # date -- null (not 0) when there's no due-and-payable rent yet in that
+    # window, so the widget can distinguish "nothing to show" from "0% on time".
+    on_time_rate_30: Optional[float] = None
+    on_time_rate_60: Optional[float] = None
+    on_time_rate_90: Optional[float] = None
+    leases_expiring_60d: int = 0
+    open_work_orders: int = 0
+
+
 RentalPropertyOut.model_rebuild()

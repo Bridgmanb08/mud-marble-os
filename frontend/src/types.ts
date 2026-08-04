@@ -783,7 +783,8 @@ export type WidgetId =
   | 'team_pulse'
   | 'weather'
   | 'project_timeline'
-  | 'job_import';
+  | 'job_import'
+  | 'rental_snapshot';
 
 export interface WidgetItem {
   id: WidgetId | string;
@@ -1210,6 +1211,14 @@ export interface RentalFile {
   size_bytes: number | null;
   storage_path: string;
   created_at: string;
+}
+
+export interface RentalDashboardSummary {
+  on_time_rate_30: number | null;
+  on_time_rate_60: number | null;
+  on_time_rate_90: number | null;
+  leases_expiring_60d: number;
+  open_work_orders: number;
 }
 
 export interface RentalPayment {
