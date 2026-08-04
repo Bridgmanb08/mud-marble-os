@@ -9,6 +9,7 @@ import { NewChangeOrderModal } from '../components/change-orders/NewChangeOrderM
 import { EstimateImportSection } from '../components/job-import/EstimateImportSection';
 import { InHouseImportSection } from '../components/job-import/InHouseImportSection';
 import { InvoiceImportSection } from '../components/job-import/InvoiceImportSection';
+import { ChangeOrderImportSection } from '../components/job-import/ChangeOrderImportSection';
 import type { ChangeOrder, Invoice, Project } from '../types';
 
 const INVOICE_STATUS_BADGE: Record<string, string> = { draft: 'bg-gray', sent: 'bg-amber', paid: 'bg-green', overdue: 'bg-red', void: 'bg-gray' };
@@ -24,6 +25,7 @@ export default function JobImportWizard() {
   const [showNewInvoice, setShowNewInvoice] = useState(false);
   const [showNewCO, setShowNewCO] = useState(false);
   const [showInvoiceScan, setShowInvoiceScan] = useState(false);
+  const [showCOScan, setShowCOScan] = useState(false);
 
   function loadFinancials() {
     if (!projectId) return;
@@ -76,6 +78,9 @@ export default function JobImportWizard() {
             <button className="btn btn-sm" onClick={() => setShowInvoiceScan((v) => !v)}>
               <IconUpload size={14} /> Upload invoice scan
             </button>
+            <button className="btn btn-sm" onClick={() => setShowCOScan((v) => !v)}>
+              <IconUpload size={14} /> Upload CO scan
+            </button>
           </div>
         </div>
 
@@ -85,6 +90,18 @@ export default function JobImportWizard() {
               projectId={projectId}
               onImported={() => {
                 setShowInvoiceScan(false);
+                loadFinancials();
+              }}
+            />
+          </div>
+        )}
+
+        {showCOScan && (
+          <div style={{ padding: 14, border: '1px solid var(--border)', borderRadius: 'var(--r)', marginBottom: 14 }}>
+            <ChangeOrderImportSection
+              projectId={projectId}
+              onImported={() => {
+                setShowCOScan(false);
                 loadFinancials();
               }}
             />

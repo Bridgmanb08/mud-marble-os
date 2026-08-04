@@ -1232,3 +1232,22 @@ export interface RentalPayment {
   notes: string | null;
   is_late: boolean;
 }
+
+export interface ChangeOrderScanRow {
+  title: string;
+  co_type: string;
+  owner_price: number;
+  builder_cost: number;
+  description: string | null;
+  discovered_by: string | null;
+  confidence: string;
+  uncertain_fields: string[];
+  already_present: boolean;
+  existing_id: string | null;
+  conflict: boolean;
+  diff: FieldDiff[];
+}
+
+export interface ChangeOrderScanPreview {
+  row: ChangeOrderScanRow;
+}

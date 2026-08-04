@@ -49,7 +49,10 @@ async def update_change_order(co_id: str, body: ChangeOrderUpdate, _: CurrentUse
     project_id = existing[0]["project_id"]
     owner_price = existing[0].get("owner_price") or 0
 
-    await db_patch("change_orders", co_id, body.model_dump(exclude_none=True))
+    # exclude_unset (not exclude_none) -- a caller may need to explicitly clear
+    # a field (e.g. an import correction clearing description), and that null
+    # has to reach the database instead of being silently dropped.
+    await db_patch("change_orders", co_id, body.model_dump(exclude_unset=True))
 
     # Approving a change order should grow the project's contracted value by
     # its owner price (and shrink it back if it's ever un-approved) -- without

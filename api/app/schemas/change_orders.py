@@ -16,6 +16,12 @@ class ChangeOrderCreate(BaseModel):
 class ChangeOrderUpdate(BaseModel):
     status: Optional[str] = None
     sent_at: Optional[str] = None
+    title: Optional[str] = None
+    co_type: Optional[str] = None
+    owner_price: Optional[float] = None
+    builder_cost: Optional[float] = None
+    description: Optional[str] = None
+    discovered_by: Optional[str] = None
 
 
 class ProjectBrief(BaseModel):

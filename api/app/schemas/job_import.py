@@ -101,3 +101,22 @@ class InvoiceScanRow(BaseModel):
 
 class InvoiceScanPreview(BaseModel):
     row: InvoiceScanRow
+
+
+class ChangeOrderScanRow(BaseModel):
+    title: str
+    co_type: str = "client_addition"
+    owner_price: float = 0
+    builder_cost: float = 0
+    description: Optional[str] = None
+    discovered_by: Optional[str] = None
+    confidence: str = "high"
+    uncertain_fields: list[str] = []
+    already_present: bool = False
+    existing_id: Optional[str] = None
+    conflict: bool = False
+    diff: list[FieldDiff] = []
+
+
+class ChangeOrderScanPreview(BaseModel):
+    row: ChangeOrderScanRow
