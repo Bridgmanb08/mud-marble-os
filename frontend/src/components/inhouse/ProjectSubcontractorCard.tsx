@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useRef, useState, type KeyboardEvent } from 'react';
 import { DndContext, PointerSensor, useSensor, useSensors, type DragEndEvent } from '@dnd-kit/core';
 import { SortableContext, verticalListSortingStrategy, useSortable, arrayMove } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
@@ -49,6 +49,38 @@ function AmountInput({ item, onSaved }: { item: ProjectSubItem; onSaved: () => v
   );
 }
 
+function DescriptionInput({ item, onSaved }: { item: ProjectSubItem; onSaved: () => void }) {
+  const toast = useToast();
+  const [value, setValue] = useState(item.description || '');
+
+  async function commit() {
+    const trimmed = value.trim();
+    if (trimmed === (item.description || '')) return;
+    try {
+      // Send the (possibly empty) string as-is rather than null -- the
+      // backend's PATCH excludes null fields entirely, which would silently
+      // drop a deliberate clear instead of persisting it.
+      await api.patch(`/subcontractor-items/${item.id}`, { description: trimmed });
+      onSaved();
+    } catch (err) {
+      toast(err instanceof ApiError ? err.message : 'Failed to update description', true);
+      setValue(item.description || '');
+    }
+  }
+
+  return (
+    <input
+      className="fi"
+      style={{ width: '100%', fontSize: 13 }}
+      value={value}
+      onChange={(e) => setValue(e.target.value)}
+      onBlur={commit}
+      onClick={(e) => e.stopPropagation()}
+      placeholder="Line item description"
+    />
+  );
+}
+
 function SortableSubItemRow({
   item,
   onSaved,
@@ -85,9 +117,9 @@ function SortableSubItemRow({
         <IconGripVertical size={14} />
       </button>
       <div style={{ flex: 1 }}>
-        <div style={{ fontSize: 13 }}>{item.description || '—'}</div>
+        <DescriptionInput item={item} onSaved={onSaved} />
         {item.builder_cost != null && (
-          <div style={{ fontSize: 11, color: 'var(--t2)' }}>Est. builder cost: {fmt(item.builder_cost)}</div>
+          <div style={{ fontSize: 11, color: 'var(--t2)', marginTop: 2 }}>Est. builder cost: {fmt(item.builder_cost)}</div>
         )}
       </div>
       <AmountInput item={item} onSaved={onSaved} />
@@ -105,12 +137,13 @@ export function ProjectSubcontractorCard({ projectId, subcontractor, items, line
   const [saving, setSaving] = useState(false);
   const [showPicker, setShowPicker] = useState(false);
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 5 } }));
+  const descriptionRef = useRef<HTMLInputElement>(null);
 
   const contracted = items.reduce((s, i) => s + (i.amount || 0), 0);
   const remaining = contracted - paid;
   const linkedLineItemIds = new Set(items.map((i) => i.source_line_item_id).filter(Boolean));
 
-  async function addItem() {
+  async function addItem(focusAfter = false) {
     const amt = parseFloat(amount);
     if (!amt) return;
     setSaving(true);
@@ -124,10 +157,21 @@ export function ProjectSubcontractorCard({ projectId, subcontractor, items, line
       setDescription('');
       setAmount('');
       onChanged();
+      if (focusAfter) descriptionRef.current?.focus();
     } catch (err) {
       toast(err instanceof ApiError ? err.message : 'Failed to add contract item', true);
     } finally {
       setSaving(false);
+    }
+  }
+
+  // Shift+Enter adds the current line and refocuses the description field so
+  // several contract items can be typed in quick succession without reaching
+  // for the mouse each time -- plain Enter is left alone.
+  function handleQuickAddKeyDown(e: KeyboardEvent<HTMLInputElement>) {
+    if (e.key === 'Enter' && e.shiftKey) {
+      e.preventDefault();
+      addItem(true);
     }
   }
 
@@ -241,10 +285,12 @@ export function ProjectSubcontractorCard({ projectId, subcontractor, items, line
 
         <div style={{ display: 'flex', gap: 8, marginTop: 12 }}>
           <input
+            ref={descriptionRef}
             className="fi"
-            placeholder="Line item (e.g. Run new electrical)"
+            placeholder="Line item (e.g. Run new electrical) — Shift+Enter to add and keep going"
             value={description}
             onChange={(e) => setDescription(e.target.value)}
+            onKeyDown={handleQuickAddKeyDown}
           />
           <input
             className="fi"
@@ -253,8 +299,9 @@ export function ProjectSubcontractorCard({ projectId, subcontractor, items, line
             style={{ maxWidth: 140 }}
             value={amount}
             onChange={(e) => setAmount(e.target.value)}
+            onKeyDown={handleQuickAddKeyDown}
           />
-          <button type="button" className="btn btn-sm" onClick={addItem} disabled={saving || !amount}>
+          <button type="button" className="btn btn-sm" onClick={() => addItem()} disabled={saving || !amount}>
             Add
           </button>
         </div>
