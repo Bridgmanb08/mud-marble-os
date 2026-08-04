@@ -1,7 +1,14 @@
 from fastapi import APIRouter, Depends, HTTPException
 
 from ..deps import CurrentUser, get_current_user, require_admin
-from ..schemas.users import PasswordReset, UserCreate, UserDirectoryEntry, UserSummary
+from ..schemas.users import (
+    PasswordReset,
+    UserCreate,
+    UserDirectoryEntry,
+    UserPreferences,
+    UserPreferencesUpdate,
+    UserSummary,
+)
 from ..security import hash_password
 from ..supabase_client import db_get, db_patch, db_post
 from ..team_roster import CANONICAL_NAMES
@@ -58,3 +65,23 @@ async def list_user_directory(_: CurrentUser = Depends(get_current_user)):
             entries.append({"id": f"roster:{name}", "name": name})
     entries.sort(key=lambda u: u["name"])
     return entries
+
+
+@router.get("/me/preferences", response_model=UserPreferences)
+async def get_my_preferences(current_user: CurrentUser = Depends(get_current_user)):
+    rows = await db_get("app_users", f"?id=eq.{current_user.id}&select=quick_task_widget_enabled")
+    if not rows:
+        raise HTTPException(status_code=404, detail="User not found")
+    return UserPreferences(quick_task_widget_enabled=rows[0].get("quick_task_widget_enabled") or False)
+
+
+@router.patch("/me/preferences", response_model=UserPreferences)
+async def update_my_preferences(body: UserPreferencesUpdate, current_user: CurrentUser = Depends(get_current_user)):
+    """Self-service only -- unlike /notification-settings' company-wide toggle,
+    each person controls their own quick-task-widget preference, so this
+    updates the calling user's own row and nothing else."""
+    updates = body.model_dump(exclude_none=True)
+    if updates:
+        await db_patch("app_users", current_user.id, updates)
+    rows = await db_get("app_users", f"?id=eq.{current_user.id}&select=quick_task_widget_enabled")
+    return UserPreferences(quick_task_widget_enabled=rows[0].get("quick_task_widget_enabled") or False)

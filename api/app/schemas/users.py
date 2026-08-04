@@ -1,3 +1,5 @@
+from typing import Optional
+
 from pydantic import BaseModel
 
 
@@ -24,3 +26,11 @@ class PasswordReset(BaseModel):
 class UserDirectoryEntry(BaseModel):
     id: str
     name: str
+
+
+class UserPreferences(BaseModel):
+    quick_task_widget_enabled: bool = False
+
+
+class UserPreferencesUpdate(BaseModel):
+    quick_task_widget_enabled: Optional[bool] = None

@@ -600,6 +600,61 @@ function PersonTagsTab() {
   );
 }
 
+function QuickTaskWidgetSettings() {
+  const toast = useToast();
+  const [enabled, setEnabled] = useState<boolean | null>(null);
+  const [saving, setSaving] = useState(false);
+
+  useEffect(() => {
+    api
+      .get<{ quick_task_widget_enabled: boolean }>('/users/me/preferences')
+      .then((p) => setEnabled(p.quick_task_widget_enabled))
+      .catch(() => toast('Failed to load your preferences', true));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  async function toggle() {
+    if (enabled === null) return;
+    setSaving(true);
+    try {
+      const updated = await api.patch<{ quick_task_widget_enabled: boolean }>('/users/me/preferences', {
+        quick_task_widget_enabled: !enabled,
+      });
+      setEnabled(updated.quick_task_widget_enabled);
+      toast(updated.quick_task_widget_enabled ? 'Quick task button enabled' : 'Quick task button disabled');
+    } catch (e) {
+      toast(e instanceof ApiError ? e.message : 'Failed to update your preferences', true);
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  if (enabled === null) {
+    return (
+      <div className="empty">
+        <div className="empty-t">Loading…</div>
+      </div>
+    );
+  }
+
+  return (
+    <>
+      <div className="sh">
+        <div className="st">Quick task button</div>
+      </div>
+      <p style={{ fontSize: 12, color: 'var(--t2)', marginBottom: 14 }}>
+        Adds a floating button in the bottom-right corner of every page. Click it to jot down a quick task — it's
+        added straight to the top of the Task Board's To Do list, so it's there the next time you look. This is a
+        personal preference — turning it on or off only affects your own view, not anyone else's.
+      </p>
+      <label style={{ display: 'flex', alignItems: 'center', gap: 10, cursor: 'pointer' }}>
+        <input type="checkbox" checked={enabled} onChange={toggle} disabled={saving} />
+        Show the quick task button
+      </label>
+    </>
+  );
+}
+
 function NotificationSettingsTab() {
   const toast = useToast();
   const [settings, setSettings] = useState<NotificationSettings | null>(null);
@@ -690,11 +745,11 @@ export default function Settings() {
             <button className={`tab${tab === 'person-tags' ? ' on' : ''}`} onClick={() => setTab('person-tags')}>
               Person tags
             </button>
-            <button className={`tab${tab === 'notifications' ? ' on' : ''}`} onClick={() => setTab('notifications')}>
-              Notification settings
-            </button>
           </>
         )}
+        <button className={`tab${tab === 'notifications' ? ' on' : ''}`} onClick={() => setTab('notifications')}>
+          Notification settings
+        </button>
         <button className={`tab${tab === 'default-text' ? ' on' : ''}`} onClick={() => setTab('default-text')}>
           Default Text
         </button>
@@ -703,7 +758,16 @@ export default function Settings() {
       {tab === 'cost-codes' && user?.is_admin && <CostCodesTab />}
       {tab === 'subcontractors' && user?.is_admin && <SubcontractorsTab />}
       {tab === 'person-tags' && user?.is_admin && <PersonTagsTab />}
-      {tab === 'notifications' && user?.is_admin && <NotificationSettingsTab />}
+      {tab === 'notifications' && (
+        <>
+          <QuickTaskWidgetSettings />
+          {user?.is_admin && (
+            <div style={{ marginTop: 28, paddingTop: 20, borderTop: '1px solid var(--border)' }}>
+              <NotificationSettingsTab />
+            </div>
+          )}
+        </>
+      )}
       {tab === 'default-text' && <DefaultTextTab />}
     </>
   );
