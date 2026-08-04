@@ -1,4 +1,5 @@
 import io
+from datetime import datetime
 from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException
@@ -9,7 +10,7 @@ from reportlab.lib import colors
 from reportlab.lib.pagesizes import letter
 from reportlab.lib.styles import ParagraphStyle, getSampleStyleSheet
 from reportlab.lib.units import inch
-from reportlab.platypus import Image, Paragraph, SimpleDocTemplate, Spacer, Table, TableStyle
+from reportlab.platypus import HRFlowable, Image, Paragraph, SimpleDocTemplate, Spacer, Table, TableStyle
 
 from .. import branding
 from ..deps import CurrentUser, get_current_user
@@ -295,43 +296,57 @@ async def export_estimate_pdf(estimate_id: str, _: CurrentUser = Depends(get_cur
     client_name = f"{client.get('first_name') or ''} {client.get('last_name') or ''}".strip()
     project_name = (project.get("name") or "").split("|")[0].strip()
 
-    buf = io.BytesIO()
-    doc = SimpleDocTemplate(buf, pagesize=letter, topMargin=0.6 * inch, bottomMargin=0.6 * inch)
-    styles = getSampleStyleSheet()
-    h1 = ParagraphStyle("h1", parent=styles["Heading1"], fontSize=16, spaceAfter=4)
-    h2 = ParagraphStyle("h2", parent=styles["Heading2"], fontSize=12, spaceBefore=14, spaceAfter=6)
-    body = ParagraphStyle("body", parent=styles["Normal"], fontSize=9.5, leading=13)
-    small = ParagraphStyle("small", parent=styles["Normal"], fontSize=8.5, textColor=colors.grey)
+    who = client_name or project_name
+    breadcrumb = who + (f" | {project_name}" if project_name and project_name != who else "")
 
-    letterhead = Table(
-        [[Image(branding.LOGO_PATH, width=0.5 * inch, height=0.5 * inch), Paragraph("Mud &amp; Marble", h1)]],
-        colWidths=[0.6 * inch, None],
+    buf = io.BytesIO()
+    doc = SimpleDocTemplate(buf, pagesize=letter, topMargin=0.5 * inch, bottomMargin=0.5 * inch)
+    styles = getSampleStyleSheet()
+    wordmark_h1 = ParagraphStyle("wordmark_h1", parent=styles["Heading1"], fontSize=14, alignment=1, spaceBefore=4, spaceAfter=1)
+    company_line = ParagraphStyle("company_line", parent=styles["Normal"], fontSize=8, alignment=1, textColor=colors.grey, spaceAfter=10)
+    h2 = ParagraphStyle("h2", parent=styles["Heading2"], fontSize=10.5, spaceBefore=8, spaceAfter=4)
+    body = ParagraphStyle("body", parent=styles["Normal"], fontSize=8.5, leading=11.5)
+    cell = ParagraphStyle("cell", parent=styles["Normal"], fontSize=7.8, leading=10)
+    small = ParagraphStyle("small", parent=styles["Normal"], fontSize=8, textColor=colors.grey)
+    small_right = ParagraphStyle("small_right", parent=small, alignment=2)
+    title_style = ParagraphStyle("title", parent=styles["Normal"], fontSize=13, spaceBefore=6, spaceAfter=2, fontName="Helvetica-Bold")
+
+    # Centered logo + wordmark + company contact line -- matches the
+    # BuilderTrend reference proposal's header layout.
+    elements = [
+        Image(branding.LOGO_PATH, width=0.55 * inch, height=0.55 * inch, hAlign="CENTER"),
+        Paragraph("Mud &amp; Marble", wordmark_h1),
+        Paragraph(branding.COMPANY_ADDRESS_LINE, company_line),
+    ]
+
+    # Left: who this proposal is for. Right: print date. Same row, small text --
+    # matches the reference's breadcrumb + print-date line above the title.
+    print_date = datetime.now()
+    header_row = Table(
+        [[
+            Paragraph(breadcrumb, small),
+            Paragraph(f"Print Date: {print_date.month}-{print_date.day}-{print_date.year}", small_right),
+        ]],
+        colWidths=[4.2 * inch, 3 * inch],
     )
-    letterhead.setStyle(
+    header_row.setStyle(
         TableStyle(
             [
-                ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
                 ("LEFTPADDING", (0, 0), (-1, -1), 0),
+                ("RIGHTPADDING", (0, 0), (-1, -1), 0),
                 ("TOPPADDING", (0, 0), (-1, -1), 0),
                 ("BOTTOMPADDING", (0, 0), (-1, -1), 0),
             ]
         )
     )
-
-    elements = [
-        letterhead,
-        Paragraph(
-            estimate.get("title") or f"Proposal for {client_name or project_name}",
-            ParagraphStyle("subtitle", parent=styles["Normal"], fontSize=12, spaceAfter=4),
-        ),
-        Paragraph(f"{project_name}" + (f" — {client_name}" if client_name else ""), small),
-        Spacer(1, 14),
-    ]
+    elements.append(header_row)
+    elements.append(Paragraph(estimate.get("title") or f"Proposal for {breadcrumb}", title_style))
+    elements.append(HRFlowable(width="100%", thickness=0.75, color=colors.lightgrey, spaceAfter=8))
 
     intro = estimate.get("introductory_text")
     if intro:
         elements.append(Paragraph(rich_text_to_pdf_markup(intro), body))
-        elements.append(Spacer(1, 10))
+        elements.append(Spacer(1, 8))
 
     for group_name, items in groups.items():
         elements.append(Paragraph(group_name, h2))
@@ -342,36 +357,44 @@ async def export_estimate_pdf(estimate_id: str, _: CurrentUser = Depends(get_cur
             if cc:
                 item_label += f"<br/><font size=7 color='grey'>{cc.get('code')} - {cc.get('name')}</font>"
             qty_unit = f"{item.get('quantity') or 0:g}" + (f" {item['unit']}" if item.get("unit") else "")
+            # Client-facing figures only -- unit_cost/builder_cost are internal
+            # margin data and must never appear on anything a client sees.
+            # "Unit Price" here is a derived per-unit client price
+            # (owner_price / quantity), the same thing BuilderTrend's export
+            # shows, not the builder's cost.
+            qty = item.get("quantity") or 0
+            owner_price = item.get("owner_price") or 0
+            client_unit_price = (owner_price / qty) if qty else owner_price
             table_data.append(
                 [
-                    Paragraph(item_label, body),
-                    Paragraph(item.get("description") or "", body),
+                    Paragraph(item_label, cell),
+                    Paragraph(item.get("description") or "", cell),
                     qty_unit,
-                    f"${(item.get('unit_cost') or 0):,.2f}",
-                    f"${(item.get('owner_price') or 0):,.2f}",
+                    f"${client_unit_price:,.2f}",
+                    f"${owner_price:,.2f}",
                 ]
             )
-        t = Table(table_data, colWidths=[1.4 * inch, 2.1 * inch, 0.9 * inch, 0.9 * inch, 0.9 * inch])
+        t = Table(table_data, colWidths=[1.3 * inch, 2.6 * inch, 0.75 * inch, 0.85 * inch, 0.85 * inch])
         t.setStyle(
             TableStyle(
                 [
-                    ("FONTSIZE", (0, 0), (-1, -1), 8.5),
+                    ("FONTSIZE", (0, 0), (-1, -1), 7.8),
                     ("BACKGROUND", (0, 0), (-1, 0), branding.BRAND_CREAM),
                     ("LINEBELOW", (0, 0), (-1, 0), 0.75, branding.BRAND_BROWN),
                     ("LINEBELOW", (0, 1), (-1, -1), 0.25, colors.lightgrey),
                     ("VALIGN", (0, 0), (-1, -1), "TOP"),
-                    ("TOPPADDING", (0, 0), (-1, -1), 4),
-                    ("BOTTOMPADDING", (0, 0), (-1, -1), 4),
+                    ("TOPPADDING", (0, 0), (-1, -1), 3),
+                    ("BOTTOMPADDING", (0, 0), (-1, -1), 3),
                 ]
             )
         )
         elements.append(t)
-        elements.append(Spacer(1, 8))
+        elements.append(Spacer(1, 6))
 
     total = estimate.get("grand_total_owner_price") or 0
-    elements.append(Spacer(1, 6))
-    elements.append(Paragraph(f"<b>Total Price: ${total:,.2f}</b>", ParagraphStyle("total", parent=styles["Normal"], fontSize=13, alignment=2)))
-    elements.append(Spacer(1, 20))
+    elements.append(Spacer(1, 4))
+    elements.append(Paragraph(f"<b>Total Price: ${total:,.2f}</b>", ParagraphStyle("total", parent=styles["Normal"], fontSize=12, alignment=2)))
+    elements.append(Spacer(1, 16))
 
     closing = estimate.get("closing_text") or DEFAULT_CLOSING_TEXT
     elements.append(Paragraph(rich_text_to_pdf_markup(closing), body))
@@ -418,14 +441,21 @@ async def export_estimate_excel(estimate_id: str, _: CurrentUser = Depends(get_c
         for cell in ws[ws.max_row]:
             cell.font = header_font
         for item in items:
+            # Client-facing figures only -- unit_cost/builder_cost are internal
+            # margin data and must never appear in anything exported for a
+            # client. "Unit Price" is a derived client per-unit price
+            # (owner_price / quantity), not the builder's cost.
+            qty = item.get("quantity") or 0
+            owner_price = item.get("owner_price") or 0
+            client_unit_price = (owner_price / qty) if qty else owner_price
             ws.append(
                 [
                     item.get("title"),
                     item.get("description"),
                     item.get("quantity"),
                     item.get("unit"),
-                    item.get("unit_cost"),
-                    item.get("owner_price"),
+                    client_unit_price,
+                    owner_price,
                 ]
             )
         ws.append([])
