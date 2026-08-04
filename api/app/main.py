@@ -28,6 +28,7 @@ from .routers import (
     rental_leases,
     rental_properties,
     rental_tenants,
+    rental_work_orders,
     reports,
     smart_nudges,
     sub_intelligence,
@@ -91,3 +92,4 @@ app.include_router(job_import.router, prefix="/api")
 app.include_router(rental_properties.router, prefix="/api")
 app.include_router(rental_tenants.router, prefix="/api")
 app.include_router(rental_leases.router, prefix="/api")
+app.include_router(rental_work_orders.router, prefix="/api")

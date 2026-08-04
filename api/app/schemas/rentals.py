@@ -147,4 +147,40 @@ class RentalPaymentOut(BaseModel):
     is_late: bool = False
 
 
+class RentalWorkOrderCreate(BaseModel):
+    property_id: str
+    unit_id: Optional[str] = None
+    title: str
+    description: Optional[str] = None
+    priority: str = "normal"
+    assigned_to: Optional[str] = None
+
+
+class RentalWorkOrderUpdate(BaseModel):
+    title: Optional[str] = None
+    description: Optional[str] = None
+    status: Optional[str] = None
+    priority: Optional[str] = None
+    assigned_to: Optional[str] = None
+    unit_id: Optional[str] = None
+
+
+class RentalWorkOrderOut(BaseModel):
+    id: str
+    property_id: str
+    unit_id: Optional[str] = None
+    title: str
+    description: Optional[str] = None
+    status: str
+    priority: str
+    assigned_to: Optional[str] = None
+    task_id: Optional[str] = None
+    created_at: str
+    resolved_at: Optional[str] = None
+    # Lightweight embed for display (mirrors the ProjectBrief{name} convention
+    # used on ChangeOrderOut/InvoiceOut) -- not the full nested property.
+    property_address: Optional[str] = None
+    unit_label: Optional[str] = None
+
+
 RentalPropertyOut.model_rebuild()
