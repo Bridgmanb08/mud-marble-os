@@ -1132,3 +1132,65 @@ export interface InvoiceScanRow {
 export interface InvoiceScanPreview {
   row: InvoiceScanRow;
 }
+
+export interface RentalUnit {
+  id: string;
+  property_id: string;
+  unit_label: string;
+  bedrooms: number | null;
+  bathrooms: number | null;
+  square_feet: number | null;
+  created_at: string;
+  current_lease_id: string | null;
+  current_tenant_name: string | null;
+}
+
+export interface RentalProperty {
+  id: string;
+  address: string;
+  city: string | null;
+  state: string | null;
+  zip: string | null;
+  property_type: string;
+  notes: string | null;
+  is_archived: boolean;
+  created_at: string;
+  units: RentalUnit[];
+}
+
+export interface RentalTenant {
+  id: string;
+  name: string;
+  email: string | null;
+  phone: string | null;
+  notes: string | null;
+  created_at: string;
+}
+
+export interface RentalLease {
+  id: string;
+  unit_id: string;
+  tenant_id: string;
+  start_date: string;
+  end_date: string;
+  monthly_rent: number;
+  security_deposit: number | null;
+  rent_due_day: number;
+  notes: string | null;
+  created_at: string;
+  lease_status: 'upcoming' | 'active' | 'ended';
+  tenants: RentalTenant | null;
+  rental_units: RentalUnit | null;
+}
+
+export interface RentalPayment {
+  id: string;
+  lease_id: string;
+  due_date: string;
+  amount_due: number;
+  amount_paid: number | null;
+  paid_date: string | null;
+  status: string;
+  notes: string | null;
+  is_late: boolean;
+}

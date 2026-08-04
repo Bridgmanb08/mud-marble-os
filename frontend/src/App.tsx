@@ -32,6 +32,9 @@ const Users = lazy(() => import('./pages/Users'));
 const Review = lazy(() => import('./pages/Review'));
 const Messages = lazy(() => import('./pages/Messages'));
 const JobImportWizard = lazy(() => import('./pages/JobImportWizard'));
+const RentalProperties = lazy(() => import('./pages/RentalProperties'));
+const RentalPropertyDetail = lazy(() => import('./pages/RentalPropertyDetail'));
+const RentalWorkOrders = lazy(() => import('./pages/RentalWorkOrders'));
 
 function PageLoader() {
   return (
@@ -79,6 +82,9 @@ export default function App() {
               <Route path="settings" element={<Settings />} />
               <Route path="reports" element={<Reports />} />
               <Route path="job-import/:projectId" element={<JobImportWizard />} />
+              <Route path="rentals" element={<RentalProperties />} />
+              <Route path="rentals/work-orders" element={<RentalWorkOrders />} />
+              <Route path="rentals/:id" element={<RentalPropertyDetail />} />
               <Route
                 path="users"
                 element={
