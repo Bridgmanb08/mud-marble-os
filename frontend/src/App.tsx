@@ -19,6 +19,7 @@ const EstimateWorksheet = lazy(() => import('./pages/EstimateWorksheet'));
 const EstimateTemplates = lazy(() => import('./pages/EstimateTemplates'));
 const EstimateTemplateWorksheet = lazy(() => import('./pages/EstimateTemplateWorksheet'));
 const Invoices = lazy(() => import('./pages/Invoices'));
+const InvoiceWorksheet = lazy(() => import('./pages/InvoiceWorksheet'));
 const ChangeOrders = lazy(() => import('./pages/ChangeOrders'));
 const InHouse = lazy(() => import('./pages/InHouse'));
 const InHouseWorkshop = lazy(() => import('./pages/InHouseWorkshop'));
@@ -72,6 +73,7 @@ export default function App() {
               <Route path="estimates/templates/:id" element={<EstimateTemplateWorksheet />} />
               <Route path="estimates/:id" element={<EstimateWorksheet />} />
               <Route path="invoices" element={<Invoices />} />
+              <Route path="invoices/:id" element={<InvoiceWorksheet />} />
               <Route path="change-orders" element={<ChangeOrders />} />
               <Route path="inhouse" element={<InHouse />} />
               <Route path="inhouse/:id" element={<InHouseWorkshop />} />

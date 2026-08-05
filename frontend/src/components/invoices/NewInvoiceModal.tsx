@@ -3,11 +3,11 @@ import { api, ApiError } from '../../api/client';
 import { Modal } from '../ui/Modal';
 import { openDatePicker } from '../../lib/datePicker';
 import { fmt } from '../../lib/format';
-import type { FinancialSummary, Project } from '../../types';
+import type { FinancialSummary, Invoice, Project } from '../../types';
 
 interface NewInvoiceModalProps {
   onClose: () => void;
-  onCreated: () => void;
+  onCreated: (invoice: Invoice) => void;
   defaultProjectId?: string;
 }
 
@@ -52,7 +52,7 @@ export function NewInvoiceModal({ onClose, onCreated, defaultProjectId }: NewInv
     setSaving(true);
     setError('');
     try {
-      await api.post('/invoices', {
+      const created = await api.post<Invoice>('/invoices', {
         project_id: projectId,
         invoice_number: invoiceNumber.trim() || null,
         invoice_type: invoiceType,
@@ -60,7 +60,7 @@ export function NewInvoiceModal({ onClose, onCreated, defaultProjectId }: NewInv
         due_date: dueDate || null,
         notes_external: notes.trim() || null,
       });
-      onCreated();
+      onCreated(created);
     } catch (err) {
       setError(err instanceof ApiError ? err.message : 'Failed to create invoice');
     } finally {
