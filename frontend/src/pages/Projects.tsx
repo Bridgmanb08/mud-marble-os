@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { Link } from 'react-router-dom';
+import { useNavigate } from 'react-router-dom';
 import { IconPlus, IconBuilding } from '@tabler/icons-react';
 import { api, ApiError } from '../api/client';
 import { useToast } from '../components/ui/Toast';
@@ -31,6 +31,7 @@ function projectTitle(name: string) {
 }
 
 export default function Projects() {
+  const navigate = useNavigate();
   const [projects, setProjects] = useState<Project[] | null>(null);
   const [filter, setFilter] = useState('all');
   const [showNew, setShowNew] = useState(false);
@@ -127,7 +128,17 @@ export default function Projects() {
         </div>
       ) : (
         filtered.map((p) => (
-          <Link key={p.id} to={`/projects/${p.id}`} className="pc" style={{ textDecoration: 'none', color: 'inherit' }}>
+          <div
+            key={p.id}
+            className="pc"
+            role="link"
+            tabIndex={0}
+            style={{ textDecoration: 'none', color: 'inherit', cursor: 'pointer' }}
+            onClick={() => navigate(`/projects/${p.id}`)}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter') navigate(`/projects/${p.id}`);
+            }}
+          >
             <div className="pi">
               <div className="pn">{projectTitle(p.name)}</div>
               <div className="ps">
@@ -156,7 +167,7 @@ export default function Projects() {
                 ))}
               </select>
             </div>
-          </Link>
+          </div>
         ))
       )}
 

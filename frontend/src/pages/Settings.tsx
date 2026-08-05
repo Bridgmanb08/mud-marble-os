@@ -621,6 +621,13 @@ function QuickTaskWidgetSettings() {
         quick_task_widget_enabled: !enabled,
       });
       setEnabled(updated.quick_task_widget_enabled);
+      // QuickTaskWidget is mounted once in AppLayout and only fetches its
+      // enabled state on mount -- without this it wouldn't notice a toggle
+      // made here until a full page reload. Same cross-component pattern
+      // Topbar already uses for 'open-command-palette'.
+      window.dispatchEvent(
+        new CustomEvent('quick-task-widget-toggled', { detail: { enabled: updated.quick_task_widget_enabled } })
+      );
       toast(updated.quick_task_widget_enabled ? 'Quick task button enabled' : 'Quick task button disabled');
     } catch (e) {
       toast(e instanceof ApiError ? e.message : 'Failed to update your preferences', true);

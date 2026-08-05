@@ -31,6 +31,18 @@ export function QuickTaskWidget() {
       .catch(() => setEnabled(false));
   }, [user]);
 
+  useEffect(() => {
+    // Settings > Notification settings toggles this same preference, but
+    // this widget is mounted once in AppLayout and only reads it on mount --
+    // without this listener, flipping the toggle wouldn't take effect here
+    // until a full page reload.
+    function handleToggle(e: Event) {
+      setEnabled((e as CustomEvent<{ enabled: boolean }>).detail.enabled);
+    }
+    window.addEventListener('quick-task-widget-toggled', handleToggle);
+    return () => window.removeEventListener('quick-task-widget-toggled', handleToggle);
+  }, []);
+
   async function addTask(e: FormEvent) {
     e.preventDefault();
     if (!message.trim() || saving || !user) return;
