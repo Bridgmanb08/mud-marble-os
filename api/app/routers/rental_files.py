@@ -28,13 +28,14 @@ async def get_upload_url(body: UploadUrlRequest, _: CurrentUser = Depends(get_cu
 
 @router.post("", response_model=RentalFileOut)
 async def create_file(body: RentalFileCreate, current_user: CurrentUser = Depends(get_current_user)):
-    if not body.property_id and not body.lease_id:
-        raise HTTPException(status_code=400, detail="A rental file must be attached to a property or a lease")
+    if not body.property_id and not body.lease_id and not body.visit_id:
+        raise HTTPException(status_code=400, detail="A rental file must be attached to a property, a lease, or a visit")
     rows = await db_post(
         "rental_files",
         {
             "property_id": body.property_id,
             "lease_id": body.lease_id,
+            "visit_id": body.visit_id,
             "uploaded_by": current_user.id,
             "file_name": body.file_name,
             "file_type": body.file_type,
@@ -48,14 +49,19 @@ async def create_file(body: RentalFileCreate, current_user: CurrentUser = Depend
 
 @router.get("", response_model=list[RentalFileOut])
 async def list_files(
-    property_id: Optional[str] = None, lease_id: Optional[str] = None, _: CurrentUser = Depends(get_current_user)
+    property_id: Optional[str] = None,
+    lease_id: Optional[str] = None,
+    visit_id: Optional[str] = None,
+    _: CurrentUser = Depends(get_current_user),
 ):
-    if lease_id:
+    if visit_id:
+        query = f"?visit_id=eq.{visit_id}&order=created_at.desc"
+    elif lease_id:
         query = f"?lease_id=eq.{lease_id}&order=created_at.desc"
     elif property_id:
         query = f"?property_id=eq.{property_id}&order=created_at.desc"
     else:
-        raise HTTPException(status_code=400, detail="Provide property_id or lease_id")
+        raise HTTPException(status_code=400, detail="Provide property_id, lease_id, or visit_id")
     return await db_get("rental_files", query)
 
 

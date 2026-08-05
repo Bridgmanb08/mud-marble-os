@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { IconCalendarDue } from '@tabler/icons-react';
 import { api } from '../../../api/client';
 import { fmtD } from '../../../lib/format';
+import { AnimatedBar, useCountUp } from '../../rentals/RentalVisuals';
 import type { RentRollRow } from '../../../types';
 
 const STATUS_LABEL: Record<string, string> = {
@@ -15,9 +16,18 @@ const STATUS_COLOR: Record<string, string> = {
   renewing: 'var(--green)',
   not_renewing: 'var(--red)',
 };
+const WINDOW_DAYS = 90;
 
-// Leases ending within ~90 days, badged by renewal_status so nothing lapses
-// unnoticed. Self-fetches off the shared rent-roll endpoint.
+function urgencyColor(daysLeft: number): string {
+  if (daysLeft < 30) return 'var(--red)';
+  if (daysLeft < 60) return 'var(--amber)';
+  return 'var(--green)';
+}
+
+// Leases ending within ~90 days, badged by renewal_status, with an animated
+// "runway" bar per lease (how much of the 90-day window is left) so urgency
+// reads visually instead of requiring date math. Self-fetches off the
+// shared rent-roll endpoint.
 export function RentalRenewalsWidget() {
   const navigate = useNavigate();
   const [rows, setRows] = useState<RentRollRow[] | null>(null);
@@ -30,13 +40,14 @@ export function RentalRenewalsWidget() {
       .catch(() => setError(true));
   }, []);
 
+  const now = Date.now();
+  const soon = (rows ?? [])
+    .filter((r) => r.lease_end_date && (new Date(r.lease_end_date).getTime() - now) / 86400000 <= WINDOW_DAYS)
+    .sort((a, b) => new Date(a.lease_end_date!).getTime() - new Date(b.lease_end_date!).getTime());
+  const animatedCount = useCountUp(soon.length, 600);
+
   if (error) return <div style={{ fontSize: 13, color: 'var(--t2)' }}>Renewal data unavailable.</div>;
   if (!rows) return <div style={{ fontSize: 13, color: 'var(--t2)' }}>Loading…</div>;
-
-  const now = Date.now();
-  const soon = rows
-    .filter((r) => r.lease_end_date && (new Date(r.lease_end_date).getTime() - now) / 86400000 <= 90)
-    .sort((a, b) => new Date(a.lease_end_date!).getTime() - new Date(b.lease_end_date!).getTime());
 
   if (soon.length === 0) {
     return (
@@ -51,22 +62,29 @@ export function RentalRenewalsWidget() {
     <div>
       <div style={{ display: 'flex', alignItems: 'baseline', gap: 8, marginBottom: 10 }}>
         <IconCalendarDue size={18} color="var(--amber)" />
-        <div style={{ fontSize: 22, fontWeight: 600 }}>{soon.length}</div>
+        <div style={{ fontSize: 22, fontWeight: 600 }}>{Math.round(animatedCount)}</div>
         <div style={{ fontSize: 12, color: 'var(--t2)' }}>lease{soon.length === 1 ? '' : 's'} ending within 90 days</div>
       </div>
-      {soon.slice(0, 5).map((r) => (
-        <div
-          key={r.unit_id}
-          style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '6px 0', borderBottom: '1px solid var(--border)', fontSize: 12.5 }}
-        >
-          <span>
-            {r.property_address} — {fmtD(r.lease_end_date!)}
-          </span>
-          <span className="badge" style={{ background: 'transparent', color: STATUS_COLOR[r.renewal_status || 'undecided'], border: `1px solid ${STATUS_COLOR[r.renewal_status || 'undecided']}` }}>
-            {STATUS_LABEL[r.renewal_status || 'undecided']}
-          </span>
-        </div>
-      ))}
+      {soon.slice(0, 5).map((r, i) => {
+        const daysLeft = Math.max(0, Math.round((new Date(r.lease_end_date!).getTime() - now) / 86400000));
+        const status = r.renewal_status || 'undecided';
+        return (
+          <div key={r.unit_id} style={{ padding: '6px 0', borderBottom: '1px solid var(--border)' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: 12.5, marginBottom: 4 }}>
+              <span>
+                {r.property_address} — {fmtD(r.lease_end_date!)}
+              </span>
+              <span
+                className="badge"
+                style={{ background: 'transparent', color: STATUS_COLOR[status], border: `1px solid ${STATUS_COLOR[status]}` }}
+              >
+                {STATUS_LABEL[status]}
+              </span>
+            </div>
+            <AnimatedBar pct={(daysLeft / WINDOW_DAYS) * 100} color={urgencyColor(daysLeft)} delayMs={i * 70} />
+          </div>
+        );
+      })}
       <button className="btn btn-sm" style={{ marginTop: 10 }} onClick={() => navigate('/rentals')}>
         View rent roll
       </button>
