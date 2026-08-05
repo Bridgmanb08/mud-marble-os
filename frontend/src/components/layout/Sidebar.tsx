@@ -16,6 +16,8 @@ import {
   IconShieldLock,
   IconInbox,
   IconMessages,
+  IconHome2,
+  IconClipboardList,
 } from '@tabler/icons-react';
 import { useAuth } from '../../auth/AuthContext';
 
@@ -56,6 +58,13 @@ const navSections: { label: string; items: NavItem[] }[] = [
       { to: '/schedule', label: 'Schedule', icon: IconCalendar },
       { to: '/subcontractors', label: 'Subcontractors', icon: IconTools },
       { to: '/sub-intelligence', label: 'Sub Intelligence', icon: IconChartBar },
+    ],
+  },
+  {
+    label: 'Rentals',
+    items: [
+      { to: '/rentals', label: 'Rental Properties', icon: IconHome2, end: true },
+      { to: '/rentals/work-orders', label: 'Work Orders', icon: IconClipboardList },
     ],
   },
 ];
