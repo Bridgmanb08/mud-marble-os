@@ -99,6 +99,15 @@ body{font-family:var(--font);background:var(--bg);color:var(--text);font-size:14
 .tbl td.sticky-col,.tbl th.sticky-col{position:sticky;left:0;z-index:1;background:var(--surface);}
 .tbl tbody tr:hover td.sticky-col{background:var(--border);}
 
+/* Alternating row bands (like an Excel/Google Sheets ledger) -- add
+   alongside .tbl on dense, scan-heavy tables (e.g. the Rentals rent roll)
+   where a long list of same-height rows is otherwise hard to track across.
+   Uses the existing brand-cream token for the tinted stripe so it stays
+   on-palette instead of introducing a new gray. Hover still wins over the
+   stripe since it comes later and matches on the same specificity. */
+.tbl-zebra tbody tr:nth-child(even) td{background:var(--brand-cream);}
+.tbl-zebra tbody tr:hover td{background:var(--border);}
+
 /* Pins the column-title row below the fixed topbar as a group's rows scroll
    past -- add alongside .tbl on tables with long, per-group scrolling lists
    (e.g. the Estimate worksheet). Each group's own <thead> sticks while its
