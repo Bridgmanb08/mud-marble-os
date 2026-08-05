@@ -30,6 +30,7 @@ from .routers import (
     rental_properties,
     rental_tenants,
     rental_work_orders,
+    rentals_dashboard,
     reports,
     smart_nudges,
     sub_intelligence,
@@ -95,3 +96,4 @@ app.include_router(rental_tenants.router, prefix="/api")
 app.include_router(rental_leases.router, prefix="/api")
 app.include_router(rental_work_orders.router, prefix="/api")
 app.include_router(rental_files.router, prefix="/api")
+app.include_router(rentals_dashboard.router, prefix="/api")
