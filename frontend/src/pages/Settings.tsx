@@ -185,7 +185,7 @@ function CostCodesTab() {
       ) : costCodes.length === 0 ? (
         <div className="empty-s">No cost codes yet.</div>
       ) : (
-        <table className="tbl">
+        <table className="tbl tbl-zebra">
           <thead>
             <tr>
               <th>Code</th>
@@ -271,7 +271,7 @@ function SubcontractorsTab() {
       ) : subs.length === 0 ? (
         <div className="empty-s">No subcontractors yet. Add your trade partners to build the roster.</div>
       ) : (
-        <table className="tbl">
+        <table className="tbl tbl-zebra">
           <thead>
             <tr>
               <th>Company</th>

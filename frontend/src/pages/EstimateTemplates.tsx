@@ -168,7 +168,7 @@ export default function EstimateTemplates() {
             <div className="empty-s">Build one from scratch, or save an existing estimate as a template.</div>
           </div>
         ) : (
-          <table className="tbl">
+          <table className="tbl tbl-zebra">
             <thead>
               <tr>
                 <th>Name</th>

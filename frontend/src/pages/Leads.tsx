@@ -167,7 +167,7 @@ export default function Leads() {
             <div className="empty-s">Add a lead opportunity to get started.</div>
           </div>
         ) : (
-          <table className="tbl">
+          <table className="tbl tbl-zebra">
             <thead>
               <tr>
                 <th className="sortable" onClick={() => toggleSort('title')}>

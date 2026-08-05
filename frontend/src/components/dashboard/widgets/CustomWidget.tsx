@@ -44,7 +44,7 @@ export function CustomWidgetRenderer({ spec, data }: { spec: CustomWidgetSpec; d
   if (!filtered.length) return <div style={{ fontSize: 13, color: 'var(--t2)' }}>Nothing matches.</div>;
   const columns = Object.keys(filtered[0]).filter((k) => k !== 'id' && k !== 'project_id');
   return (
-    <table className="tbl">
+    <table className="tbl tbl-zebra">
       <thead>
         <tr>
           {columns.map((c) => (

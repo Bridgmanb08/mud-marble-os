@@ -46,7 +46,7 @@ export function ProjectProfitabilityWidget({ data }: { data: DashboardSummary })
   if (!data.project_profitability.length)
     return <div style={{ fontSize: 13, color: 'var(--t2)' }}>No project financial data yet.</div>;
   return (
-    <table className="tbl">
+    <table className="tbl tbl-zebra">
       <thead>
         <tr>
           <th>Project</th>

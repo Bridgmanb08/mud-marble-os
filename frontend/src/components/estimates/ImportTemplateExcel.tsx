@@ -176,7 +176,7 @@ export function ImportTemplateExcel({ onClose }: { onClose: () => void }) {
 
           <div style={{ fontSize: 12, fontWeight: 600, marginBottom: 8 }}>Preview (first {previewRows.length} rows)</div>
           <div style={{ overflowX: 'auto', marginBottom: 16 }}>
-            <table className="tbl">
+            <table className="tbl tbl-zebra">
               <thead>
                 <tr>
                   <th>Title</th>

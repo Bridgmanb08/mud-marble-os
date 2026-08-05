@@ -344,7 +344,7 @@ export function TableView({
               </div>
             )}
             <div className="card">
-              <table className="tbl">
+              <table className="tbl tbl-zebra">
                 <thead>
                   <tr>
                     {dragEnabled && <th style={{ width: 24 }} />}
