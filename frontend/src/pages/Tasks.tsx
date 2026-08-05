@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
-import { IconPlus, IconLayoutKanban, IconTable, IconTimeline, IconBookmark, IconTrash } from '@tabler/icons-react';
+import { IconPlus, IconLayoutKanban, IconTable, IconTimeline, IconBookmark, IconTrash, IconFileImport } from '@tabler/icons-react';
 import { api } from '../api/client';
 import { useAuth } from '../auth/AuthContext';
 import { useToast } from '../components/ui/Toast';
@@ -13,6 +13,7 @@ import { TimelineView } from '../components/tasks/TimelineView';
 import { NewTaskModal } from '../components/tasks/NewTaskModal';
 import { TaskDetailDrawer } from '../components/tasks/TaskDetailDrawer';
 import { JobFilterSidebar } from '../components/tasks/JobFilterSidebar';
+import { FathomImportModal } from '../components/tasks/FathomImportModal';
 
 type TaskTab = 'all' | 'mine' | 'punch';
 type ViewMode = 'kanban' | 'table' | 'timeline';
@@ -58,6 +59,7 @@ export default function Tasks() {
   const [activeViewId, setActiveViewId] = useState(saved?.activeViewId || '');
   const [showSaveViewModal, setShowSaveViewModal] = useState(false);
   const [newViewName, setNewViewName] = useState('');
+  const [showFathomImport, setShowFathomImport] = useState(false);
 
   const toast = useToast();
 
@@ -221,6 +223,9 @@ export default function Tasks() {
                   <IconTimeline size={14} /> Timeline
                 </button>
               </div>
+              <button className="btn btn-sm" onClick={() => setShowFathomImport(true)}>
+                <IconFileImport size={14} /> Import Fathom
+              </button>
               <button className="btn btn-p btn-sm" onClick={() => openNew('upcoming')}>
                 <IconPlus size={14} /> New task
               </button>
@@ -338,6 +343,10 @@ export default function Tasks() {
             load();
           }}
         />
+      )}
+
+      {showFathomImport && (
+        <FathomImportModal onClose={() => setShowFathomImport(false)} onImported={load} />
       )}
 
       {detailTask && (
