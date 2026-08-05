@@ -8,6 +8,7 @@ import { NewRentalUnitModal } from '../components/rentals/NewRentalUnitModal';
 import { NewRentalLeaseModal } from '../components/rentals/NewRentalLeaseModal';
 import { LeaseRentLedgerModal } from '../components/rentals/LeaseRentLedgerModal';
 import { NewRentalWorkOrderModal } from '../components/rentals/NewRentalWorkOrderModal';
+import { MoneyField } from '../components/rentals/MoneyField';
 import type { RentalLease, RentalProperty, RentalWorkOrder } from '../types';
 
 const TABS = ['Overview', 'Financials', 'Units & Tenants', 'Leases', 'Maintenance'];
@@ -225,58 +226,58 @@ export default function RentalPropertyDetail() {
 
           <div className="fr3" style={{ marginTop: 14 }}>
             <div className="fg">
-              <label className="fl">Purchase value ($)</label>
-              <input className="fi" type="number" value={financials.purchase_value} onChange={(e) => setFinancials((f) => ({ ...f, purchase_value: e.target.value }))} onBlur={(e) => saveFinancial('purchase_value', e.target.value)} />
+              <label className="fl">Purchase value</label>
+              <MoneyField value={financials.purchase_value} onCommit={(v) => saveFinancial('purchase_value', v)} />
             </div>
             <div className="fg">
-              <label className="fl">Debt ($)</label>
-              <input className="fi" type="number" value={financials.debt} onChange={(e) => setFinancials((f) => ({ ...f, debt: e.target.value }))} onBlur={(e) => saveFinancial('debt', e.target.value)} />
+              <label className="fl">Debt</label>
+              <MoneyField value={financials.debt} onCommit={(v) => saveFinancial('debt', v)} />
             </div>
             <div className="fg">
-              <label className="fl">Target monthly rent ($)</label>
-              <input className="fi" type="number" value={financials.target_monthly_rent} onChange={(e) => setFinancials((f) => ({ ...f, target_monthly_rent: e.target.value }))} onBlur={(e) => saveFinancial('target_monthly_rent', e.target.value)} />
+              <label className="fl">Target monthly rent</label>
+              <MoneyField value={financials.target_monthly_rent} onCommit={(v) => saveFinancial('target_monthly_rent', v)} />
             </div>
           </div>
           <div className="fr3">
             <div className="fg">
-              <label className="fl">Mortgage payment ($/mo)</label>
-              <input className="fi" type="number" value={financials.mortgage_payment} onChange={(e) => setFinancials((f) => ({ ...f, mortgage_payment: e.target.value }))} onBlur={(e) => saveFinancial('mortgage_payment', e.target.value)} />
+              <label className="fl">Mortgage payment (/mo)</label>
+              <MoneyField value={financials.mortgage_payment} onCommit={(v) => saveFinancial('mortgage_payment', v)} />
             </div>
             <div className="fg">
               <label className="fl">Interest rate</label>
               <input className="fi" type="number" step="0.0001" value={financials.interest_rate} onChange={(e) => setFinancials((f) => ({ ...f, interest_rate: e.target.value }))} onBlur={(e) => saveFinancial('interest_rate', e.target.value)} />
             </div>
             <div className="fg">
-              <label className="fl">Taxes ($/mo)</label>
-              <input className="fi" type="number" value={financials.taxes_monthly} onChange={(e) => setFinancials((f) => ({ ...f, taxes_monthly: e.target.value }))} onBlur={(e) => saveFinancial('taxes_monthly', e.target.value)} />
+              <label className="fl">Taxes (/mo)</label>
+              <MoneyField value={financials.taxes_monthly} onCommit={(v) => saveFinancial('taxes_monthly', v)} />
             </div>
           </div>
           <div className="fr3">
             <div className="fg">
-              <label className="fl">Insurance ($/yr)</label>
-              <input className="fi" type="number" value={financials.insurance_annual} onChange={(e) => setFinancials((f) => ({ ...f, insurance_annual: e.target.value }))} onBlur={(e) => saveFinancial('insurance_annual', e.target.value)} />
+              <label className="fl">Insurance (/yr)</label>
+              <MoneyField value={financials.insurance_annual} onCommit={(v) => saveFinancial('insurance_annual', v)} />
             </div>
             <div className="fg">
-              <label className="fl">Insurance ($/mo)</label>
-              <input className="fi" type="number" value={financials.insurance_monthly} onChange={(e) => setFinancials((f) => ({ ...f, insurance_monthly: e.target.value }))} onBlur={(e) => saveFinancial('insurance_monthly', e.target.value)} />
+              <label className="fl">Insurance (/mo)</label>
+              <MoneyField value={financials.insurance_monthly} onCommit={(v) => saveFinancial('insurance_monthly', v)} />
             </div>
             <div className="fg">
-              <label className="fl">Other expenses ($/mo)</label>
-              <input className="fi" type="number" value={financials.other_expenses_monthly} onChange={(e) => setFinancials((f) => ({ ...f, other_expenses_monthly: e.target.value }))} onBlur={(e) => saveFinancial('other_expenses_monthly', e.target.value)} />
+              <label className="fl">Other expenses (/mo)</label>
+              <MoneyField value={financials.other_expenses_monthly} onCommit={(v) => saveFinancial('other_expenses_monthly', v)} />
             </div>
           </div>
           <div className="fr3">
             <div className="fg">
-              <label className="fl">Maintenance/Cap Ex ($/mo)</label>
-              <input className="fi" type="number" value={financials.maintenance_monthly} onChange={(e) => setFinancials((f) => ({ ...f, maintenance_monthly: e.target.value }))} onBlur={(e) => saveFinancial('maintenance_monthly', e.target.value)} />
+              <label className="fl">Maintenance/Cap Ex (/mo)</label>
+              <MoneyField value={financials.maintenance_monthly} onCommit={(v) => saveFinancial('maintenance_monthly', v)} />
             </div>
             <div className="fg">
-              <label className="fl">Mowing ($/mo)</label>
-              <input className="fi" type="number" value={financials.mowing_monthly} onChange={(e) => setFinancials((f) => ({ ...f, mowing_monthly: e.target.value }))} onBlur={(e) => saveFinancial('mowing_monthly', e.target.value)} />
+              <label className="fl">Mowing (/mo)</label>
+              <MoneyField value={financials.mowing_monthly} onCommit={(v) => saveFinancial('mowing_monthly', v)} />
             </div>
             <div className="fg">
-              <label className="fl">Utilities ($/mo)</label>
-              <input className="fi" type="number" value={financials.utilities_monthly} onChange={(e) => setFinancials((f) => ({ ...f, utilities_monthly: e.target.value }))} onBlur={(e) => saveFinancial('utilities_monthly', e.target.value)} />
+              <label className="fl">Utilities (/mo)</label>
+              <MoneyField value={financials.utilities_monthly} onCommit={(v) => saveFinancial('utilities_monthly', v)} />
             </div>
           </div>
           <div className="fr3">
