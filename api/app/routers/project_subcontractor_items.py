@@ -25,7 +25,10 @@ async def create_item(project_id: str, body: SubItemCreate, _: CurrentUser = Dep
 
 @router.patch("/subcontractor-items/{item_id}", response_model=SubItemOut)
 async def update_item(item_id: str, body: SubItemUpdate, _: CurrentUser = Depends(get_current_user)):
-    updates = body.model_dump(exclude_none=True)
+    # exclude_unset (not exclude_none) -- a caller may need to explicitly
+    # clear a field (e.g. confirmed_at when un-confirming a line), and that
+    # null has to reach the database instead of being silently dropped.
+    updates = body.model_dump(exclude_unset=True)
     if not updates:
         raise HTTPException(status_code=400, detail="No fields to update")
     rows = await db_patch("project_subcontractor_items", item_id, updates)

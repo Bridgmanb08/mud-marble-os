@@ -154,7 +154,11 @@ async def create_estimate(body: EstimateCreate, _: CurrentUser = Depends(get_cur
 
 @router.patch("/{estimate_id}", response_model=EstimateOut)
 async def update_estimate(estimate_id: str, body: EstimateUpdate, _: CurrentUser = Depends(get_current_user)):
-    await db_patch("estimates", estimate_id, body.model_dump(exclude_none=True))
+    # exclude_unset (not exclude_none) -- a caller may need to explicitly
+    # clear a field (e.g. removing an approval_deadline or closing_text),
+    # and that null has to reach the database instead of being silently
+    # dropped. Same fix already made for clients/projects/invoices/etc.
+    await db_patch("estimates", estimate_id, body.model_dump(exclude_unset=True))
     full = await db_get("estimates", f"?id=eq.{estimate_id}&select=*,projects(name)")
     if not full:
         raise HTTPException(status_code=404, detail="Estimate not found")
@@ -250,7 +254,10 @@ async def update_line_item(
     if not existing_rows:
         raise HTTPException(status_code=404, detail="Line item not found")
     existing = existing_rows[0]
-    updates = body.model_dump(exclude_none=True)
+    # exclude_unset (not exclude_none) -- a caller may need to explicitly
+    # clear a field (e.g. removing a cost_code_id or notes_external), and
+    # that null has to reach the database instead of being silently dropped.
+    updates = body.model_dump(exclude_unset=True)
     merged = {**existing, **updates}
     builder_cost, owner_price = _compute_costs(
         merged.get("quantity") or 0, merged.get("unit_cost") or 0, merged.get("markup_type") or "percent", merged.get("markup_value") or 0

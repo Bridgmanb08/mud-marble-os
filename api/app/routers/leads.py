@@ -35,7 +35,11 @@ async def create_lead(body: LeadCreate, _: CurrentUser = Depends(get_current_use
 
 @router.patch("/{lead_id}", response_model=LeadOut)
 async def update_lead(lead_id: str, body: LeadUpdate, _: CurrentUser = Depends(get_current_user)):
-    rows = await db_patch("leads", lead_id, body.model_dump(exclude_none=True))
+    # exclude_unset (not exclude_none) -- a caller may need to explicitly
+    # clear a field (e.g. unlinking a referral, clearing last_contacted_at),
+    # and that null has to reach the database instead of being silently
+    # dropped. Same fix already made for clients/projects/invoices/etc.
+    rows = await db_patch("leads", lead_id, body.model_dump(exclude_unset=True))
     return (await _attach_referrers(rows))[0]
 
 

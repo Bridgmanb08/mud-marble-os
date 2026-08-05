@@ -32,7 +32,11 @@ async def create_subcontractor(body: SubcontractorCreate, _: CurrentUser = Depen
 async def update_subcontractor(
     subcontractor_id: str, body: SubcontractorUpdate, _: CurrentUser = Depends(get_current_user)
 ):
-    rows = await db_patch("subcontractors", subcontractor_id, body.model_dump(exclude_none=True))
+    # exclude_unset (not exclude_none) -- a caller may need to explicitly
+    # clear a field (e.g. removing an insurance_expiry or license_number),
+    # and that null has to reach the database instead of being silently
+    # dropped. Same fix already made for clients/projects/invoices/etc.
+    rows = await db_patch("subcontractors", subcontractor_id, body.model_dump(exclude_unset=True))
     return rows[0]
 
 

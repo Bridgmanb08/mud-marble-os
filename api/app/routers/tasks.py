@@ -241,7 +241,7 @@ async def create_view(body: BoardViewCreate, current_user: CurrentUser = Depends
 @router.patch("/views/{view_id}", response_model=BoardViewOut)
 async def update_view(view_id: str, body: BoardViewUpdate, current_user: CurrentUser = Depends(get_current_user)):
     await _require_owned("board_views", view_id, current_user)
-    rows = await db_patch("board_views", view_id, body.model_dump(exclude_none=True))
+    rows = await db_patch("board_views", view_id, body.model_dump(exclude_unset=True))
     return rows[0]
 
 
@@ -271,7 +271,7 @@ async def create_subtask(task_id: str, body: SubtaskCreate, _: CurrentUser = Dep
 
 @router.patch("/{task_id}/subtasks/{subtask_id}", response_model=SubtaskOut)
 async def update_subtask(task_id: str, subtask_id: str, body: SubtaskUpdate, _: CurrentUser = Depends(get_current_user)):
-    rows = await db_patch("task_subtasks", subtask_id, body.model_dump(exclude_none=True))
+    rows = await db_patch("task_subtasks", subtask_id, body.model_dump(exclude_unset=True))
     return rows[0]
 
 
@@ -376,7 +376,13 @@ async def update_task(task_id: str, body: TaskUpdate, _: CurrentUser = Depends(g
                     detail=f"Can't mark this task complete — it's blocked by an incomplete dependency: {names}",
                 )
 
-    updates = body.model_dump(exclude_none=True, exclude={"expected_version"})
+    # exclude_unset (not exclude_none) -- a caller may need to explicitly
+    # clear a nullable field (e.g. unassigning a subcontractor, removing a
+    # scheduled date), and that null has to reach the database instead of
+    # being silently dropped. This is the same fix already made for
+    # clients/projects/invoices/change_orders; TaskClarifyUpdate above only
+    # ever existed as a narrow workaround for this exact bug on one field.
+    updates = body.model_dump(exclude_unset=True, exclude={"expected_version"})
     if "assignees" in updates:
         updates["assignees"] = [normalize_assignee_name(a) for a in updates["assignees"]]
         updates["assigned_to"] = updates["assignees"][0] if updates["assignees"] else None

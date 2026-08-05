@@ -46,7 +46,10 @@ async def get_template(template_id: str, _: CurrentUser = Depends(get_current_us
 
 @router.patch("/{template_id}", response_model=EstimateTemplateOut)
 async def update_template(template_id: str, body: EstimateTemplateUpdate, _: CurrentUser = Depends(get_current_user)):
-    updates = body.model_dump(exclude_none=True)
+    # exclude_unset (not exclude_none) -- a caller may need to explicitly
+    # clear a field (e.g. removing category/description), and that null has
+    # to reach the database instead of being silently dropped.
+    updates = body.model_dump(exclude_unset=True)
     updates["updated_at"] = datetime.now(timezone.utc).isoformat()
     await db_patch("estimate_templates", template_id, updates)
     rows = await db_get("estimate_templates", f"?id=eq.{template_id}")
@@ -219,7 +222,10 @@ async def update_template_item(
     if not existing_rows:
         raise HTTPException(status_code=404, detail="Line item not found")
     existing = existing_rows[0]
-    updates = body.model_dump(exclude_none=True)
+    # exclude_unset (not exclude_none) -- a caller may need to explicitly
+    # clear a field (e.g. removing a cost_code_id), and that null has to
+    # reach the database instead of being silently dropped.
+    updates = body.model_dump(exclude_unset=True)
     merged = {**existing, **updates}
     builder_cost, owner_price = _compute_costs(
         merged.get("quantity") or 0, merged.get("unit_cost") or 0, merged.get("markup_type") or "percent", merged.get("markup_value") or 0
