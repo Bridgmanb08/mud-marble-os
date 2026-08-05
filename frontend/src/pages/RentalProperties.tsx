@@ -4,11 +4,13 @@ import { IconPlus, IconHome2 } from '@tabler/icons-react';
 import { api } from '../api/client';
 import { useToast } from '../components/ui/Toast';
 import { NewRentalPropertyModal } from '../components/rentals/NewRentalPropertyModal';
-import type { RentalProperty } from '../types';
+import { LeaseTimeline } from '../components/rentals/LeaseTimeline';
+import type { RentalLease, RentalProperty } from '../types';
 
 export default function RentalProperties() {
   const toast = useToast();
   const [properties, setProperties] = useState<RentalProperty[] | null>(null);
+  const [leases, setLeases] = useState<RentalLease[]>([]);
   const [showNew, setShowNew] = useState(false);
 
   function load() {
@@ -16,6 +18,10 @@ export default function RentalProperties() {
       .get<RentalProperty[]>('/rental-properties')
       .then(setProperties)
       .catch(() => toast('Failed to load rental properties', true));
+    api
+      .get<RentalLease[]>('/rental-leases')
+      .then(setLeases)
+      .catch(() => {});
   }
 
   useEffect(load, []);
@@ -60,6 +66,15 @@ export default function RentalProperties() {
           </div>
         </div>
       </div>
+
+      {leases.length > 0 && (
+        <div className="card" style={{ padding: 20, marginBottom: 16 }}>
+          <div className="ibt" style={{ fontSize: 13, textTransform: 'none', letterSpacing: 0, border: 'none', padding: 0, marginBottom: 14 }}>
+            Lease timeline
+          </div>
+          <LeaseTimeline leases={leases} />
+        </div>
+      )}
 
       {properties === null ? (
         <div className="empty">
