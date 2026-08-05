@@ -80,7 +80,7 @@ async def update_my_preferences(body: UserPreferencesUpdate, current_user: Curre
     """Self-service only -- unlike /notification-settings' company-wide toggle,
     each person controls their own quick-task-widget preference, so this
     updates the calling user's own row and nothing else."""
-    updates = body.model_dump(exclude_none=True)
+    updates = body.model_dump(exclude_unset=True)
     if updates:
         await db_patch("app_users", current_user.id, updates)
     rows = await db_get("app_users", f"?id=eq.{current_user.id}&select=quick_task_widget_enabled")

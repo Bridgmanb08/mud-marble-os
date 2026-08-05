@@ -112,3 +112,9 @@ async def db_patch_query(table: str, query: str, data: dict) -> list[dict]:
 
 async def db_delete(table: str, record_id: str) -> None:
     await _request("DELETE", f"{_base_url()}/{table}?id=eq.{record_id}")
+
+
+async def db_delete_query(table: str, query: str) -> None:
+    """Deletes every row matching an arbitrary filter (e.g. `?id=in.(...)`)
+    in a single request, instead of one DELETE per row."""
+    await _request("DELETE", f"{_base_url()}/{table}{query}")

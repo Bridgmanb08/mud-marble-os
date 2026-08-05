@@ -12,7 +12,7 @@ from ..project_matching import match_project
 from ..schemas.files import DownloadUrlResponse
 from ..schemas.inbound_media import AssignProjectRequest, InboundMediaOut
 from ..storage_client import create_signed_download_url, upload_object
-from ..supabase_client import db_get, db_patch, db_post
+from ..supabase_client import db_get, db_patch, db_post, db_post_many
 from ..twilio_client import fetch_media, twiml_reply, verify_signature
 
 logger = logging.getLogger("twilio_sms")
@@ -86,9 +86,13 @@ async def _active_projects() -> list[dict]:
 
 async def _notify_admins(message: str, source_id: str) -> None:
     admins = await db_get("app_users", "?is_admin=eq.true&select=id")
-    for a in admins:
-        await db_post(
-            "notifications",
+    if not admins:
+        return
+    # One bulk insert instead of one POST per admin -- same fix already
+    # applied elsewhere in this codebase for identical-shape row fanout.
+    await db_post_many(
+        "notifications",
+        [
             {
                 "user_id": a["id"],
                 "type": "unclaimed_media",
@@ -96,8 +100,10 @@ async def _notify_admins(message: str, source_id: str) -> None:
                 "source_id": source_id,
                 "project_id": None,
                 "message": message,
-            },
-        )
+            }
+            for a in admins
+        ],
+    )
 
 
 async def _resolve_to_project(inbound_row: dict, project_id: str) -> None:
