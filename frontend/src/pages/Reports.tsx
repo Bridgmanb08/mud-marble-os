@@ -401,7 +401,7 @@ export default function Reports() {
           {result.rows.length === 0 ? (
             <div className="empty-s">No data matches this report's filters.</div>
           ) : spec.chart_type === 'table' ? (
-            <table className="tbl">
+            <table className="tbl tbl-zebra">
               <thead>
                 <tr>
                   <th>{config.groupFields.find((f) => f.value === spec.group_by)?.label || 'Group'}</th>

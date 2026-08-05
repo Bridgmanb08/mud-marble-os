@@ -80,7 +80,7 @@ export default function Estimates() {
             <div className="empty-s">Open a project and start an estimate from the Estimate tab.</div>
           </div>
         ) : (
-          <table className="tbl">
+          <table className="tbl tbl-zebra">
             <thead>
               <tr>
                 <th>Project</th>

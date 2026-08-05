@@ -155,7 +155,7 @@ export default function Schedule() {
                   <div className="empty-t">No scheduled tasks</div>
                 </div>
               ) : (
-                <table className="tbl">
+                <table className="tbl tbl-zebra">
                   <thead>
                     <tr>
                       <th>Date</th>

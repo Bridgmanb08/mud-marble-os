@@ -110,7 +110,7 @@ export function LeaseRentLedgerModal({ lease, onClose }: { lease: RentalLease; o
           <div className="empty-t">No payment rows yet</div>
         </div>
       ) : (
-        <table className="tbl">
+        <table className="tbl tbl-zebra">
           <thead>
             <tr>
               <th>Due date</th>

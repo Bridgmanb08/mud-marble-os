@@ -159,7 +159,7 @@ export default function SubIntelligence() {
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16, marginBottom: 16 }}>
         <div className="card" style={{ padding: 18, overflowX: 'auto' }}>
           <div className="ibt">Project performance vs estimate</div>
-          <table className="tbl">
+          <table className="tbl tbl-zebra">
             <thead>
               <tr>
                 <th>Project</th>
@@ -217,7 +217,7 @@ export default function SubIntelligence() {
             <div className="empty-s">Add subs from the Subcontractors page to see intelligence here.</div>
           </div>
         ) : (
-          <table className="tbl">
+          <table className="tbl tbl-zebra">
             <thead>
               <tr>
                 <th>Company</th>

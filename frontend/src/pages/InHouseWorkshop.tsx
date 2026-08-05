@@ -311,7 +311,7 @@ export default function InHouseWorkshop() {
             </div>
           ) : (
             <div className="tbl-scroll">
-            <table className="tbl">
+            <table className="tbl tbl-zebra">
               <thead>
                 <tr>
                   <th className="sticky-col">Date</th>

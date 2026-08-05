@@ -357,7 +357,7 @@ export default function ProjectDetail() {
               <div className="empty-s">Start an estimate to build out a proposal worksheet with grouped line items, markup, and PDF export.</div>
             </div>
           ) : (
-            <table className="tbl">
+            <table className="tbl tbl-zebra">
               <thead>
                 <tr>
                   <th>Title</th>
@@ -397,7 +397,7 @@ export default function ProjectDetail() {
           {changeOrders.length === 0 ? (
             <div className="empty-s">No change orders yet.</div>
           ) : (
-            <table className="tbl">
+            <table className="tbl tbl-zebra">
               <thead>
                 <tr>
                   <th>CO #</th>
@@ -438,7 +438,7 @@ export default function ProjectDetail() {
           {invoices.length === 0 ? (
             <div className="empty-s">No invoices yet.</div>
           ) : (
-            <table className="tbl">
+            <table className="tbl tbl-zebra">
               <thead>
                 <tr>
                   <th>Invoice #</th>
@@ -527,7 +527,7 @@ export default function ProjectDetail() {
             ) : filteredTasks.length === 0 ? (
               <div className="empty-s">No tasks scheduled yet.</div>
             ) : (
-              <table className="tbl">
+              <table className="tbl tbl-zebra">
                 <thead>
                   <tr>
                     <th>Title</th>
