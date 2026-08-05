@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
+import { Link, useNavigate } from 'react-router-dom';
 import { IconPlus, IconReceipt } from '@tabler/icons-react';
 import { api } from '../api/client';
 import { useToast } from '../components/ui/Toast';
@@ -17,6 +18,7 @@ const STATUS_BADGE: Record<string, string> = {
 const FILTERS = ['all', 'overdue', 'sent', 'paid', 'draft'];
 
 export default function Invoices() {
+  const navigate = useNavigate();
   const [invoices, setInvoices] = useState<Invoice[] | null>(null);
   const [filter, setFilter] = useState('all');
   const [showNew, setShowNew] = useState(false);
@@ -106,7 +108,7 @@ export default function Invoices() {
         </div>
       ) : (
         filtered.map((i) => (
-          <div key={i.id} className="invr">
+          <Link key={i.id} to={`/invoices/${i.id}`} className="invr" style={{ textDecoration: 'none', color: 'inherit' }}>
             <div>
               <div style={{ fontSize: 13, fontWeight: 500 }}>
                 {i.invoice_number || 'Draft'} <span style={{ color: 'var(--t2)', fontWeight: 400 }}>· {i.projects?.name || ''}</span>
@@ -119,17 +121,17 @@ export default function Invoices() {
               <span style={{ fontSize: 14, fontWeight: 600 }}>{fmt(i.amount_due)}</span>
               <span className={`badge ${STATUS_BADGE[i.status] || 'bg-gray'}`}>{i.status}</span>
             </div>
-          </div>
+          </Link>
         ))
       )}
 
       {showNew && (
         <NewInvoiceModal
           onClose={() => setShowNew(false)}
-          onCreated={() => {
+          onCreated={(invoice) => {
             setShowNew(false);
             toast('Invoice created');
-            load();
+            navigate(`/invoices/${invoice.id}`);
           }}
         />
       )}

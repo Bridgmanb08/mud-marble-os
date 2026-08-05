@@ -361,6 +361,37 @@ export interface Invoice {
   projects: ProjectBrief | null;
 }
 
+export interface InvoiceLineItem {
+  id: string;
+  invoice_id: string;
+  source_line_item_id: string | null;
+  cost_code_id: string | null;
+  title: string;
+  description: string | null;
+  pct_of_line_item: number | null;
+  amount: number;
+  sort_order: number;
+  created_at: string;
+  cost_codes: { code: string; name: string } | null;
+}
+
+// The "Add from Estimate" picker's row shape -- one per line item on the
+// project's current estimate, annotated with how much of it has already
+// been invoiced across every invoice for the project (not just the one
+// being built), so the picker can show a progress bar and cap what's left.
+export interface EstimateItemForInvoice {
+  id: string;
+  title: string;
+  cost_code_id: string | null;
+  cost_codes: { code: string; name: string } | null;
+  cost_type: string;
+  owner_price: number;
+  notes_external: string | null;
+  invoiced_amount: number;
+  invoiced_pct: number;
+  remaining_amount: number;
+}
+
 export interface ChangeOrder {
   id: string;
   project_id: string;
