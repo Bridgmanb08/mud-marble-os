@@ -27,6 +27,11 @@ import { FathomImportCard } from './FathomImportCard';
 import { TeamPulseWidget } from './widgets/TeamPulseWidget';
 import { WeatherWidget } from './widgets/WeatherWidget';
 import { RentalSnapshotWidget } from './widgets/RentalSnapshotWidget';
+import { RentalCollectionWidget } from './widgets/RentalCollectionWidget';
+import { RentalLateWidget } from './widgets/RentalLateWidget';
+import { RentalOccupancyWidget } from './widgets/RentalOccupancyWidget';
+import { RentalRenewalsWidget } from './widgets/RentalRenewalsWidget';
+import { RentalVisitsWidget } from './widgets/RentalVisitsWidget';
 import { ProjectTimelineWidget } from './widgets/ProjectTimelineWidget';
 import { JobImportWidget } from './widgets/JobImportWidget';
 
@@ -66,4 +71,9 @@ export const WIDGET_REGISTRY: Record<WidgetId, WidgetDef> = {
   project_timeline: { title: 'Project timeline', Component: ProjectTimelineWidget, wide: true },
   job_import: { title: 'Job import portal', Component: JobImportWidget, wide: true },
   rental_snapshot: { title: 'Rental portfolio snapshot', Component: RentalSnapshotWidget },
+  rental_collection: { title: 'Rent collected this month', Component: RentalCollectionWidget },
+  rental_late: { title: 'Late rent', Component: RentalLateWidget },
+  rental_occupancy: { title: 'Occupancy', Component: RentalOccupancyWidget },
+  rental_renewals: { title: 'Leases expiring soon', Component: RentalRenewalsWidget },
+  rental_visits: { title: 'Property visits due', Component: RentalVisitsWidget },
 };

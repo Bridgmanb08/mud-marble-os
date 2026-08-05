@@ -784,7 +784,12 @@ export type WidgetId =
   | 'weather'
   | 'project_timeline'
   | 'job_import'
-  | 'rental_snapshot';
+  | 'rental_snapshot'
+  | 'rental_collection'
+  | 'rental_late'
+  | 'rental_occupancy'
+  | 'rental_renewals'
+  | 'rental_visits';
 
 export interface WidgetItem {
   id: WidgetId | string;
@@ -1176,7 +1181,18 @@ export interface RentalProperty {
   parcel_number: string | null;
   equity: number | null;
   estimated_monthly_cash_flow: number | null;
+  last_visited_at: string | null;
+  days_since_visit: number | null;
   units: RentalUnit[];
+}
+
+export interface RentalPropertyVisit {
+  id: string;
+  property_id: string;
+  visited_at: string;
+  visited_by: string | null;
+  notes: string | null;
+  created_at: string;
 }
 
 export interface RentalTenant {
@@ -1199,9 +1215,32 @@ export interface RentalLease {
   rent_due_day: number;
   notes: string | null;
   created_at: string;
+  renewal_status: 'undecided' | 'renewing' | 'not_renewing';
+  renewal_rent_increase: number | null;
   lease_status: 'upcoming' | 'active' | 'ended';
   tenants: RentalTenant | null;
   rental_units: RentalUnit | null;
+}
+
+export interface RentRollRow {
+  property_id: string;
+  property_address: string;
+  unit_id: string;
+  unit_label: string;
+  lease_id: string | null;
+  tenant_name: string | null;
+  monthly_rent: number | null;
+  rent_due_day: number | null;
+  lease_status: 'upcoming' | 'active' | 'ended' | null;
+  current_month_due: number;
+  current_month_paid: number;
+  past_due_total: number;
+  is_late: boolean;
+  last_visited_at: string | null;
+  days_since_visit: number | null;
+  lease_end_date: string | null;
+  renewal_status: 'undecided' | 'renewing' | 'not_renewing' | null;
+  renewal_rent_increase: number | null;
 }
 
 export interface RentalWorkOrder {
