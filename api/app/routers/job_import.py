@@ -9,6 +9,7 @@ from fastapi import APIRouter, Depends, File, HTTPException, UploadFile
 from ..ai_provider import (
     ProviderError,
     build_scan_content_block,
+    extract_change_order_from_document,
     extract_estimate_from_scan,
     extract_invoice_from_document,
     extract_transactions_from_scan,
@@ -23,6 +24,8 @@ from ..inhouse_import import (
     parse_quickbooks_sheet,
 )
 from ..schemas.job_import import (
+    ChangeOrderScanPreview,
+    ChangeOrderScanRow,
     ContractorBlock,
     EstimateSheetPreview,
     EstimateSheetRow,
@@ -402,3 +405,71 @@ async def preview_invoice_scan(
     await _notify_conflicts(current_user.id, project_id, project_name, 1 if diff else 0, "invoice")
     await _archive_scan(project_id, current_user.id, filename, content, file.content_type or "", "Invoice scan")
     return InvoiceScanPreview(row=row)
+
+
+_CHANGE_ORDER_DIFF_FIELDS = [
+    ("Type", "co_type", "co_type"),
+    ("Owner price", "owner_price", "owner_price"),
+    ("Builder cost", "builder_cost", "builder_cost"),
+    ("Description", "description", "description"),
+    ("Discovered by", "discovered_by", "discovered_by"),
+]
+
+
+@router.post("/{project_id}/change-order-scan/preview", response_model=ChangeOrderScanPreview)
+async def preview_change_order_scan(
+    project_id: str, file: UploadFile = File(...), current_user: CurrentUser = Depends(get_current_user)
+):
+    content = await file.read()
+    filename = file.filename or ""
+    ext = _ext(filename)
+    if ext not in SCAN_EXTS:
+        raise HTTPException(status_code=400, detail="Unsupported file type -- use a JPEG, PNG, or PDF")
+
+    project_rows, existing_cos = await asyncio.gather(
+        db_get("projects", f"?id=eq.{project_id}&select=name"),
+        db_get(
+            "change_orders",
+            f"?project_id=eq.{project_id}&select=id,title,co_type,owner_price,builder_cost,description,discovered_by",
+        ),
+    )
+    if not project_rows:
+        raise HTTPException(status_code=404, detail="Project not found")
+    project_name = project_rows[0]["name"].split("|")[0].strip()
+    # co_number is server-assigned and unusable as an incoming key from a scan,
+    # so an exact normalized-title match is the only dedupe key -- no
+    # fuzzy/similarity matching, since a wrong fuzzy match risks silently
+    # offering to overwrite the wrong CO.
+    existing_by_title = {c["title"].strip().lower(): c for c in existing_cos if c.get("title")}
+
+    try:
+        content_block = build_scan_content_block(content, filename, file.content_type)
+        extraction = await extract_change_order_from_document(content_block)
+    except ProviderError as e:
+        raise HTTPException(status_code=502, detail=str(e)) from e
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=f"Could not read that file: {e}") from e
+
+    existing = existing_by_title.get(extraction.title.strip().lower())
+    incoming = {
+        "co_type": extraction.co_type,
+        "owner_price": extraction.owner_price,
+        "builder_cost": extraction.builder_cost,
+        "description": extraction.description,
+        "discovered_by": extraction.discovered_by,
+    }
+    diff = diff_fields_helper(existing, incoming, _CHANGE_ORDER_DIFF_FIELDS) if existing else []
+
+    row = ChangeOrderScanRow(
+        title=extraction.title,
+        **incoming,
+        confidence=extraction.confidence,
+        uncertain_fields=extraction.uncertain_fields,
+        already_present=existing is not None,
+        existing_id=existing["id"] if existing else None,
+        conflict=bool(diff),
+        diff=diff,
+    )
+    await _notify_conflicts(current_user.id, project_id, project_name, 1 if diff else 0, "change order")
+    await _archive_scan(project_id, current_user.id, filename, content, file.content_type or "", "Change order scan")
+    return ChangeOrderScanPreview(row=row)
