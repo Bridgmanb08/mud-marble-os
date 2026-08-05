@@ -4,6 +4,7 @@ from fastapi import APIRouter, Depends, HTTPException
 
 from ..deps import CurrentUser, get_current_user
 from ..mentions import create_mention_notifications
+from ..schemas.invoices import EstimateItemForInvoiceOut
 from ..schemas.projects import (
     FinancialSummaryOut,
     ProjectCreate,
@@ -111,6 +112,58 @@ async def get_financial_summary(project_id: str, _: CurrentUser = Depends(get_cu
         credit_card_balance=project.get("credit_card_balance"),
         pending_invoices_manual=project.get("pending_invoices_manual"),
     )
+
+
+@router.get("/{project_id}/estimate-items-for-invoice", response_model=list[EstimateItemForInvoiceOut])
+async def get_estimate_items_for_invoice(project_id: str, _: CurrentUser = Depends(get_current_user)):
+    """Backs the "Add from Estimate" invoice picker -- every line item on the
+    project's current (latest-version) estimate, each annotated with how
+    much of it has already been invoiced across every invoice for this
+    project, not just the one being built right now. That total is computed
+    live by summing invoice_line_items rather than trusting a stored
+    running total, so it can never drift out of sync with reality."""
+    estimates = await db_get("estimates", f"?project_id=eq.{project_id}&order=version.desc&limit=1&select=id")
+    if not estimates:
+        return []
+    estimate_id = estimates[0]["id"]
+
+    items = await db_get(
+        "estimate_line_items",
+        f"?estimate_id=eq.{estimate_id}&order=sort_order.asc&select=*,cost_codes(code,name)",
+    )
+    if not items:
+        return []
+
+    item_ids = ",".join(i["id"] for i in items)
+    invoice_items = await db_get(
+        "invoice_line_items", f"?source_line_item_id=in.({item_ids})&select=source_line_item_id,amount"
+    )
+    invoiced_by_item: dict[str, float] = {}
+    for ii in invoice_items:
+        source_id = ii.get("source_line_item_id")
+        if source_id:
+            invoiced_by_item[source_id] = invoiced_by_item.get(source_id, 0) + (ii.get("amount") or 0)
+
+    out = []
+    for i in items:
+        owner_price = i.get("owner_price") or 0
+        invoiced_amount = round(invoiced_by_item.get(i["id"], 0), 2)
+        invoiced_pct = round((invoiced_amount / owner_price) * 100, 2) if owner_price else 0.0
+        out.append(
+            EstimateItemForInvoiceOut(
+                id=i["id"],
+                title=i["title"],
+                cost_code_id=i.get("cost_code_id"),
+                cost_codes=i.get("cost_codes"),
+                cost_type=i.get("cost_type") or "none",
+                owner_price=owner_price,
+                notes_external=i.get("notes_external"),
+                invoiced_amount=invoiced_amount,
+                invoiced_pct=invoiced_pct,
+                remaining_amount=round(owner_price - invoiced_amount, 2),
+            )
+        )
+    return out
 
 
 @router.get("/{project_id}/notes", response_model=list[ProjectNoteOut])
