@@ -38,6 +38,36 @@ def _attach_unit_occupancy(unit: dict, active_by_unit: dict[str, dict]) -> dict:
     return unit
 
 
+def _attach_financials(prop: dict) -> dict:
+    """Equity and estimated cash flow are computed from the underlying
+    numbers, not stored -- same convention as lease_status/is_late (derive
+    rather than trust a value that can drift). Both are None (not 0) when
+    there isn't enough information to compute them, so the frontend can tell
+    "unknown" apart from "actually zero"."""
+    value = prop.get("purchase_value")
+    debt = prop.get("debt")
+    prop["equity"] = (value - debt) if value is not None and debt is not None else None
+
+    target_rent = prop.get("target_monthly_rent")
+    if target_rent is None:
+        prop["estimated_monthly_cash_flow"] = None
+    else:
+        carrying_costs = sum(
+            prop.get(field) or 0
+            for field in (
+                "taxes_monthly",
+                "insurance_monthly",
+                "other_expenses_monthly",
+                "mortgage_payment",
+                "maintenance_monthly",
+                "mowing_monthly",
+                "utilities_monthly",
+            )
+        )
+        prop["estimated_monthly_cash_flow"] = round(target_rent - carrying_costs, 2)
+    return prop
+
+
 async def _enrich_properties(rows: list[dict]) -> list[RentalPropertyOut]:
     if not rows:
         return []
@@ -49,7 +79,7 @@ async def _enrich_properties(rows: list[dict]) -> list[RentalPropertyOut]:
     for u in units:
         units_by_property.setdefault(u["property_id"], []).append(_attach_unit_occupancy(u, active_by_unit))
 
-    return [RentalPropertyOut(**r, units=units_by_property.get(r["id"], [])) for r in rows]
+    return [RentalPropertyOut(**_attach_financials(r), units=units_by_property.get(r["id"], [])) for r in rows]
 
 
 @router.get("", response_model=list[RentalPropertyOut])
