@@ -93,6 +93,10 @@ class RentalPropertyOut(BaseModel):
     # sync (see lease_status/is_late below).
     equity: Optional[float] = None
     estimated_monthly_cash_flow: Optional[float] = None
+    # Computed from the most recent row in rental_property_visits -- same
+    # derive-don't-store convention as equity/cash-flow above.
+    last_visited_at: Optional[str] = None
+    days_since_visit: Optional[int] = None
     units: list["RentalUnitOut"] = []
 
 
@@ -166,6 +170,8 @@ class RentalLeaseUpdate(BaseModel):
     security_deposit: Optional[float] = None
     rent_due_day: Optional[int] = None
     notes: Optional[str] = None
+    renewal_status: Optional[str] = None
+    renewal_rent_increase: Optional[float] = None
 
 
 class RentalLeaseOut(BaseModel):
@@ -179,6 +185,11 @@ class RentalLeaseOut(BaseModel):
     rent_due_day: int
     notes: Optional[str] = None
     created_at: str
+    # "undecided" / "renewing" / "not_renewing" -- a real 3-state improvement
+    # over the plain checkbox this mirrors from Brent's spreadsheet, so
+    # "haven't discussed it yet" isn't indistinguishable from "declining".
+    renewal_status: Literal["undecided", "renewing", "not_renewing"] = "undecided"
+    renewal_rent_increase: Optional[float] = None
     # Computed, not stored -- derived from start_date/end_date vs. today,
     # matching this app's convention for other date-derived state (task
     # overdue, CO sop_breach) rather than a manually-set flag that goes stale.
@@ -265,6 +276,51 @@ class RentalFileOut(BaseModel):
     size_bytes: Optional[int] = None
     storage_path: str
     created_at: str
+
+
+class RentalPropertyVisitCreate(BaseModel):
+    visited_at: Optional[str] = None  # defaults to today server-side if omitted
+    visited_by: Optional[str] = None
+    notes: Optional[str] = None
+
+
+class RentalPropertyVisitOut(BaseModel):
+    id: str
+    property_id: str
+    visited_at: str
+    visited_by: Optional[str] = None
+    notes: Optional[str] = None
+    created_at: str
+
+
+class RentRollRow(BaseModel):
+    """One row per unit -- the master rent-roll view every competitor
+    platform (Buildium/AppFolio/DoorLoop/etc.) treats as its flagship
+    screen. Combines occupancy, this-period rent collection, arrears,
+    property-visit staleness, and lease-renewal status in one place so the
+    property list can show real operational signal instead of just static
+    address/unit-count data."""
+
+    property_id: str
+    property_address: str
+    unit_id: str
+    unit_label: str
+    lease_id: Optional[str] = None
+    tenant_name: Optional[str] = None
+    monthly_rent: Optional[float] = None
+    rent_due_day: Optional[int] = None
+    lease_status: Optional[Literal["upcoming", "active", "ended"]] = None
+    # Rolling arrears snapshot, computed from rental_payments -- current
+    # month's due/paid amounts plus everything still owed from prior months.
+    current_month_due: float = 0
+    current_month_paid: float = 0
+    past_due_total: float = 0
+    is_late: bool = False
+    last_visited_at: Optional[str] = None
+    days_since_visit: Optional[int] = None
+    lease_end_date: Optional[str] = None
+    renewal_status: Optional[Literal["undecided", "renewing", "not_renewing"]] = None
+    renewal_rent_increase: Optional[float] = None
 
 
 class RentalDashboardSummary(BaseModel):

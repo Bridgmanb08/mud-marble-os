@@ -8,6 +8,8 @@ from ..schemas.rentals import (
     RentalPropertyCreate,
     RentalPropertyOut,
     RentalPropertyUpdate,
+    RentalPropertyVisitCreate,
+    RentalPropertyVisitOut,
     RentalUnitCreate,
     RentalUnitOut,
     RentalUnitUpdate,
@@ -68,18 +70,47 @@ def _attach_financials(prop: dict) -> dict:
     return prop
 
 
+async def _last_visited_by_property(property_ids: list[str]) -> dict[str, str]:
+    """Most recent visited_at per property, derived from the visit log rather
+    than a single mutable column -- same reasoning as _active_lease_by_unit
+    above (derive current state from an event log, don't trust one field)."""
+    if not property_ids:
+        return {}
+    visits = await db_get(
+        "rental_property_visits",
+        f"?property_id=in.({','.join(property_ids)})&select=property_id,visited_at&order=visited_at.desc",
+    )
+    latest: dict[str, str] = {}
+    for v in visits:
+        latest.setdefault(v["property_id"], v["visited_at"])  # first hit per id is the max, since sorted desc
+    return latest
+
+
+def _attach_visit_info(prop: dict, last_visited_by_property: dict[str, str]) -> dict:
+    last_visited = last_visited_by_property.get(prop["id"])
+    prop["last_visited_at"] = last_visited
+    prop["days_since_visit"] = (date.today() - date.fromisoformat(last_visited)).days if last_visited else None
+    return prop
+
+
 async def _enrich_properties(rows: list[dict]) -> list[RentalPropertyOut]:
     if not rows:
         return []
     ids = [r["id"] for r in rows]
-    units = await db_get("rental_units", f"?property_id=in.({','.join(ids)})&select=*&order=unit_label.asc")
+    units, last_visited_by_property = await asyncio.gather(
+        db_get("rental_units", f"?property_id=in.({','.join(ids)})&select=*&order=unit_label.asc"),
+        _last_visited_by_property(ids),
+    )
     active_by_unit = await _active_lease_by_unit([u["id"] for u in units])
 
     units_by_property: dict[str, list[dict]] = {}
     for u in units:
         units_by_property.setdefault(u["property_id"], []).append(_attach_unit_occupancy(u, active_by_unit))
 
-    return [RentalPropertyOut(**_attach_financials(r), units=units_by_property.get(r["id"], [])) for r in rows]
+    return [
+        RentalPropertyOut(**_attach_visit_info(_attach_financials(r), last_visited_by_property), units=units_by_property.get(r["id"], []))
+        for r in rows
+    ]
 
 
 @router.get("", response_model=list[RentalPropertyOut])
@@ -149,3 +180,20 @@ async def update_unit(unit_id: str, body: RentalUnitUpdate, _: CurrentUser = Dep
 async def delete_unit(unit_id: str, _: CurrentUser = Depends(get_current_user)):
     await db_delete("rental_units", unit_id)
     return {"ok": True}
+
+
+@router.get("/{property_id}/visits", response_model=list[RentalPropertyVisitOut])
+async def list_visits(property_id: str, _: CurrentUser = Depends(get_current_user)):
+    return await db_get("rental_property_visits", f"?property_id=eq.{property_id}&order=visited_at.desc")
+
+
+@router.post("/{property_id}/visits", response_model=RentalPropertyVisitOut)
+async def log_visit(property_id: str, body: RentalPropertyVisitCreate, _: CurrentUser = Depends(get_current_user)):
+    data = {
+        "property_id": property_id,
+        "visited_at": body.visited_at or date.today().isoformat(),
+        "visited_by": body.visited_by,
+        "notes": body.notes,
+    }
+    rows = await db_post("rental_property_visits", data)
+    return rows[0]
