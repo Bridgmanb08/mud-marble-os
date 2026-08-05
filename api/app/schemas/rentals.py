@@ -1,6 +1,8 @@
 from typing import Literal, Optional
 
-from pydantic import BaseModel
+from pydantic import BaseModel, model_validator
+
+from ..date_validation import check_date_order
 
 
 class RentalPropertyCreate(BaseModel):
@@ -161,6 +163,11 @@ class RentalLeaseCreate(BaseModel):
     rent_due_day: int = 1
     notes: Optional[str] = None
 
+    @model_validator(mode="after")
+    def _validate_dates(self):
+        check_date_order(self.start_date, self.end_date, "Lease end date")
+        return self
+
 
 class RentalLeaseUpdate(BaseModel):
     tenant_id: Optional[str] = None
@@ -172,6 +179,11 @@ class RentalLeaseUpdate(BaseModel):
     notes: Optional[str] = None
     renewal_status: Optional[str] = None
     renewal_rent_increase: Optional[float] = None
+
+    @model_validator(mode="after")
+    def _validate_dates(self):
+        check_date_order(self.start_date, self.end_date, "Lease end date")
+        return self
 
 
 class RentalLeaseOut(BaseModel):

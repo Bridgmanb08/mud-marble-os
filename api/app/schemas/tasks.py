@@ -2,10 +2,7 @@ from typing import Optional
 
 from pydantic import BaseModel, model_validator
 
-
-def _check_date_order(scheduled_start: Optional[str], scheduled_end: Optional[str]) -> None:
-    if scheduled_start and scheduled_end and scheduled_end < scheduled_start:
-        raise ValueError("Due date cannot be before the start date")
+from ..date_validation import check_date_order
 
 
 class TaskCreate(BaseModel):
@@ -26,7 +23,7 @@ class TaskCreate(BaseModel):
 
     @model_validator(mode="after")
     def _validate_dates(self):
-        _check_date_order(self.scheduled_start, self.scheduled_end)
+        check_date_order(self.scheduled_start, self.scheduled_end, "Due date")
         return self
 
 
@@ -50,7 +47,7 @@ class TaskUpdate(BaseModel):
 
     @model_validator(mode="after")
     def _validate_dates(self):
-        _check_date_order(self.scheduled_start, self.scheduled_end)
+        check_date_order(self.scheduled_start, self.scheduled_end, "Due date")
         return self
 
 
