@@ -784,7 +784,12 @@ export type WidgetId =
   | 'weather'
   | 'project_timeline'
   | 'job_import'
-  | 'rental_snapshot';
+  | 'rental_snapshot'
+  | 'rental_collection'
+  | 'rental_late'
+  | 'rental_occupancy'
+  | 'rental_renewals'
+  | 'rental_visits';
 
 export interface WidgetItem {
   id: WidgetId | string;
