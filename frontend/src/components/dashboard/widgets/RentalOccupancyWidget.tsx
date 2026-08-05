@@ -2,10 +2,13 @@ import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { IconHome2 } from '@tabler/icons-react';
 import { api } from '../../../api/client';
+import { RadialProgress, StatusDot, useCountUp } from '../../rentals/RentalVisuals';
 import type { RentRollRow } from '../../../types';
 
-// Occupied vs vacant units, portfolio-wide, with a quick vacant-unit list so
-// a vacancy doesn't quietly sit unnoticed. Self-fetches off the shared
+// Occupied vs vacant units, portfolio-wide -- an animated ring for the rate
+// plus a per-unit ticker strip (green = occupied, gray = vacant) so the
+// whole portfolio reads as one image, with a text list of vacant units
+// underneath so a vacancy never sits unnoticed. Self-fetches off the shared
 // rent-roll endpoint.
 export function RentalOccupancyWidget() {
   const navigate = useNavigate();
@@ -19,23 +22,47 @@ export function RentalOccupancyWidget() {
       .catch(() => setError(true));
   }, []);
 
+  const all = rows ?? [];
+  const occupied = all.filter((r) => r.lease_id).length;
+  const rate = all.length > 0 ? (occupied / all.length) * 100 : 0;
+  const animatedRate = useCountUp(rate);
+  const ringColor = rate >= 90 ? 'var(--green)' : rate >= 70 ? 'var(--amber)' : 'var(--red)';
+
   if (error) return <div style={{ fontSize: 13, color: 'var(--t2)' }}>Occupancy data unavailable.</div>;
   if (!rows) return <div style={{ fontSize: 13, color: 'var(--t2)' }}>Loading…</div>;
-  if (rows.length === 0) return <div style={{ fontSize: 13, color: 'var(--t2)' }}>No units yet.</div>;
+  if (all.length === 0) return <div style={{ fontSize: 13, color: 'var(--t2)' }}>No units yet.</div>;
 
-  const occupied = rows.filter((r) => r.lease_id).length;
-  const vacant = rows.filter((r) => !r.lease_id);
-  const rate = Math.round((occupied / rows.length) * 100);
+  const vacant = all.filter((r) => !r.lease_id);
 
   return (
     <div>
-      <div style={{ display: 'flex', alignItems: 'baseline', gap: 8, marginBottom: 8 }}>
-        <IconHome2 size={18} color="var(--brand-brown)" />
-        <div style={{ fontSize: 22, fontWeight: 600 }}>{rate}%</div>
-        <div style={{ fontSize: 12, color: 'var(--t2)' }}>
-          occupied — {occupied}/{rows.length} units
+      <div style={{ display: 'flex', alignItems: 'center', gap: 16, marginBottom: 12 }}>
+        <RadialProgress pct={rate} color={ringColor}>
+          <div style={{ fontSize: 18, fontWeight: 700, lineHeight: 1.1 }}>{Math.round(animatedRate)}%</div>
+          <div style={{ fontSize: 9, color: 'var(--t3)' }}>occupied</div>
+        </RadialProgress>
+        <div>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+            <IconHome2 size={16} color="var(--brand-brown)" />
+            <span style={{ fontSize: 20, fontWeight: 600 }}>
+              {occupied}/{all.length}
+            </span>
+          </div>
+          <div style={{ fontSize: 12, color: 'var(--t2)' }}>units occupied</div>
         </div>
       </div>
+
+      <div style={{ display: 'flex', flexWrap: 'wrap', gap: 5, marginBottom: 10 }}>
+        {all.map((r, i) => (
+          <StatusDot
+            key={r.unit_id}
+            color={r.lease_id ? 'var(--green)' : 'var(--t3)'}
+            delayMs={i * 40}
+            title={`${r.property_address} — ${r.unit_label}: ${r.lease_id ? r.tenant_name || 'Occupied' : 'Vacant'}`}
+          />
+        ))}
+      </div>
+
       {vacant.length > 0 ? (
         <>
           <div style={{ fontSize: 11.5, color: 'var(--amber)', fontWeight: 500, marginBottom: 4 }}>Vacant:</div>

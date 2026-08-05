@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
-import { useParams } from 'react-router-dom';
-import { IconPlus, IconUsers } from '@tabler/icons-react';
+import { useParams, useNavigate } from 'react-router-dom';
+import { IconArrowLeft, IconCamera, IconPlus, IconUsers } from '@tabler/icons-react';
 import { api } from '../api/client';
 import { useToast } from '../components/ui/Toast';
 import { fmt, fmtD } from '../lib/format';
@@ -9,9 +9,10 @@ import { NewRentalLeaseModal } from '../components/rentals/NewRentalLeaseModal';
 import { LeaseRentLedgerModal } from '../components/rentals/LeaseRentLedgerModal';
 import { NewRentalWorkOrderModal } from '../components/rentals/NewRentalWorkOrderModal';
 import { MoneyField } from '../components/rentals/MoneyField';
-import type { RentalLease, RentalProperty, RentalWorkOrder } from '../types';
+import { VisitLogModal } from '../components/rentals/VisitLogModal';
+import type { RentalLease, RentalProperty, RentalPropertyVisit, RentalWorkOrder } from '../types';
 
-const TABS = ['Overview', 'Financials', 'Units & Tenants', 'Leases', 'Maintenance'];
+const TABS = ['Overview', 'Financials', 'Units & Tenants', 'Leases', 'Maintenance', 'Visit Log'];
 
 // Every editable financial field, kept in one string-valued form object
 // rather than 19 separate useState calls -- each maps directly to a
@@ -50,15 +51,19 @@ const LEASE_STATUS_BADGE: Record<string, string> = { active: 'bg-green', upcomin
 
 export default function RentalPropertyDetail() {
   const { id } = useParams<{ id: string }>();
+  const navigate = useNavigate();
   const toast = useToast();
   const [property, setProperty] = useState<RentalProperty | null>(null);
   const [leases, setLeases] = useState<RentalLease[]>([]);
   const [workOrders, setWorkOrders] = useState<RentalWorkOrder[]>([]);
+  const [visits, setVisits] = useState<RentalPropertyVisit[]>([]);
   const [activeTab, setActiveTab] = useState('Overview');
   const [showNewUnit, setShowNewUnit] = useState(false);
   const [showNewLease, setShowNewLease] = useState(false);
   const [showNewWorkOrder, setShowNewWorkOrder] = useState(false);
   const [ledgerLease, setLedgerLease] = useState<RentalLease | null>(null);
+  const [editingVisit, setEditingVisit] = useState<RentalPropertyVisit | null>(null);
+  const [loggingVisit, setLoggingVisit] = useState(false);
   const [financials, setFinancials] = useState<Record<FinancialField, string>>(
     () => Object.fromEntries(FINANCIAL_FIELDS.map((f) => [f, ''])) as Record<FinancialField, string>
   );
@@ -111,12 +116,35 @@ export default function RentalPropertyDetail() {
       .catch(() => toast('Failed to load work orders', true));
   }
 
+  function loadVisits() {
+    if (!id) return;
+    api
+      .get<RentalPropertyVisit[]>(`/rental-properties/${id}/visits`)
+      .then(setVisits)
+      .catch(() => toast('Failed to load visit log', true));
+  }
+
   useEffect(() => {
     loadProperty();
     loadLeases();
     loadWorkOrders();
+    loadVisits();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [id]);
+
+  async function startNewVisit() {
+    if (!id) return;
+    setLoggingVisit(true);
+    try {
+      const created = await api.post<RentalPropertyVisit>(`/rental-properties/${id}/visits`, {});
+      loadVisits();
+      setEditingVisit(created);
+    } catch {
+      toast('Failed to log visit', true);
+    } finally {
+      setLoggingVisit(false);
+    }
+  }
 
   async function changeWorkOrderStatus(wo: RentalWorkOrder, status: string) {
     try {
@@ -145,6 +173,9 @@ export default function RentalPropertyDetail() {
 
   return (
     <>
+      <button className="btn btn-sm" style={{ marginBottom: 12 }} onClick={() => navigate('/rentals')}>
+        <IconArrowLeft size={14} /> Back to Rental Properties
+      </button>
       <div className="ph">
         <div>
           <h1>{property.address}</h1>
@@ -448,6 +479,56 @@ export default function RentalPropertyDetail() {
             ))
           )}
         </div>
+
+        <div
+          id={sectionId('Visit Log')}
+          style={{ scrollMarginTop: SECTION_SCROLL_MARGIN, marginTop: 24, paddingTop: 24, borderTop: '1px solid var(--border)' }}
+        >
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 14 }}>
+            <div className="ibt" style={{ fontSize: 13, textTransform: 'none', letterSpacing: 0, border: 'none', padding: 0 }}>
+              Visit Log
+            </div>
+            <button className="btn btn-sm" onClick={startNewVisit} disabled={loggingVisit}>
+              <IconCamera size={14} /> Log visit
+            </button>
+          </div>
+          {visits.length === 0 ? (
+            <div style={{ fontSize: 13, color: 'var(--t2)' }}>No visits logged yet.</div>
+          ) : (
+            visits.map((v) => (
+              <button
+                key={v.id}
+                type="button"
+                className="cc btn-reset"
+                style={{ width: '100%', textAlign: 'left', alignItems: 'flex-start', cursor: 'pointer' }}
+                onClick={() => setEditingVisit(v)}
+              >
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <div style={{ fontSize: 13, fontWeight: 500 }}>
+                    {fmtD(v.visited_at)}
+                    {v.visited_by ? ` · ${v.visited_by}` : ''}
+                  </div>
+                  {v.notes ? (
+                    <div
+                      style={{
+                        fontSize: 12,
+                        color: 'var(--t2)',
+                        marginTop: 2,
+                        whiteSpace: 'nowrap',
+                        overflow: 'hidden',
+                        textOverflow: 'ellipsis',
+                      }}
+                    >
+                      {v.notes}
+                    </div>
+                  ) : (
+                    <div style={{ fontSize: 12, color: 'var(--t3)', marginTop: 2, fontStyle: 'italic' }}>No summary added yet — click to add one</div>
+                  )}
+                </div>
+              </button>
+            ))
+          )}
+        </div>
       </div>
 
       {showNewUnit && (
@@ -483,6 +564,16 @@ export default function RentalPropertyDetail() {
             setShowNewWorkOrder(false);
             toast('Work order created — linked task added to the Task Board');
             loadWorkOrders();
+          }}
+        />
+      )}
+      {editingVisit && (
+        <VisitLogModal
+          visit={editingVisit}
+          onClose={() => setEditingVisit(null)}
+          onSaved={() => {
+            setEditingVisit(null);
+            loadVisits();
           }}
         />
       )}

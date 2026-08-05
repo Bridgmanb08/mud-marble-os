@@ -258,6 +258,7 @@ class RentalWorkOrderOut(BaseModel):
 class RentalFileCreate(BaseModel):
     property_id: Optional[str] = None
     lease_id: Optional[str] = None
+    visit_id: Optional[str] = None
     file_name: str
     file_type: str = "lease"
     mime_type: Optional[str] = None
@@ -269,6 +270,7 @@ class RentalFileOut(BaseModel):
     id: str
     property_id: Optional[str] = None
     lease_id: Optional[str] = None
+    visit_id: Optional[str] = None
     uploaded_by: Optional[str] = None
     file_name: str
     file_type: str
@@ -280,6 +282,12 @@ class RentalFileOut(BaseModel):
 
 class RentalPropertyVisitCreate(BaseModel):
     visited_at: Optional[str] = None  # defaults to today server-side if omitted
+    visited_by: Optional[str] = None
+    notes: Optional[str] = None
+
+
+class RentalPropertyVisitUpdate(BaseModel):
+    visited_at: Optional[str] = None
     visited_by: Optional[str] = None
     notes: Optional[str] = None
 

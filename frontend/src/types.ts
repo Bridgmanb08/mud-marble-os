@@ -1263,6 +1263,7 @@ export interface RentalFile {
   id: string;
   property_id: string | null;
   lease_id: string | null;
+  visit_id: string | null;
   uploaded_by: string | null;
   file_name: string;
   file_type: string;

@@ -10,6 +10,7 @@ from ..schemas.rentals import (
     RentalPropertyUpdate,
     RentalPropertyVisitCreate,
     RentalPropertyVisitOut,
+    RentalPropertyVisitUpdate,
     RentalUnitCreate,
     RentalUnitOut,
     RentalUnitUpdate,
@@ -197,3 +198,20 @@ async def log_visit(property_id: str, body: RentalPropertyVisitCreate, _: Curren
     }
     rows = await db_post("rental_property_visits", data)
     return rows[0]
+
+
+# exclude_unset so a blank-but-untouched field (e.g. notes left empty on a
+# quick pin-icon log) doesn't overwrite a summary added later -- same
+# clients/projects/transactions PATCH convention used throughout this app.
+@router.patch("/visits/{visit_id}", response_model=RentalPropertyVisitOut)
+async def update_visit(visit_id: str, body: RentalPropertyVisitUpdate, _: CurrentUser = Depends(get_current_user)):
+    rows = await db_patch("rental_property_visits", visit_id, body.model_dump(exclude_unset=True))
+    if not rows:
+        raise HTTPException(status_code=404, detail="Visit not found")
+    return rows[0]
+
+
+@router.delete("/visits/{visit_id}")
+async def delete_visit(visit_id: str, _: CurrentUser = Depends(get_current_user)):
+    await db_delete("rental_property_visits", visit_id)
+    return {"ok": True}

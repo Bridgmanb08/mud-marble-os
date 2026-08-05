@@ -78,6 +78,27 @@ export async function uploadRentalFile(leaseId: string, file: File): Promise<Ren
   });
 }
 
+// Photos/video attached to a specific property visit -- reuses the same
+// rental-files bucket/upload flow as lease documents, just tagged with
+// visit_id instead of lease_id.
+export async function uploadRentalVisitFile(visitId: string, file: File): Promise<RentalFile> {
+  const fileType = inferFileType(file.type);
+  const { upload_url, storage_path } = await api.post<UploadUrlResponse>('/rental-files/upload-url', {
+    file_name: file.name,
+    file_type: fileType,
+    mime_type: file.type || null,
+  });
+  await putToSignedUrl(upload_url, file);
+  return api.post<RentalFile>('/rental-files', {
+    visit_id: visitId,
+    file_name: file.name,
+    file_type: fileType,
+    mime_type: file.type || null,
+    size_bytes: file.size,
+    storage_path,
+  });
+}
+
 export function fmtBytes(n: number | null): string {
   if (!n) return '';
   if (n < 1024) return `${n} B`;
