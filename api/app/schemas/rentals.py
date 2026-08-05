@@ -10,6 +10,24 @@ class RentalPropertyCreate(BaseModel):
     zip: Optional[str] = None
     property_type: str = "single_family"
     notes: Optional[str] = None
+    ownership_name: Optional[str] = None
+    ownership_pct: Optional[float] = None
+    purchase_value: Optional[float] = None
+    debt: Optional[float] = None
+    target_monthly_rent: Optional[float] = None
+    interest_rate: Optional[float] = None
+    mortgage_payment: Optional[float] = None
+    loan_number: Optional[str] = None
+    lender: Optional[str] = None
+    taxes_monthly: Optional[float] = None
+    insurance_annual: Optional[float] = None
+    insurance_monthly: Optional[float] = None
+    other_expenses_monthly: Optional[float] = None
+    maintenance_monthly: Optional[float] = None
+    mowing_monthly: Optional[float] = None
+    utilities_monthly: Optional[float] = None
+    year_acquired: Optional[int] = None
+    parcel_number: Optional[str] = None
 
 
 class RentalPropertyUpdate(BaseModel):
@@ -20,6 +38,24 @@ class RentalPropertyUpdate(BaseModel):
     property_type: Optional[str] = None
     notes: Optional[str] = None
     is_archived: Optional[bool] = None
+    ownership_name: Optional[str] = None
+    ownership_pct: Optional[float] = None
+    purchase_value: Optional[float] = None
+    debt: Optional[float] = None
+    target_monthly_rent: Optional[float] = None
+    interest_rate: Optional[float] = None
+    mortgage_payment: Optional[float] = None
+    loan_number: Optional[str] = None
+    lender: Optional[str] = None
+    taxes_monthly: Optional[float] = None
+    insurance_annual: Optional[float] = None
+    insurance_monthly: Optional[float] = None
+    other_expenses_monthly: Optional[float] = None
+    maintenance_monthly: Optional[float] = None
+    mowing_monthly: Optional[float] = None
+    utilities_monthly: Optional[float] = None
+    year_acquired: Optional[int] = None
+    parcel_number: Optional[str] = None
 
 
 class RentalPropertyOut(BaseModel):
@@ -32,6 +68,31 @@ class RentalPropertyOut(BaseModel):
     notes: Optional[str] = None
     is_archived: bool
     created_at: str
+    ownership_name: Optional[str] = None
+    ownership_pct: Optional[float] = None
+    purchase_value: Optional[float] = None
+    debt: Optional[float] = None
+    target_monthly_rent: Optional[float] = None
+    interest_rate: Optional[float] = None
+    mortgage_payment: Optional[float] = None
+    loan_number: Optional[str] = None
+    lender: Optional[str] = None
+    taxes_monthly: Optional[float] = None
+    insurance_annual: Optional[float] = None
+    insurance_monthly: Optional[float] = None
+    other_expenses_monthly: Optional[float] = None
+    maintenance_monthly: Optional[float] = None
+    mowing_monthly: Optional[float] = None
+    utilities_monthly: Optional[float] = None
+    year_acquired: Optional[int] = None
+    parcel_number: Optional[str] = None
+    # Computed, not stored -- purchase_value minus debt, and a rough monthly
+    # cash-flow estimate (target rent minus every known carrying cost, nulls
+    # treated as 0). Matches this app's convention of deriving state from
+    # underlying numbers rather than storing a value that can drift out of
+    # sync (see lease_status/is_late below).
+    equity: Optional[float] = None
+    estimated_monthly_cash_flow: Optional[float] = None
     units: list["RentalUnitOut"] = []
 
 

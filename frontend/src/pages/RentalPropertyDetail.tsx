@@ -10,7 +10,33 @@ import { LeaseRentLedgerModal } from '../components/rentals/LeaseRentLedgerModal
 import { NewRentalWorkOrderModal } from '../components/rentals/NewRentalWorkOrderModal';
 import type { RentalLease, RentalProperty, RentalWorkOrder } from '../types';
 
-const TABS = ['Overview', 'Units & Tenants', 'Leases', 'Maintenance'];
+const TABS = ['Overview', 'Financials', 'Units & Tenants', 'Leases', 'Maintenance'];
+
+// Every editable financial field, kept in one string-valued form object
+// rather than 19 separate useState calls -- each maps directly to a
+// RentalPropertyUpdate field on PATCH /rental-properties/{id}.
+const FINANCIAL_FIELDS = [
+  'purchase_value',
+  'debt',
+  'target_monthly_rent',
+  'mortgage_payment',
+  'interest_rate',
+  'taxes_monthly',
+  'insurance_annual',
+  'insurance_monthly',
+  'other_expenses_monthly',
+  'maintenance_monthly',
+  'mowing_monthly',
+  'utilities_monthly',
+  'year_acquired',
+  'lender',
+  'loan_number',
+  'parcel_number',
+  'ownership_name',
+  'ownership_pct',
+] as const;
+type FinancialField = (typeof FINANCIAL_FIELDS)[number];
+const TEXT_FIELDS: FinancialField[] = ['lender', 'loan_number', 'parcel_number', 'ownership_name'];
 const WO_STATUS_BADGE: Record<string, string> = { open: 'bg-gray', in_progress: 'bg-amber', resolved: 'bg-green' };
 const WO_PRIORITY_BADGE: Record<string, string> = { low: 'bg-gray', normal: 'bg-blue', high: 'bg-amber', urgent: 'bg-red' };
 const SECTION_SCROLL_MARGIN = 108;
@@ -32,13 +58,40 @@ export default function RentalPropertyDetail() {
   const [showNewLease, setShowNewLease] = useState(false);
   const [showNewWorkOrder, setShowNewWorkOrder] = useState(false);
   const [ledgerLease, setLedgerLease] = useState<RentalLease | null>(null);
+  const [financials, setFinancials] = useState<Record<FinancialField, string>>(
+    () => Object.fromEntries(FINANCIAL_FIELDS.map((f) => [f, ''])) as Record<FinancialField, string>
+  );
 
   function loadProperty() {
     if (!id) return;
     api
       .get<RentalProperty>(`/rental-properties/${id}`)
-      .then(setProperty)
+      .then((p) => {
+        setProperty(p);
+        setFinancials(
+          Object.fromEntries(FINANCIAL_FIELDS.map((f) => [f, p[f] !== null && p[f] !== undefined ? String(p[f]) : ''])) as Record<
+            FinancialField,
+            string
+          >
+        );
+      })
       .catch(() => toast('Failed to load property', true));
+  }
+
+  async function saveFinancial(field: FinancialField, value: string) {
+    if (!id) return;
+    const trimmed = value.trim();
+    let parsed: string | number | null;
+    if (trimmed === '') parsed = null;
+    else if (TEXT_FIELDS.includes(field)) parsed = trimmed;
+    else if (field === 'year_acquired') parsed = parseInt(trimmed, 10);
+    else parsed = parseFloat(trimmed);
+    try {
+      await api.patch(`/rental-properties/${id}`, { [field]: parsed });
+      loadProperty();
+    } catch {
+      toast('Failed to save', true);
+    }
   }
 
   function loadLeases() {
@@ -145,6 +198,115 @@ export default function RentalPropertyDetail() {
               <p style={{ fontSize: 13, color: 'var(--t2)', whiteSpace: 'pre-wrap' }}>{property.notes}</p>
             </div>
           )}
+        </div>
+
+        <div
+          id={sectionId('Financials')}
+          style={{ scrollMarginTop: SECTION_SCROLL_MARGIN, paddingBottom: 24, marginBottom: 24, borderBottom: '1px solid var(--border)' }}
+        >
+          <div className="ibt" style={{ fontSize: 13, textTransform: 'none', letterSpacing: 0, border: 'none', padding: 0, marginBottom: 14 }}>
+            Financials
+          </div>
+          <div className="metrics">
+            <div className="metric">
+              <div className="m-label">Equity</div>
+              <div className="m-val">{property.equity !== null ? fmt(property.equity) : '—'}</div>
+            </div>
+            <div className="metric">
+              <div className="m-label">Est. monthly cash flow</div>
+              <div
+                className="m-val"
+                style={{ color: property.estimated_monthly_cash_flow === null ? undefined : property.estimated_monthly_cash_flow >= 0 ? 'var(--green)' : 'var(--red)' }}
+              >
+                {property.estimated_monthly_cash_flow !== null ? fmt(property.estimated_monthly_cash_flow) : '—'}
+              </div>
+            </div>
+          </div>
+
+          <div className="fr3" style={{ marginTop: 14 }}>
+            <div className="fg">
+              <label className="fl">Purchase value ($)</label>
+              <input className="fi" type="number" value={financials.purchase_value} onChange={(e) => setFinancials((f) => ({ ...f, purchase_value: e.target.value }))} onBlur={(e) => saveFinancial('purchase_value', e.target.value)} />
+            </div>
+            <div className="fg">
+              <label className="fl">Debt ($)</label>
+              <input className="fi" type="number" value={financials.debt} onChange={(e) => setFinancials((f) => ({ ...f, debt: e.target.value }))} onBlur={(e) => saveFinancial('debt', e.target.value)} />
+            </div>
+            <div className="fg">
+              <label className="fl">Target monthly rent ($)</label>
+              <input className="fi" type="number" value={financials.target_monthly_rent} onChange={(e) => setFinancials((f) => ({ ...f, target_monthly_rent: e.target.value }))} onBlur={(e) => saveFinancial('target_monthly_rent', e.target.value)} />
+            </div>
+          </div>
+          <div className="fr3">
+            <div className="fg">
+              <label className="fl">Mortgage payment ($/mo)</label>
+              <input className="fi" type="number" value={financials.mortgage_payment} onChange={(e) => setFinancials((f) => ({ ...f, mortgage_payment: e.target.value }))} onBlur={(e) => saveFinancial('mortgage_payment', e.target.value)} />
+            </div>
+            <div className="fg">
+              <label className="fl">Interest rate</label>
+              <input className="fi" type="number" step="0.0001" value={financials.interest_rate} onChange={(e) => setFinancials((f) => ({ ...f, interest_rate: e.target.value }))} onBlur={(e) => saveFinancial('interest_rate', e.target.value)} />
+            </div>
+            <div className="fg">
+              <label className="fl">Taxes ($/mo)</label>
+              <input className="fi" type="number" value={financials.taxes_monthly} onChange={(e) => setFinancials((f) => ({ ...f, taxes_monthly: e.target.value }))} onBlur={(e) => saveFinancial('taxes_monthly', e.target.value)} />
+            </div>
+          </div>
+          <div className="fr3">
+            <div className="fg">
+              <label className="fl">Insurance ($/yr)</label>
+              <input className="fi" type="number" value={financials.insurance_annual} onChange={(e) => setFinancials((f) => ({ ...f, insurance_annual: e.target.value }))} onBlur={(e) => saveFinancial('insurance_annual', e.target.value)} />
+            </div>
+            <div className="fg">
+              <label className="fl">Insurance ($/mo)</label>
+              <input className="fi" type="number" value={financials.insurance_monthly} onChange={(e) => setFinancials((f) => ({ ...f, insurance_monthly: e.target.value }))} onBlur={(e) => saveFinancial('insurance_monthly', e.target.value)} />
+            </div>
+            <div className="fg">
+              <label className="fl">Other expenses ($/mo)</label>
+              <input className="fi" type="number" value={financials.other_expenses_monthly} onChange={(e) => setFinancials((f) => ({ ...f, other_expenses_monthly: e.target.value }))} onBlur={(e) => saveFinancial('other_expenses_monthly', e.target.value)} />
+            </div>
+          </div>
+          <div className="fr3">
+            <div className="fg">
+              <label className="fl">Maintenance/Cap Ex ($/mo)</label>
+              <input className="fi" type="number" value={financials.maintenance_monthly} onChange={(e) => setFinancials((f) => ({ ...f, maintenance_monthly: e.target.value }))} onBlur={(e) => saveFinancial('maintenance_monthly', e.target.value)} />
+            </div>
+            <div className="fg">
+              <label className="fl">Mowing ($/mo)</label>
+              <input className="fi" type="number" value={financials.mowing_monthly} onChange={(e) => setFinancials((f) => ({ ...f, mowing_monthly: e.target.value }))} onBlur={(e) => saveFinancial('mowing_monthly', e.target.value)} />
+            </div>
+            <div className="fg">
+              <label className="fl">Utilities ($/mo)</label>
+              <input className="fi" type="number" value={financials.utilities_monthly} onChange={(e) => setFinancials((f) => ({ ...f, utilities_monthly: e.target.value }))} onBlur={(e) => saveFinancial('utilities_monthly', e.target.value)} />
+            </div>
+          </div>
+          <div className="fr3">
+            <div className="fg">
+              <label className="fl">Lender</label>
+              <input className="fi" value={financials.lender} onChange={(e) => setFinancials((f) => ({ ...f, lender: e.target.value }))} onBlur={(e) => saveFinancial('lender', e.target.value)} />
+            </div>
+            <div className="fg">
+              <label className="fl">Loan number</label>
+              <input className="fi" value={financials.loan_number} onChange={(e) => setFinancials((f) => ({ ...f, loan_number: e.target.value }))} onBlur={(e) => saveFinancial('loan_number', e.target.value)} />
+            </div>
+            <div className="fg">
+              <label className="fl">Parcel number</label>
+              <input className="fi" value={financials.parcel_number} onChange={(e) => setFinancials((f) => ({ ...f, parcel_number: e.target.value }))} onBlur={(e) => saveFinancial('parcel_number', e.target.value)} />
+            </div>
+          </div>
+          <div className="fr3">
+            <div className="fg">
+              <label className="fl">Ownership entity</label>
+              <input className="fi" value={financials.ownership_name} onChange={(e) => setFinancials((f) => ({ ...f, ownership_name: e.target.value }))} onBlur={(e) => saveFinancial('ownership_name', e.target.value)} />
+            </div>
+            <div className="fg">
+              <label className="fl">Ownership %</label>
+              <input className="fi" type="number" step="0.01" value={financials.ownership_pct} onChange={(e) => setFinancials((f) => ({ ...f, ownership_pct: e.target.value }))} onBlur={(e) => saveFinancial('ownership_pct', e.target.value)} />
+            </div>
+            <div className="fg">
+              <label className="fl">Year acquired</label>
+              <input className="fi" type="number" value={financials.year_acquired} onChange={(e) => setFinancials((f) => ({ ...f, year_acquired: e.target.value }))} onBlur={(e) => saveFinancial('year_acquired', e.target.value)} />
+            </div>
+          </div>
         </div>
 
         <div

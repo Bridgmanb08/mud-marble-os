@@ -1156,6 +1156,26 @@ export interface RentalProperty {
   notes: string | null;
   is_archived: boolean;
   created_at: string;
+  ownership_name: string | null;
+  ownership_pct: number | null;
+  purchase_value: number | null;
+  debt: number | null;
+  target_monthly_rent: number | null;
+  interest_rate: number | null;
+  mortgage_payment: number | null;
+  loan_number: string | null;
+  lender: string | null;
+  taxes_monthly: number | null;
+  insurance_annual: number | null;
+  insurance_monthly: number | null;
+  other_expenses_monthly: number | null;
+  maintenance_monthly: number | null;
+  mowing_monthly: number | null;
+  utilities_monthly: number | null;
+  year_acquired: number | null;
+  parcel_number: string | null;
+  equity: number | null;
+  estimated_monthly_cash_flow: number | null;
   units: RentalUnit[];
 }
 
