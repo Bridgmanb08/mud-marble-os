@@ -7,9 +7,12 @@ import { fmt, fmtD } from '../lib/format';
 import { NewRentalUnitModal } from '../components/rentals/NewRentalUnitModal';
 import { NewRentalLeaseModal } from '../components/rentals/NewRentalLeaseModal';
 import { LeaseRentLedgerModal } from '../components/rentals/LeaseRentLedgerModal';
-import type { RentalLease, RentalProperty } from '../types';
+import { NewRentalWorkOrderModal } from '../components/rentals/NewRentalWorkOrderModal';
+import type { RentalLease, RentalProperty, RentalWorkOrder } from '../types';
 
-const TABS = ['Overview', 'Units & Tenants', 'Leases'];
+const TABS = ['Overview', 'Units & Tenants', 'Leases', 'Maintenance'];
+const WO_STATUS_BADGE: Record<string, string> = { open: 'bg-gray', in_progress: 'bg-amber', resolved: 'bg-green' };
+const WO_PRIORITY_BADGE: Record<string, string> = { low: 'bg-gray', normal: 'bg-blue', high: 'bg-amber', urgent: 'bg-red' };
 const SECTION_SCROLL_MARGIN = 108;
 
 function sectionId(tab: string): string {
@@ -23,9 +26,11 @@ export default function RentalPropertyDetail() {
   const toast = useToast();
   const [property, setProperty] = useState<RentalProperty | null>(null);
   const [leases, setLeases] = useState<RentalLease[]>([]);
+  const [workOrders, setWorkOrders] = useState<RentalWorkOrder[]>([]);
   const [activeTab, setActiveTab] = useState('Overview');
   const [showNewUnit, setShowNewUnit] = useState(false);
   const [showNewLease, setShowNewLease] = useState(false);
+  const [showNewWorkOrder, setShowNewWorkOrder] = useState(false);
   const [ledgerLease, setLedgerLease] = useState<RentalLease | null>(null);
 
   function loadProperty() {
@@ -44,11 +49,30 @@ export default function RentalPropertyDetail() {
       .catch(() => toast('Failed to load leases', true));
   }
 
+  function loadWorkOrders() {
+    if (!id) return;
+    api
+      .get<RentalWorkOrder[]>(`/rental-work-orders?property_id=${id}`)
+      .then(setWorkOrders)
+      .catch(() => toast('Failed to load work orders', true));
+  }
+
   useEffect(() => {
     loadProperty();
     loadLeases();
+    loadWorkOrders();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [id]);
+
+  async function changeWorkOrderStatus(wo: RentalWorkOrder, status: string) {
+    try {
+      await api.patch(`/rental-work-orders/${wo.id}`, { status });
+      toast('Work order updated');
+      loadWorkOrders();
+    } catch {
+      toast('Failed to update work order', true);
+    }
+  }
 
   function scrollToSection(t: string) {
     setActiveTab(t);
@@ -214,6 +238,53 @@ export default function RentalPropertyDetail() {
             </table>
           )}
         </div>
+
+        <div
+          id={sectionId('Maintenance')}
+          style={{ scrollMarginTop: SECTION_SCROLL_MARGIN, marginTop: 24, paddingTop: 24, borderTop: '1px solid var(--border)' }}
+        >
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 14 }}>
+            <div className="ibt" style={{ fontSize: 13, textTransform: 'none', letterSpacing: 0, border: 'none', padding: 0 }}>
+              Maintenance
+            </div>
+            <button className="btn btn-sm" onClick={() => setShowNewWorkOrder(true)}>
+              <IconPlus size={14} /> New work order
+            </button>
+          </div>
+          {workOrders.length === 0 ? (
+            <div style={{ fontSize: 13, color: 'var(--t2)' }}>No work orders yet.</div>
+          ) : (
+            workOrders.map((w) => (
+              <div key={w.id} className="cc" style={{ width: '100%', alignItems: 'flex-start' }}>
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <div style={{ fontSize: 13, fontWeight: 500 }}>
+                    {w.title}
+                    {w.unit_label ? ` · ${w.unit_label}` : ''}
+                  </div>
+                  {w.description && <div style={{ fontSize: 12, color: 'var(--t2)', marginTop: 2 }}>{w.description}</div>}
+                  <div style={{ display: 'flex', gap: 6, marginTop: 6, alignItems: 'center' }}>
+                    <span className={`badge ${WO_PRIORITY_BADGE[w.priority] || 'bg-gray'}`}>{w.priority}</span>
+                    <span className={`badge ${WO_STATUS_BADGE[w.status] || 'bg-gray'}`}>{w.status.replace('_', ' ')}</span>
+                    {w.assigned_to && <span style={{ fontSize: 11, color: 'var(--t3)' }}>{w.assigned_to}</span>}
+                    <span style={{ fontSize: 11, color: 'var(--t3)' }}>{fmtD(w.created_at)}</span>
+                  </div>
+                </div>
+                {w.status !== 'resolved' && (
+                  <select
+                    className="fi"
+                    style={{ width: 140 }}
+                    value={w.status}
+                    onChange={(e) => changeWorkOrderStatus(w, e.target.value)}
+                  >
+                    <option value="open">Open</option>
+                    <option value="in_progress">In Progress</option>
+                    <option value="resolved">Resolved</option>
+                  </select>
+                )}
+              </div>
+            ))
+          )}
+        </div>
       </div>
 
       {showNewUnit && (
@@ -240,6 +311,18 @@ export default function RentalPropertyDetail() {
         />
       )}
       {ledgerLease && <LeaseRentLedgerModal lease={ledgerLease} onClose={() => setLedgerLease(null)} />}
+      {showNewWorkOrder && (
+        <NewRentalWorkOrderModal
+          properties={[property]}
+          defaultPropertyId={property.id}
+          onClose={() => setShowNewWorkOrder(false)}
+          onSaved={() => {
+            setShowNewWorkOrder(false);
+            toast('Work order created — linked task added to the Task Board');
+            loadWorkOrders();
+          }}
+        />
+      )}
     </>
   );
 }
