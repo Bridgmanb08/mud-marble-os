@@ -27,7 +27,7 @@ from ..schemas.tasks import (
     TaskOut,
     TaskUpdate,
 )
-from ..supabase_client import db_delete, db_get, db_patch, db_patch_query, db_post
+from ..supabase_client import db_delete, db_delete_query, db_get, db_patch, db_patch_query, db_post
 from ..team_roster import normalize_assignee_name
 
 router = APIRouter(prefix="/tasks", tags=["tasks"])
@@ -222,8 +222,10 @@ async def bulk_update_tasks(body: BulkUpdateRequest, _: CurrentUser = Depends(ge
 
 @router.post("/bulk-delete")
 async def bulk_delete_tasks(body: BulkDeleteRequest, _: CurrentUser = Depends(get_current_user)):
-    for task_id in body.ids:
-        await db_delete("schedule_items", task_id)
+    # One DELETE ...?id=in.(...) instead of one request per task -- same
+    # batching already used for bulk status/assignee updates just above.
+    if body.ids:
+        await db_delete_query("schedule_items", f"?id=in.({','.join(body.ids)})")
     return {"ok": True, "deleted": len(body.ids)}
 
 
@@ -384,7 +386,11 @@ async def update_task(task_id: str, body: TaskUpdate, _: CurrentUser = Depends(g
     # ever existed as a narrow workaround for this exact bug on one field.
     updates = body.model_dump(exclude_unset=True, exclude={"expected_version"})
     if "assignees" in updates:
-        updates["assignees"] = [normalize_assignee_name(a) for a in updates["assignees"]]
+        # Now that an explicit null is no longer dropped (see above), a
+        # caller clearing every assignee could send `assignees: null`
+        # instead of `[]` -- guard against iterating None the same way the
+        # empty-list case already falls through to "unassigned".
+        updates["assignees"] = [normalize_assignee_name(a) for a in (updates["assignees"] or [])]
         updates["assigned_to"] = updates["assignees"][0] if updates["assignees"] else None
     elif "assigned_to" in updates:
         updates["assigned_to"] = normalize_assignee_name(updates["assigned_to"])
