@@ -208,7 +208,10 @@ async def suggest_estimate_gaps(
     # instead of re-processing the whole prompt, which is most of the latency.
     message = await client.messages.create(
         model=MODEL,
-        max_tokens=3000,
+        # Same headroom reasoning as extract_estimate_from_transcript below --
+        # a two-level Socratic question tree over a real estimate's worth of
+        # line items can outgrow a tight cap and get silently truncated.
+        max_tokens=6000,
         messages=[
             {
                 "role": "user",
@@ -228,6 +231,11 @@ async def suggest_estimate_gaps(
             }
         ],
     )
+    if message.stop_reason == "max_tokens":
+        raise ProviderError(
+            "Claude ran out of room checking for gaps -- this estimate may have too many line items for one "
+            "pass right now."
+        )
     raw = message.content[0].text if message.content else "{}"
     items = _parse_gap_questions(raw)
 
@@ -271,7 +279,14 @@ async def extract_estimate_from_transcript(
     client = _client()
     message = await client.messages.create(
         model=MODEL,
-        max_tokens=4096,
+        # A dense walkthrough (many distinct cost items, each with a title,
+        # rationale, and source_quote) can genuinely need more than 4096
+        # tokens of JSON output -- that cap was tight enough to silently
+        # truncate mid-object on a real transcript, which then surfaced as an
+        # opaque "couldn't be parsed as JSON" error with no indication of
+        # what actually went wrong. 8192 matches the other transcript-parsing
+        # endpoint (routers/ai.py's parse_transcript).
+        max_tokens=8192,
         messages=[
             {
                 "role": "user",
@@ -283,6 +298,11 @@ async def extract_estimate_from_transcript(
             }
         ],
     )
+    if message.stop_reason == "max_tokens":
+        raise ProviderError(
+            "Claude ran out of room extracting line items from this transcript -- try a shorter excerpt "
+            "(e.g. split a long walkthrough into two passes)."
+        )
     raw = message.content[0].text if message.content else "{}"
     items = _parse_suggestions(raw, "transcript_item")
 
