@@ -11,17 +11,22 @@ class LeadCreate(BaseModel):
     email: Optional[str] = None
     project_address: Optional[str] = None
     project_type: Optional[str] = None
+    project_scope: Optional[str] = None
     initial_contact_method: Optional[str] = None
     budget_range_min: Optional[float] = None
     budget_range_max: Optional[float] = None
     estimated_revenue_min: Optional[float] = None
     estimated_revenue_max: Optional[float] = None
+    projected_profit: Optional[float] = None
     confidence: Optional[int] = None
+    lead_temp: Optional[str] = None
     referral_name: Optional[str] = None
     referred_by_client_id: Optional[str] = None
     funding_type: Optional[str] = None
     vetting_score: Optional[int] = None
     form_submission_raw: Optional[str] = None
+    notes: Optional[str] = None
+    objections: Optional[str] = None
     assigned_to: Optional[str] = None
     status: str = "new"
 
@@ -34,14 +39,19 @@ class LeadUpdate(BaseModel):
     email: Optional[str] = None
     project_address: Optional[str] = None
     project_type: Optional[str] = None
+    project_scope: Optional[str] = None
     budget_range_min: Optional[float] = None
     budget_range_max: Optional[float] = None
     estimated_revenue_min: Optional[float] = None
     estimated_revenue_max: Optional[float] = None
+    projected_profit: Optional[float] = None
     confidence: Optional[int] = None
+    lead_temp: Optional[str] = None
     referral_name: Optional[str] = None
     referred_by_client_id: Optional[str] = None
     last_contacted_at: Optional[str] = None
+    notes: Optional[str] = None
+    objections: Optional[str] = None
     status: Optional[str] = None
 
 

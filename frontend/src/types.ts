@@ -1,4 +1,17 @@
-export type LeadStatus = 'new' | 'contacted' | 'qualified' | 'converted' | 'disqualified';
+// Brent's real sales pipeline (from his "Sales Lead Tracker" spreadsheet's
+// Sales Stages sheet) -- 'new' is the default before any stage is picked,
+// 'converted' is set automatically by the Convert action (not a manually
+// selectable stage), 'stage_6_lost' covers both "Missed Opportunity" and
+// the plain "Lost" label he's also used.
+export type LeadStatus =
+  | 'new'
+  | 'stage_1'
+  | 'stage_2'
+  | 'stage_3'
+  | 'stage_4'
+  | 'stage_5'
+  | 'stage_6_lost'
+  | 'converted';
 
 export interface ProjectBrief {
   name: string;
@@ -603,20 +616,25 @@ export interface Lead {
   title: string | null;
   project_address: string | null;
   project_type: string | null;
+  project_scope: string | null;
   phone: string | null;
   email: string | null;
   status: LeadStatus;
   confidence: number | null;
   estimated_revenue_min: number | null;
   estimated_revenue_max: number | null;
+  projected_profit: number | null;
   budget_range_min: number | null;
   budget_range_max: number | null;
+  lead_temp: string | null;
   referral_name: string | null;
   referred_by_client_id: string | null;
   referred_by: ClientBrief | null;
   converted_client_id: string | null;
   converted_project_id: string | null;
   vetting_score: number | null;
+  notes: string | null;
+  objections: string | null;
   last_contacted_at: string | null;
   created_at: string;
 }
