@@ -69,7 +69,12 @@ const navSections: { label: string; items: NavItem[] }[] = [
   },
 ];
 
-export function Sidebar() {
+interface SidebarProps {
+  isOpen: boolean;
+  onClose: () => void;
+}
+
+export function Sidebar({ isOpen, onClose }: SidebarProps) {
   const { user } = useAuth();
   const sections = user?.is_admin
     ? [
@@ -86,7 +91,7 @@ export function Sidebar() {
     : navSections;
 
   return (
-    <div className="sidebar">
+    <div className={`sidebar${isOpen ? ' open' : ''}`}>
       {sections.map((section) => (
         <div key={section.label}>
           <div className="nav-section">{section.label}</div>
@@ -95,6 +100,7 @@ export function Sidebar() {
               key={item.to}
               to={item.to}
               end={item.end}
+              onClick={onClose}
               className={({ isActive }) => `nav-item${isActive ? ' active' : ''}`}
             >
               <item.icon size={16} />
