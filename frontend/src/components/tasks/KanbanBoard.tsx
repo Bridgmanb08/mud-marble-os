@@ -26,6 +26,7 @@ import { colorForPerson } from '../../lib/personColor';
 import { hasUnseenComment } from '../../lib/commentSeen';
 import { useIsMobile } from '../../hooks/useMediaQuery';
 import type { Task, TaskSubtask, Project, UserDirectoryEntry } from '../../types';
+import { taskAssignees } from '../../lib/taskAssignees';
 
 const COLUMNS = [
   { id: 'upcoming', label: 'Recently Imported Tasks' },
@@ -157,7 +158,7 @@ function TaskCard({
   const [clarifyPicking, setClarifyPicking] = useState(false);
   const [pendingChecked, setPendingChecked] = useState<boolean | null>(null);
   const overdue = task.overdue;
-  const assignees = task.assignees && task.assignees.length > 0 ? task.assignees : task.assigned_to ? [task.assigned_to] : [];
+  const assignees = taskAssignees(task);
   // A comment counts as "new activity" only if someone else left it and
   // this browser hasn't opened the task since -- your own comment isn't a
   // notification to yourself.
@@ -418,7 +419,7 @@ function TaskCard({
 // independent of which column's DOM subtree the real item currently
 // belongs to, so it stays visually continuous through the whole drag.
 function TaskCardPreview({ task }: { task: Task }) {
-  const assignees = task.assignees && task.assignees.length > 0 ? task.assignees : task.assigned_to ? [task.assigned_to] : [];
+  const assignees = taskAssignees(task);
   return (
     <div
       className="task-card"
