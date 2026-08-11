@@ -18,6 +18,7 @@ from ..schemas.tasks import (
     DependencyCreate,
     DependencyOut,
     PriorityReorderRequest,
+    ReactionToggle,
     ReorderRequest,
     SubtaskCreate,
     SubtaskOut,
@@ -348,9 +349,29 @@ async def delete_dependency(task_id: str, dependency_id: str, _: CurrentUser = D
     return {"ok": True}
 
 
+async def _attach_reactions(comments: list[dict], current_user_name: str) -> list[dict]:
+    if not comments:
+        return comments
+    ids = [c["id"] for c in comments]
+    id_filter = ",".join(ids)
+    reactions = await db_get(
+        "task_comment_reactions", f"?comment_id=in.({id_filter})&select=comment_id,author,emoji"
+    )
+    by_comment: dict[str, dict[str, list[str]]] = defaultdict(lambda: defaultdict(list))
+    for r in reactions:
+        by_comment[r["comment_id"]][r["emoji"]].append(r["author"])
+    for c in comments:
+        c["reactions"] = [
+            {"emoji": emoji, "count": len(people), "reacted_by_me": current_user_name in people, "people": people}
+            for emoji, people in by_comment.get(c["id"], {}).items()
+        ]
+    return comments
+
+
 @router.get("/{task_id}/comments", response_model=list[CommentOut])
-async def list_comments(task_id: str, _: CurrentUser = Depends(get_current_user)):
-    return await db_get("task_comments", f"?task_id=eq.{task_id}&order=created_at.desc")
+async def list_comments(task_id: str, current_user: CurrentUser = Depends(get_current_user)):
+    comments = await db_get("task_comments", f"?task_id=eq.{task_id}&order=created_at.desc")
+    return await _attach_reactions(comments, current_user.name or current_user.email)
 
 
 @router.post("/{task_id}/comments", response_model=CommentOut)
@@ -360,18 +381,55 @@ async def create_comment(task_id: str, body: CommentCreate, current_user: Curren
     )
     comment = rows[0]
 
-    task_rows = await db_get("schedule_items", f"?id=eq.{task_id}&select=title,project_id")
-    task_title = task_rows[0]["title"] if task_rows else "a task"
-    project_id = task_rows[0].get("project_id") if task_rows else None
-    await create_mention_notifications(
-        content=body.content,
-        project_id=project_id,
-        source_type="task_comment",
-        source_id=comment["id"],
-        message=f'{current_user.name or current_user.email} mentioned you on task "{task_title}"',
-        exclude_user_id=current_user.id,
-    )
+    # The comment is already saved at this point -- everything below is a
+    # best-effort side effect (notifying anyone @mentioned). If it throws for
+    # any reason (a malformed mention, a transient DB hiccup scanning
+    # app_users), the whole request must not come back as a failure: from the
+    # caller's side that looks exactly like "I posted a comment and it
+    # disappeared" -- the comment is really sitting in the DB the whole time,
+    # but the client never sees the success response and never refreshes to
+    # show it. Isolate it the same way every other non-critical-path AI/side
+    # effect in this codebase degrades gracefully instead of sinking the
+    # primary action.
+    try:
+        task_rows = await db_get("schedule_items", f"?id=eq.{task_id}&select=title,project_id")
+        task_title = task_rows[0]["title"] if task_rows else "a task"
+        project_id = task_rows[0].get("project_id") if task_rows else None
+        await create_mention_notifications(
+            content=body.content,
+            project_id=project_id,
+            source_type="task_comment",
+            source_id=comment["id"],
+            message=f'{current_user.name or current_user.email} mentioned you on task "{task_title}"',
+            exclude_user_id=current_user.id,
+        )
+    except Exception:
+        pass
     return comment
+
+
+@router.post("/{task_id}/comments/{comment_id}/react", response_model=CommentOut)
+async def toggle_comment_reaction(
+    task_id: str, comment_id: str, body: ReactionToggle, current_user: CurrentUser = Depends(get_current_user)
+):
+    """Tapback-style toggle: reacting with an emoji you've already used on this
+    comment removes it instead of stacking a duplicate -- the (comment_id,
+    author, emoji) unique constraint is what makes this a plain add-or-remove
+    rather than needing separate add/remove endpoints."""
+    author = current_user.name or current_user.email
+    existing = await db_get(
+        "task_comment_reactions", f"?comment_id=eq.{comment_id}&author=eq.{author}&emoji=eq.{body.emoji}"
+    )
+    if existing:
+        await db_delete("task_comment_reactions", existing[0]["id"])
+    else:
+        await db_post("task_comment_reactions", {"comment_id": comment_id, "author": author, "emoji": body.emoji})
+
+    comment_rows = await db_get("task_comments", f"?id=eq.{comment_id}&task_id=eq.{task_id}")
+    if not comment_rows:
+        raise HTTPException(status_code=404, detail="Comment not found")
+    attached = await _attach_reactions(comment_rows, author)
+    return attached[0]
 
 
 @router.patch("/{task_id}", response_model=TaskOut)

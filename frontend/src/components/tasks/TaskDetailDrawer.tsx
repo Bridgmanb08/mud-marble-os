@@ -14,6 +14,160 @@ import { colorForPerson, initialsForPerson } from '../../lib/personColor';
 import { markCommentsSeen } from '../../lib/commentSeen';
 import type { Project, Task, TaskComment, TaskDependency, TaskSubtask, UserDirectoryEntry } from '../../types';
 
+// Small, fixed set -- iMessage-tapback style, not a full picker -- kept
+// deliberately narrow per "don't make it too complicated": a quick
+// acknowledgment (👀 = seen it, 🎉 = nice, 👍/👎 = approve/concern, ❤️ = thanks,
+// 😂 = lighten it up) rather than a searchable emoji grid.
+const REACTION_EMOJIS = ['❤️', '👍', '👎', '😂', '🎉', '👀'];
+
+// One comment bubble -- hovering reveals a small "react" button pinned to
+// the bubble's top-right corner (same spot iMessage's tapback popup anchors
+// from), which opens a row of the fixed emoji set. Existing reactions render
+// as small pill badges below the comment text; clicking a pill you're
+// already in toggles it off (mirrors the backend's toggle-on-repeat-emoji
+// behavior).
+function CommentBubble({ comment, onReact }: { comment: TaskComment; onReact: (emoji: string) => void }) {
+  const [pickerOpen, setPickerOpen] = useState(false);
+
+  return (
+    <div
+      style={{ display: 'flex', gap: 8, alignItems: 'flex-start' }}
+      // Auto-close the picker when the mouse leaves the bubble -- a
+      // desktop-only nicety (touch has no "leave" event, so on a phone the
+      // picker just stays open until an emoji is tapped, which is fine).
+      onMouseLeave={() => setPickerOpen(false)}
+    >
+      <div
+        style={{
+          width: 26,
+          height: 26,
+          borderRadius: '50%',
+          background: colorForPerson(comment.author),
+          color: '#fff',
+          fontSize: 11,
+          fontWeight: 600,
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          flexShrink: 0,
+        }}
+      >
+        {initialsForPerson(comment.author)}
+      </div>
+      <div
+        style={{
+          flex: 1,
+          position: 'relative',
+          background: 'var(--bg)',
+          borderLeft: `3px solid ${colorForPerson(comment.author)}`,
+          borderRadius: 6,
+          padding: '6px 10px',
+        }}
+      >
+        <div style={{ display: 'flex', alignItems: 'baseline', gap: 6, flexWrap: 'wrap' }}>
+          <span style={{ fontSize: 12, fontWeight: 600 }}>{comment.author}</span>
+          <span style={{ fontSize: 10, color: 'var(--t3)' }}>{new Date(comment.created_at).toLocaleString()}</span>
+        </div>
+        <div style={{ fontSize: 13, marginTop: 2, whiteSpace: 'pre-wrap' }}>{comment.content}</div>
+
+        {comment.reactions.length > 0 && (
+          <div style={{ display: 'flex', gap: 4, marginTop: 5, flexWrap: 'wrap' }}>
+            {comment.reactions.map((r) => (
+              <button
+                key={r.emoji}
+                type="button"
+                className="btn-reset"
+                onClick={() => onReact(r.emoji)}
+                title={r.people.join(', ')}
+                style={{
+                  fontSize: 11,
+                  padding: '1px 6px',
+                  borderRadius: 20,
+                  border: `1px solid ${r.reacted_by_me ? 'var(--accent)' : 'var(--border)'}`,
+                  background: r.reacted_by_me ? 'var(--brand-cream)' : 'var(--surface)',
+                  cursor: 'pointer',
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  gap: 3,
+                }}
+              >
+                <span>{r.emoji}</span>
+                <span style={{ color: 'var(--t2)' }}>{r.count}</span>
+              </button>
+            ))}
+          </div>
+        )}
+
+        {/* Always mounted (not gated on `hovering`) -- onMouseEnter/
+            onMouseLeave never fire on a touchscreen, so a hover-only
+            render condition meant this button simply never appeared on a
+            phone at all, not just "hidden until you touch it". Visibility
+            is CSS-driven instead: dim by default, full opacity on
+            `:hover`/`:focus-within` for a mouse, and forced fully visible
+            under `@media(hover:none)` so touch devices -- which can never
+            satisfy a :hover rule -- always see it. */}
+        <button
+          type="button"
+          className="btn-reset comment-react-btn"
+          onClick={() => setPickerOpen((v) => !v)}
+          title="React"
+          style={{
+            position: 'absolute',
+            top: -10,
+            right: -6,
+            width: 22,
+            height: 22,
+            borderRadius: '50%',
+            background: 'var(--surface)',
+            border: '1px solid var(--border-md)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            fontSize: 12,
+            cursor: 'pointer',
+            boxShadow: '0 1px 4px rgba(0,0,0,.15)',
+          }}
+        >
+          🙂
+        </button>
+
+        {pickerOpen && (
+          <div
+            style={{
+              position: 'absolute',
+              top: -38,
+              right: -6,
+              zIndex: 20,
+              background: 'var(--surface)',
+              border: '1px solid var(--border)',
+              borderRadius: 20,
+              padding: '4px 6px',
+              display: 'flex',
+              gap: 4,
+              boxShadow: '0 2px 10px rgba(0,0,0,.16)',
+            }}
+          >
+            {REACTION_EMOJIS.map((emoji) => (
+              <button
+                key={emoji}
+                type="button"
+                className="btn-reset"
+                onClick={() => {
+                  onReact(emoji);
+                  setPickerOpen(false);
+                }}
+                style={{ fontSize: 16, cursor: 'pointer', lineHeight: 1 }}
+              >
+                {emoji}
+              </button>
+            ))}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
 interface TaskDetailDrawerProps {
   task: Task;
   allTasks: Task[];
@@ -231,10 +385,27 @@ export function TaskDetailDrawer({ task, allTasks, onClose, onSaved, onDeleted, 
 
   async function postComment() {
     if (!newComment.trim()) return;
+    const content = newComment.trim();
     try {
-      await api.post(`/tasks/${task.id}/comments`, { content: newComment.trim() });
+      // The POST endpoint already returns the created comment -- append it
+      // directly instead of re-fetching the whole list with a second
+      // request. Posting used to depend on that follow-up GET to ever show
+      // your own comment; if it lagged or failed for any reason, what
+      // you'd just typed would simply never appear, reading as "I commented
+      // and it disappeared."
+      const created = await api.post<TaskComment>(`/tasks/${task.id}/comments`, { content });
       setNewComment('');
-      loadComments();
+      setComments((prev) => [created, ...prev]);
+      markCommentsSeen(task.id, created.created_at);
+    } catch (err) {
+      toast(errMsg(err), true);
+    }
+  }
+
+  async function reactToComment(commentId: string, emoji: string) {
+    try {
+      const updated = await api.post<TaskComment>(`/tasks/${task.id}/comments/${commentId}/react`, { emoji });
+      setComments((prev) => prev.map((c) => (c.id === commentId ? updated : c)));
     } catch (err) {
       toast(errMsg(err), true);
     }
@@ -457,40 +628,7 @@ export function TaskDetailDrawer({ task, allTasks, onClose, onSaved, onDeleted, 
                   note" bubble on the Kanban card, so it's recognizable at a
                   glance whose comment triggered the update. */}
               {[...comments].reverse().map((c) => (
-                <div key={c.id} style={{ display: 'flex', gap: 8, alignItems: 'flex-start' }}>
-                  <div
-                    style={{
-                      width: 26,
-                      height: 26,
-                      borderRadius: '50%',
-                      background: colorForPerson(c.author),
-                      color: '#fff',
-                      fontSize: 11,
-                      fontWeight: 600,
-                      display: 'flex',
-                      alignItems: 'center',
-                      justifyContent: 'center',
-                      flexShrink: 0,
-                    }}
-                  >
-                    {initialsForPerson(c.author)}
-                  </div>
-                  <div
-                    style={{
-                      flex: 1,
-                      background: 'var(--bg)',
-                      borderLeft: `3px solid ${colorForPerson(c.author)}`,
-                      borderRadius: 6,
-                      padding: '6px 10px',
-                    }}
-                  >
-                    <div style={{ display: 'flex', alignItems: 'baseline', gap: 6, flexWrap: 'wrap' }}>
-                      <span style={{ fontSize: 12, fontWeight: 600 }}>{c.author}</span>
-                      <span style={{ fontSize: 10, color: 'var(--t3)' }}>{new Date(c.created_at).toLocaleString()}</span>
-                    </div>
-                    <div style={{ fontSize: 13, marginTop: 2, whiteSpace: 'pre-wrap' }}>{c.content}</div>
-                  </div>
-                </div>
+                <CommentBubble key={c.id} comment={c} onReact={(emoji) => reactToComment(c.id, emoji)} />
               ))}
             </div>
           )}

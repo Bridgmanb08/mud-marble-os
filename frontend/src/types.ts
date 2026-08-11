@@ -82,12 +82,20 @@ export interface TaskDependency {
   created_at: string;
 }
 
+export interface CommentReaction {
+  emoji: string;
+  count: number;
+  reacted_by_me: boolean;
+  people: string[];
+}
+
 export interface TaskComment {
   id: string;
   task_id: string;
   author: string;
   content: string;
   created_at: string;
+  reactions: CommentReaction[];
 }
 
 export interface BoardView {
