@@ -246,8 +246,9 @@ export default function RentalProperties() {
                           </span>
                           <button
                             type="button"
-                            className="btn-reset"
-                            title="Log a visit today"
+                            className="btn-reset hover-tip"
+                            data-tip="Click to record visit for today"
+                            aria-label="Log a visit today"
                             style={{ color: 'var(--t3)', cursor: 'pointer', display: 'inline-flex' }}
                             onClick={() => logVisit(r.property_id)}
                           >
