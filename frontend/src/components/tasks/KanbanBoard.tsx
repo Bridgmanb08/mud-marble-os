@@ -26,6 +26,7 @@ const COLUMNS = [
   { id: 'upcoming', label: 'Recently Imported Tasks' },
   { id: 'in_progress', label: 'In Progress' },
   { id: 'delayed', label: 'Delayed / Blocked' },
+  { id: 'urgent_today', label: 'Extremely Important / Urgent — Must Be Done Today' },
   { id: 'complete', label: 'Done' },
 ];
 

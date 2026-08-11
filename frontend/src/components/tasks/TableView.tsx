@@ -273,6 +273,7 @@ export function TableView({
               <option value="upcoming">To Do</option>
               <option value="in_progress">In Progress</option>
               <option value="delayed">Delayed / Blocked</option>
+              <option value="urgent_today">Extremely Important / Urgent — Must Be Done Today</option>
               <option value="complete">Done</option>
             </select>
             <button type="button" className="btn btn-sm" onClick={applyBulkStatus} disabled={!bulkStatus || bulkBusy}>

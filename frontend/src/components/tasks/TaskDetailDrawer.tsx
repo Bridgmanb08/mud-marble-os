@@ -305,6 +305,7 @@ export function TaskDetailDrawer({ task, allTasks, onClose, onSaved, onDeleted, 
               <option value="upcoming">To Do</option>
               <option value="in_progress">In Progress</option>
               <option value="delayed">Delayed / Blocked</option>
+              <option value="urgent_today">Extremely Important / Urgent — Must Be Done Today</option>
               <option value="complete" disabled={blockedByIncomplete && status !== 'complete'}>
                 Done{blockedByIncomplete ? ' (blocked)' : ''}
               </option>
