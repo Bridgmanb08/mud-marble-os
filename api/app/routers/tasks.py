@@ -153,7 +153,18 @@ async def reorder_tasks(body: ReorderRequest, _: CurrentUser = Depends(get_curre
         )
 
     async def _apply(item):
-        updates: dict = {"status": item.status, "position": item.position}
+        position = item.position
+        if position is None:
+            # Cross-column drop while a filter hid some of the destination
+            # column's siblings from the frontend (see ReorderItem) -- ask
+            # the database for the real end-of-column position instead of
+            # trusting a client-side guess. Higher position sorts last (see
+            # create_task's mirror-image "go one below the minimum" logic).
+            siblings = await db_get(
+                "schedule_items", f"?status=eq.{item.status}&order=position.desc&limit=1&select=position"
+            )
+            position = (siblings[0]["position"] + 1) if siblings else 0
+        updates: dict = {"status": item.status, "position": position}
         if item.id in current_versions:
             updates["version"] = current_versions[item.id] + 1
         await db_patch("schedule_items", item.id, updates)

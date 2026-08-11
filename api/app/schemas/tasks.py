@@ -97,7 +97,12 @@ class TaskOut(BaseModel):
 class ReorderItem(BaseModel):
     id: str
     status: str
-    position: int
+    # Optional -- omitted for a cross-column drop while a filter is hiding
+    # some of the destination column's real siblings (see reorder_tasks):
+    # the frontend can't safely compute "the end" from a partial view, so it
+    # leaves this null and the backend appends using its own full-column
+    # query instead of guessing with a client-side sentinel value.
+    position: Optional[int] = None
     expected_version: Optional[int] = None
 
 
