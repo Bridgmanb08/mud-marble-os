@@ -497,7 +497,10 @@ async def get_dashboard(_: CurrentUser = Depends(get_current_user)):
     )
 
     # -- lead pipeline: open leads by stage + revenue potential --
-    OPEN_LEAD_STATUSES = ("new", "contacted", "qualified")
+    # Matches Leads.tsx's real sales-stage vocabulary (Brent's own pipeline
+    # stages, not a generic new/contacted/qualified guess) -- open means
+    # anything short of a terminal state (converted or missed-opportunity).
+    OPEN_LEAD_STATUSES = ("new", "stage_1", "stage_2", "stage_3", "stage_4", "stage_5")
     lead_stage_totals: dict[str, list] = defaultdict(lambda: [0, 0.0, 0.0])
     for lead in leads:
         status = lead.get("status") or "new"

@@ -6,10 +6,13 @@ import type { DashboardSummary, TeamWorkloadInsightsResponse } from '../../../ty
 
 const LEAD_STAGE_LABELS: Record<string, string> = {
   new: 'New',
-  contacted: 'Contacted',
-  qualified: 'Qualified',
+  stage_1: 'Initial Walkthrough',
+  stage_2: 'Working On Proposal',
+  stage_3: 'Negotiations',
+  stage_4: 'Paid For Initial Step',
+  stage_5: 'Signed!',
+  stage_6_lost: 'Missed Opportunity',
   converted: 'Converted',
-  disqualified: 'Disqualified',
 };
 
 const TASK_PRIORITY_COLOR: Record<string, string> = {
