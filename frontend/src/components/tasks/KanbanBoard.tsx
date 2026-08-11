@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState, type ChangeEvent } from 'react';
 import {
   DndContext,
+  DragOverlay,
   closestCorners,
   pointerWithin,
   PointerSensor,
@@ -405,6 +406,53 @@ function TaskCard({
   );
 }
 
+// Rendered inside <DragOverlay> -- a plain visual clone, not a sortable
+// item itself (no useSortable/drag listeners, no interactive controls).
+// Without this, dnd-kit's only drag feedback is the *actual* card's own
+// CSS transform -- but a cross-column move re-parents that DOM node (React
+// unmounts it from the source column and mounts a fresh one in the
+// destination the moment `columns` state updates), which drops the
+// transform/transition mid-gesture and reads as the card "glitching" or
+// snapping, specifically at the instant it crosses into a new column.
+// DragOverlay renders a floating clone that follows the pointer
+// independent of which column's DOM subtree the real item currently
+// belongs to, so it stays visually continuous through the whole drag.
+function TaskCardPreview({ task }: { task: Task }) {
+  const assignees = task.assignees && task.assignees.length > 0 ? task.assignees : task.assigned_to ? [task.assigned_to] : [];
+  return (
+    <div
+      className="task-card"
+      style={{
+        borderLeft: `3px solid ${PRIORITY_COLOR[task.priority] || 'var(--border-md)'}`,
+        boxShadow: '0 8px 24px rgba(0,0,0,.18)',
+        cursor: 'grabbing',
+      }}
+    >
+      <div className="task-title" style={{ display: 'flex', alignItems: 'flex-start', gap: 6 }}>
+        <input type="checkbox" checked={task.status === 'complete'} readOnly style={{ marginTop: 3, flexShrink: 0 }} />
+        <span>
+          {task.is_punch_list && (
+            <span className="badge bg-purple" style={{ marginRight: 6, fontSize: 9, padding: '1px 6px', verticalAlign: 2 }}>
+              Punch
+            </span>
+          )}
+          {task.title}
+        </span>
+      </div>
+      {task.project_id && <div className="task-meta">{task.projects?.name?.replace(/\|.*/, '').trim() || 'No project'}</div>}
+      {assignees.length > 0 && (
+        <div className="task-meta" style={{ marginTop: 3, display: 'flex', gap: 4, flexWrap: 'wrap' }}>
+          {assignees.map((name) => (
+            <span key={name} style={{ background: 'var(--bbg)', color: 'var(--btx)', padding: '1px 6px', borderRadius: 10, fontSize: 10 }}>
+              {name}
+            </span>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
 function Column({
   id,
   label,
@@ -515,6 +563,9 @@ export function KanbanBoard({
   // together into one very long scroll. Session-only (not persisted like
   // doneCollapsed) since it's a lighter-weight, more exploratory toggle.
   const [mobileCollapsedCols, setMobileCollapsedCols] = useState<Set<string>>(new Set());
+  // Drives <DragOverlay> -- see TaskCardPreview's comment for why this
+  // exists at all.
+  const [activeId, setActiveId] = useState<string | null>(null);
   const tasksById = new Map(tasks.map((t) => [t.id, t]));
   const snapshotRef = useRef<Record<string, string[]> | null>(null);
 
@@ -568,11 +619,12 @@ export function KanbanBoard({
     return pointerCollisions.length > 0 ? pointerCollisions : closestCorners(args);
   };
 
-  function handleDragStart(_event: DragStartEvent) {
+  function handleDragStart(event: DragStartEvent) {
     // Snapshot so we can cleanly roll back if the server rejects this move
     // (stale version, someone else moved the board, etc.) instead of leaving
     // the UI in a state that doesn't match what was actually saved.
     snapshotRef.current = columns;
+    setActiveId(event.active.id as string);
   }
 
   function handleDragOver(event: DragOverEvent) {
@@ -594,12 +646,23 @@ export function KanbanBoard({
     const rollback = snapshotRef.current;
     snapshotRef.current = null;
 
-    if (!over) return;
+    // Every early return below must clear activeId itself -- it's what
+    // was driving <DragOverlay>, and none of these paths reach the
+    // try/finally further down. Missing one here means a drop that lands
+    // on nothing valid (off the board entirely, etc.) leaves the floating
+    // preview card stuck on screen after the drag has visually ended.
+    if (!over) {
+      setActiveId(null);
+      return;
+    }
     // Always derive the destination from *this* drop event (`over`), not
     // from the live `columns` state -- keeps status persistence correct
     // even if handleDragOver's running preview ever falls behind.
     const overCol = COLUMNS.some((c) => c.id === over.id) ? (over.id as string) : findColumn(over.id as string);
-    if (!overCol) return;
+    if (!overCol) {
+      setActiveId(null);
+      return;
+    }
 
     // Where the task started, from the snapshot taken at drag start --
     // reliable regardless of how many (possibly stale) dragover updates
@@ -607,7 +670,10 @@ export function KanbanBoard({
     const originalCol = rollback
       ? Object.keys(rollback).find((col) => rollback[col].includes(active.id as string))
       : findColumn(active.id as string);
-    if (!originalCol) return;
+    if (!originalCol) {
+      setActiveId(null);
+      return;
+    }
     const statusChanged = originalCol !== overCol;
 
     let finalColumns = columns;
@@ -638,6 +704,7 @@ export function KanbanBoard({
       // positions from this partial view would silently scramble the hidden
       // ones. Skip saving the reorder and snap back to the last known order.
       if (rollback) setColumns(rollback);
+      setActiveId(null);
       return;
     }
 
@@ -670,6 +737,8 @@ export function KanbanBoard({
         e instanceof ApiError ? e.message : e instanceof Error ? e.message : 'Failed to save the new order';
       toast(message, true);
       onChanged();
+    } finally {
+      setActiveId(null);
     }
   }
 
@@ -713,6 +782,7 @@ export function KanbanBoard({
         onDragStart={handleDragStart}
         onDragOver={handleDragOver}
         onDragEnd={handleDragEnd}
+        onDragCancel={() => setActiveId(null)}
       >
         <div className="board">
           {COLUMNS.map((col) => {
@@ -755,6 +825,7 @@ export function KanbanBoard({
             );
           })}
         </div>
+        <DragOverlay>{activeId && tasksById.get(activeId) ? <TaskCardPreview task={tasksById.get(activeId)!} /> : null}</DragOverlay>
       </DndContext>
     </>
   );

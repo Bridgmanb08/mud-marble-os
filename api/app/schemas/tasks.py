@@ -165,12 +165,24 @@ class CommentCreate(BaseModel):
     content: str
 
 
+class ReactionToggle(BaseModel):
+    emoji: str
+
+
+class ReactionSummary(BaseModel):
+    emoji: str
+    count: int
+    reacted_by_me: bool
+    people: list[str] = []
+
+
 class CommentOut(BaseModel):
     id: str
     task_id: str
     author: str
     content: str
     created_at: str
+    reactions: list[ReactionSummary] = []
 
 
 class BoardViewCreate(BaseModel):
