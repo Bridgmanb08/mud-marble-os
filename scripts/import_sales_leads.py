@@ -11,19 +11,25 @@ Skips (never overwrites) any lead that already matches an existing one by
 (first_name, project_address) case-insensitively, so this is safe to re-run
 after partial progress.
 
-Run this yourself. Requires SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY set in
-your shell.
+Run this yourself. Prompts for the Supabase service-role key interactively
+(hidden input, like a password prompt) unless SUPABASE_SERVICE_ROLE_KEY is
+already set in your shell -- this avoids the key ever landing in shell
+history or getting corrupted by a long one-line paste. SUPABASE_URL defaults
+to the real project URL (not secret) but can be overridden via env var.
 
 Usage:
     cd api && source .venv/bin/activate
     python ../scripts/import_sales_leads.py "/path/to/Mud & Marble Sales Lead Tracker.xlsx"
 """
 
+import getpass
 import os
 import sys
 
 import httpx
 import openpyxl
+
+DEFAULT_SUPABASE_URL = "https://boekqzxgooinrhxlckbp.supabase.co"
 
 # Exact labels from the workbook's own "Sales Stages" sheet, mapped onto this
 # app's status vocabulary (Leads.tsx's STAGE_OPTIONS). Matched by prefix
@@ -69,10 +75,12 @@ def main() -> None:
         sys.exit(1)
     path = sys.argv[1]
 
-    supabase_url = os.environ.get("SUPABASE_URL")
+    supabase_url = os.environ.get("SUPABASE_URL") or DEFAULT_SUPABASE_URL
     service_key = os.environ.get("SUPABASE_SERVICE_ROLE_KEY")
-    if not supabase_url or not service_key:
-        print("Set SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY in your shell first.", file=sys.stderr)
+    if not service_key:
+        service_key = getpass.getpass("Supabase service-role key (hidden as you type/paste): ").strip()
+    if not service_key:
+        print("No service-role key entered.", file=sys.stderr)
         sys.exit(1)
 
     headers = {
