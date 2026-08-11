@@ -60,6 +60,8 @@ export interface Task {
   subtask_total: number;
   subtask_complete: number;
   comment_count: number;
+  last_comment_author: string | null;
+  last_comment_at: string | null;
   blocked: boolean;
   overdue: boolean;
 }

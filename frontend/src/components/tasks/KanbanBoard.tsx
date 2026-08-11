@@ -18,8 +18,11 @@ import { SortableContext, verticalListSortingStrategy, useSortable, arrayMove, s
 import { CSS } from '@dnd-kit/utilities';
 import { IconMessageCircle, IconChecklist, IconLock, IconChevronDown, IconChevronRight, IconPlus, IconFlag, IconX } from '@tabler/icons-react';
 import { api, ApiError } from '../../api/client';
+import { useAuth } from '../../auth/AuthContext';
 import { useToast } from '../ui/Toast';
 import { fmtD } from '../../lib/format';
+import { colorForPerson } from '../../lib/personColor';
+import { hasUnseenComment } from '../../lib/commentSeen';
 import type { Task, TaskSubtask, Project, UserDirectoryEntry } from '../../types';
 
 const COLUMNS = [
@@ -137,6 +140,7 @@ function TaskCard({
   directory: UserDirectoryEntry[];
 }) {
   const toast = useToast();
+  const { user } = useAuth();
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
     id: task.id,
     disabled: dragDisabled,
@@ -146,6 +150,11 @@ function TaskCard({
   const [pendingChecked, setPendingChecked] = useState<boolean | null>(null);
   const overdue = task.overdue;
   const assignees = task.assignees && task.assignees.length > 0 ? task.assignees : task.assigned_to ? [task.assigned_to] : [];
+  // A comment counts as "new activity" only if someone else left it and
+  // this browser hasn't opened the task since -- your own comment isn't a
+  // notification to yourself.
+  const unseenComment =
+    task.last_comment_author !== user?.name && hasUnseenComment(task.id, task.last_comment_at);
 
   // Drop the optimistic override once the real task data reflects it --
   // otherwise a stale override could stick around across an unrelated
@@ -338,7 +347,21 @@ function TaskCard({
           {task.subtask_total > 0 ? `${task.subtask_complete}/${task.subtask_total}` : 'Add subtask'}
         </button>
         {task.comment_count > 0 && (
-          <span style={{ fontSize: 10, color: 'var(--t2)', display: 'flex', alignItems: 'center', gap: 3 }}>
+          <span
+            title={task.last_comment_author ? `Last comment from ${task.last_comment_author}` : undefined}
+            style={{
+              fontSize: 10,
+              fontWeight: 600,
+              color: '#fff',
+              background: colorForPerson(task.last_comment_author),
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: 3,
+              padding: '2px 6px',
+              borderRadius: 20,
+              boxShadow: unseenComment ? `0 0 0 2px var(--surface), 0 0 0 4px ${colorForPerson(task.last_comment_author)}` : undefined,
+            }}
+          >
             <IconMessageCircle size={11} /> {task.comment_count}
           </span>
         )}

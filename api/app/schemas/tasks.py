@@ -90,6 +90,8 @@ class TaskOut(BaseModel):
     subtask_total: int = 0
     subtask_complete: int = 0
     comment_count: int = 0
+    last_comment_author: Optional[str] = None
+    last_comment_at: Optional[str] = None
     blocked: bool = False
     overdue: bool = False
 
