@@ -217,6 +217,23 @@ textarea.fi{resize:vertical;min-height:80px;}
 .file-meta{font-size:11px;color:var(--t2);margin-top:2px;display:flex;align-items:center;gap:4px;}
 .file-drop{border:1.5px dashed var(--border-md);border-radius:var(--rl);padding:20px;text-align:center;color:var(--t2);font-size:13px;cursor:pointer;transition:all .1s;}
 .file-drop:hover,.file-drop.over{border-color:var(--accent);color:var(--text);background:var(--bg);}
+/* Small CSS-only hover tooltip -- put class="hover-tip" data-tip="..." on any
+   element (usually an icon button whose visible label doesn't say enough).
+   No JS state, no dependency -- matches this app's plain-input, no-library
+   convention. */
+.hover-tip{position:relative;}
+.hover-tip::after{
+  content:attr(data-tip);position:absolute;bottom:calc(100% + 7px);left:50%;transform:translateX(-50%);
+  background:var(--text);color:var(--bg);font-size:11px;line-height:1.3;padding:5px 9px;border-radius:6px;
+  white-space:nowrap;opacity:0;visibility:hidden;pointer-events:none;transition:opacity .12s;z-index:400;
+  box-shadow:0 2px 8px rgba(0,0,0,.15);
+}
+.hover-tip::before{
+  content:'';position:absolute;bottom:calc(100% + 2px);left:50%;transform:translateX(-50%);
+  border:5px solid transparent;border-top-color:var(--text);opacity:0;visibility:hidden;transition:opacity .12s;z-index:400;
+}
+.hover-tip:hover::after,.hover-tip:hover::before{opacity:1;visibility:visible;}
+
 .lightbox{position:fixed;inset:0;background:rgba(0,0,0,.8);display:flex;align-items:center;justify-content:center;z-index:400;padding:32px;}
 .lightbox-body{background:var(--surface);border-radius:var(--rl);max-width:90vw;max-height:90vh;width:900px;display:flex;flex-direction:column;overflow:hidden;}
 .lightbox-hd{display:flex;align-items:center;justify-content:space-between;padding:12px 16px;border-bottom:1px solid var(--border);}
