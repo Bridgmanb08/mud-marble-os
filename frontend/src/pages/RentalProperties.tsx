@@ -7,6 +7,8 @@ import { fmt, fmtD } from '../lib/format';
 import { NewRentalPropertyModal } from '../components/rentals/NewRentalPropertyModal';
 import { LeaseTimeline } from '../components/rentals/LeaseTimeline';
 import { MoneyField } from '../components/rentals/MoneyField';
+import { DesktopOnlyNotice } from '../components/ui/DesktopOnlyNotice';
+import { useIsMobile } from '../hooks/useMediaQuery';
 import type { RentalLease, RentalProperty, RentRollRow } from '../types';
 
 function visitColor(daysSince: number | null): string {
@@ -133,16 +135,18 @@ function SortTh({
   sortKey,
   sortDir,
   onToggle,
+  sticky,
 }: {
   label: string;
   sortKeyValue: SortKey;
   sortKey: SortKey;
   sortDir: 'asc' | 'desc';
   onToggle: (key: SortKey) => void;
+  sticky?: boolean;
 }) {
   const active = sortKey === sortKeyValue;
   return (
-    <th className="sortable" style={theadThStyle} onClick={() => onToggle(sortKeyValue)}>
+    <th className={`sortable${sticky ? ' sticky-col' : ''}`} style={theadThStyle} onClick={() => onToggle(sortKeyValue)}>
       <span style={{ display: 'inline-flex', alignItems: 'center', gap: 3, whiteSpace: 'nowrap' }}>
         {label}
         {active ? (sortDir === 'asc' ? <IconChevronUp size={12} /> : <IconChevronDown size={12} />) : null}
@@ -153,6 +157,7 @@ function SortTh({
 
 export default function RentalProperties() {
   const toast = useToast();
+  const isMobile = useIsMobile();
   const [properties, setProperties] = useState<RentalProperty[] | null>(null);
   const [leases, setLeases] = useState<RentalLease[]>([]);
   const [rentRoll, setRentRoll] = useState<RentRollRow[] | null>(null);
@@ -349,14 +354,21 @@ export default function RentalProperties() {
         </div>
       )}
 
-      {leases.length > 0 && (
-        <div className="card" style={{ padding: 20, marginBottom: 16 }}>
-          <div className="ibt" style={{ fontSize: 13, textTransform: 'none', letterSpacing: 0, border: 'none', padding: 0, marginBottom: 14 }}>
-            Lease timeline
+      {leases.length > 0 &&
+        (isMobile ? (
+          // Gantt-style timeline is inherently wide -- point back to the
+          // rent roll below instead of force-fitting it into a phone screen.
+          <div style={{ marginBottom: 16 }}>
+            <DesktopOnlyNotice label="Lease timeline" />
           </div>
-          <LeaseTimeline leases={leases} />
-        </div>
-      )}
+        ) : (
+          <div className="card" style={{ padding: 20, marginBottom: 16 }}>
+            <div className="ibt" style={{ fontSize: 13, textTransform: 'none', letterSpacing: 0, border: 'none', padding: 0, marginBottom: 14 }}>
+              Lease timeline
+            </div>
+            <LeaseTimeline leases={leases} />
+          </div>
+        ))}
 
       {properties === null ? (
         <div className="empty">
@@ -377,7 +389,7 @@ export default function RentalProperties() {
             <table className="tbl tbl-zebra tbl-sticky-head">
               <thead>
                 <tr>
-                  <SortTh label="Property / Unit" sortKeyValue="property" sortKey={sortKey} sortDir={sortDir} onToggle={toggleSort} />
+                  <SortTh label="Property / Unit" sortKeyValue="property" sortKey={sortKey} sortDir={sortDir} onToggle={toggleSort} sticky />
                   <SortTh label="Tenant" sortKeyValue="tenant" sortKey={sortKey} sortDir={sortDir} onToggle={toggleSort} />
                   <SortTh label="Rent" sortKeyValue="rent" sortKey={sortKey} sortDir={sortDir} onToggle={toggleSort} />
                   <SortTh label="Current due" sortKeyValue="current_due" sortKey={sortKey} sortDir={sortDir} onToggle={toggleSort} />
@@ -398,7 +410,7 @@ export default function RentalProperties() {
                 ) : (
                   sortedRentRoll.map((r) => (
                     <tr key={r.unit_id}>
-                      <td>
+                      <td className="sticky-col">
                         <Link to={`/rentals/${r.property_id}`} style={{ color: 'var(--blue)', fontWeight: 500 }}>
                           {r.property_address}
                         </Link>
