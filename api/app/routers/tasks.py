@@ -49,8 +49,15 @@ async def _enrich(rows: list[dict]) -> list[TaskOut]:
             subtask_done[s["task_id"]] += 1
 
     comment_counts: dict[str, int] = defaultdict(int)
+    last_comment_author: dict[str, str] = {}
+    last_comment_at: dict[str, str] = {}
     for c in comments:
         comment_counts[c["task_id"]] += 1
+        # created_at sorts correctly as a plain string (ISO 8601) -- no
+        # datetime parsing needed to find the latest per task.
+        if c["task_id"] not in last_comment_at or c["created_at"] > last_comment_at[c["task_id"]]:
+            last_comment_at[c["task_id"]] = c["created_at"]
+            last_comment_author[c["task_id"]] = c["author"]
 
     status_by_id = {r["id"]: r["status"] for r in rows}
     blocked_ids: set[str] = set()
@@ -70,6 +77,8 @@ async def _enrich(rows: list[dict]) -> list[TaskOut]:
                 subtask_total=subtask_totals.get(r["id"], 0),
                 subtask_complete=subtask_done.get(r["id"], 0),
                 comment_count=comment_counts.get(r["id"], 0),
+                last_comment_author=last_comment_author.get(r["id"]),
+                last_comment_at=last_comment_at.get(r["id"]),
                 blocked=r["id"] in blocked_ids,
                 overdue=overdue,
             )
@@ -79,7 +88,7 @@ async def _enrich(rows: list[dict]) -> list[TaskOut]:
 
 async def _gather_related(id_filter: str):
     subtasks = await db_get("task_subtasks", f"?task_id=in.({id_filter})&select=task_id,is_complete")
-    comments = await db_get("task_comments", f"?task_id=in.({id_filter})&select=task_id")
+    comments = await db_get("task_comments", f"?task_id=in.({id_filter})&select=task_id,author,created_at")
     deps = await db_get("task_dependencies", f"?task_id=in.({id_filter})&select=task_id,depends_on_id")
     return subtasks, comments, deps
 

@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState, type FormEvent } from 'react';
 import { IconTrash, IconLock, IconPlus, IconAlertTriangle } from '@tabler/icons-react';
 import { api, ApiError } from '../../api/client';
+import { useAuth } from '../../auth/AuthContext';
 import { Modal } from '../ui/Modal';
 import { useToast } from '../ui/Toast';
 import { MentionTextarea } from '../ui/MentionTextarea';
@@ -9,6 +10,8 @@ import { NewSubcontractorModal } from '../subcontractors/NewSubcontractorModal';
 import { MultiAssigneeInput } from './MultiAssigneeInput';
 import { openDatePicker } from '../../lib/datePicker';
 import { useReferenceData } from '../../reference-data/ReferenceDataContext';
+import { colorForPerson, initialsForPerson } from '../../lib/personColor';
+import { markCommentsSeen } from '../../lib/commentSeen';
 import type { Project, Task, TaskComment, TaskDependency, TaskSubtask, UserDirectoryEntry } from '../../types';
 
 interface TaskDetailDrawerProps {
@@ -22,6 +25,7 @@ interface TaskDetailDrawerProps {
 
 export function TaskDetailDrawer({ task, allTasks, onClose, onSaved, onDeleted, onChanged }: TaskDetailDrawerProps) {
   const toast = useToast();
+  const { user } = useAuth();
   const [projects, setProjects] = useState<Project[]>([]);
   const [directory, setDirectory] = useState<UserDirectoryEntry[]>([]);
   const { costCodes: costCodesData, subcontractors: subcontractorsData, refreshSubcontractors } = useReferenceData();
@@ -90,7 +94,13 @@ export function TaskDetailDrawer({ task, allTasks, onClose, onSaved, onDeleted, 
     setDependencies(await api.get<TaskDependency[]>(`/tasks/${task.id}/dependencies`).catch(() => []));
   }
   async function loadComments() {
-    setComments(await api.get<TaskComment[]>(`/tasks/${task.id}/comments`).catch(() => []));
+    const rows = await api.get<TaskComment[]>(`/tasks/${task.id}/comments`).catch(() => []);
+    setComments(rows);
+    // Comments come back newest-first (see the GET endpoint's
+    // order=created_at.desc) -- opening the drawer counts as having seen
+    // everything currently here, clearing the Kanban card's "new activity"
+    // glow next time this browser sees the board.
+    if (rows.length > 0) markCommentsSeen(task.id, rows[0].created_at);
   }
 
   const blockedByIncomplete = dependencies.some((d) => tasksById.get(d.depends_on_id)?.status !== 'complete');
@@ -436,27 +446,86 @@ export function TaskDetailDrawer({ task, allTasks, onClose, onSaved, onDeleted, 
 
         <div className="fg" style={{ marginTop: 14 }}>
           <label className="fl">Comments</label>
-          <div style={{ marginBottom: 10 }}>
-            <MentionTextarea
-              value={newComment}
-              onChange={setNewComment}
-              placeholder="Add a comment… type @ to mention someone"
-              style={{ minHeight: 60 }}
-            />
-            <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: 6 }}>
-              <button type="button" className="btn btn-sm" onClick={postComment} disabled={!newComment.trim()}>
-                Post
-              </button>
+          {comments.length === 0 ? (
+            <div style={{ fontSize: 12, color: 'var(--t2)', marginBottom: 10 }}>No comments yet -- start the thread below.</div>
+          ) : (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginBottom: 10 }}>
+              {/* Chronological (oldest first), reversing the API's newest-first
+                  order -- reads top-to-bottom like a chat thread rather than a
+                  changelog. Each author gets a stable color (colorForPerson)
+                  everywhere -- same avatar/stripe color here as the "sticky
+                  note" bubble on the Kanban card, so it's recognizable at a
+                  glance whose comment triggered the update. */}
+              {[...comments].reverse().map((c) => (
+                <div key={c.id} style={{ display: 'flex', gap: 8, alignItems: 'flex-start' }}>
+                  <div
+                    style={{
+                      width: 26,
+                      height: 26,
+                      borderRadius: '50%',
+                      background: colorForPerson(c.author),
+                      color: '#fff',
+                      fontSize: 11,
+                      fontWeight: 600,
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      flexShrink: 0,
+                    }}
+                  >
+                    {initialsForPerson(c.author)}
+                  </div>
+                  <div
+                    style={{
+                      flex: 1,
+                      background: 'var(--bg)',
+                      borderLeft: `3px solid ${colorForPerson(c.author)}`,
+                      borderRadius: 6,
+                      padding: '6px 10px',
+                    }}
+                  >
+                    <div style={{ display: 'flex', alignItems: 'baseline', gap: 6, flexWrap: 'wrap' }}>
+                      <span style={{ fontSize: 12, fontWeight: 600 }}>{c.author}</span>
+                      <span style={{ fontSize: 10, color: 'var(--t3)' }}>{new Date(c.created_at).toLocaleString()}</span>
+                    </div>
+                    <div style={{ fontSize: 13, marginTop: 2, whiteSpace: 'pre-wrap' }}>{c.content}</div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+          <div style={{ display: 'flex', gap: 8, alignItems: 'flex-start' }}>
+            <div
+              style={{
+                width: 26,
+                height: 26,
+                borderRadius: '50%',
+                background: colorForPerson(user?.name),
+                color: '#fff',
+                fontSize: 11,
+                fontWeight: 600,
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                flexShrink: 0,
+              }}
+            >
+              {initialsForPerson(user?.name)}
+            </div>
+            <div style={{ flex: 1 }}>
+              <MentionTextarea
+                value={newComment}
+                onChange={setNewComment}
+                placeholder="Reply… type @ to mention someone"
+                style={{ minHeight: 50 }}
+              />
+              <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: 6 }}>
+                <button type="button" className="btn btn-sm" onClick={postComment} disabled={!newComment.trim()}>
+                  Post
+                </button>
+              </div>
             </div>
           </div>
-          {comments.map((c) => (
-            <div key={c.id} style={{ padding: '8px 0', borderBottom: '1px solid var(--border)' }}>
-              <div style={{ fontSize: 12, fontWeight: 500 }}>{c.author}</div>
-              <div style={{ fontSize: 13, marginTop: 2, whiteSpace: 'pre-wrap' }}>{c.content}</div>
-              <div style={{ fontSize: 11, color: 'var(--t2)', marginTop: 2 }}>{new Date(c.created_at).toLocaleString()}</div>
-            </div>
-          ))}
-          {comments.length === 0 && <div style={{ fontSize: 12, color: 'var(--t2)' }}>No comments yet.</div>}
         </div>
 
         <TaskFilesSection taskId={task.id} projectId={projectId || null} />
