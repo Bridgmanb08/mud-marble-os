@@ -573,12 +573,14 @@ export function KanbanBoard({
     // than silently overwriting a concurrent edit.
     const items = filtersActive
       ? // Cross-column moves are safe even while filtered -- they only touch
-        // the dragged task, not any hidden sibling's position.
+        // the dragged task, not any hidden sibling's position. `position` is
+        // omitted (not guessed client-side) since the filtered view can't
+        // see the destination column's real siblings to compute "the end"
+        // from -- the backend appends using its own unfiltered query.
         [
           {
             id: active.id as string,
             status: overCol,
-            position: Date.now(),
             expected_version: tasksById.get(active.id as string)?.version,
           },
         ]
