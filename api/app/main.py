@@ -16,6 +16,7 @@ from .routers import (
     files,
     invoices,
     job_import,
+    lead_stages,
     leads,
     messages,
     notification_settings,
@@ -87,6 +88,7 @@ app.include_router(reports.router, prefix="/api")
 app.include_router(quick_reminders.router, prefix="/api")
 app.include_router(twilio_sms.router, prefix="/api")
 app.include_router(person_tags.router, prefix="/api")
+app.include_router(lead_stages.router, prefix="/api")
 app.include_router(pulse.router, prefix="/api")
 app.include_router(notification_settings.router, prefix="/api")
 app.include_router(smart_nudges.router, prefix="/api")

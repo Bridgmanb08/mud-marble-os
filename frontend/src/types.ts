@@ -1,8 +1,9 @@
-// Brent's real sales pipeline (from his "Sales Lead Tracker" spreadsheet's
-// Sales Stages sheet) -- 'new' is the default before any stage is picked,
-// 'converted' is set automatically by the Convert action (not a manually
-// selectable stage), 'stage_6_lost' covers both "Missed Opportunity" and
-// the plain "Lost" label he's also used.
+// The seeded default keys from migration 0050_lead_stages.sql -- kept only
+// as a reference for what ships out of the box. The real, current set of
+// stages (which an admin can rename or add to from Leads.tsx's "Edit
+// stages" flow) lives in the `lead_stages` table and is fetched at runtime
+// via LeadStage below; `Lead.status` is a plain string, not this union, so
+// a newly-added custom stage's key isn't a type error.
 export type LeadStatus =
   | 'new'
   | 'stage_1'
@@ -12,6 +13,17 @@ export type LeadStatus =
   | 'stage_5'
   | 'stage_6_lost'
   | 'converted';
+
+export interface LeadStage {
+  id: string;
+  key: string;
+  label: string;
+  sort_order: number;
+  is_open: boolean;
+  is_won: boolean;
+  is_lost: boolean;
+  created_at: string;
+}
 
 export interface ProjectBrief {
   name: string;
@@ -619,7 +631,7 @@ export interface Lead {
   project_scope: string | null;
   phone: string | null;
   email: string | null;
-  status: LeadStatus;
+  status: string;
   confidence: number | null;
   estimated_revenue_min: number | null;
   estimated_revenue_max: number | null;

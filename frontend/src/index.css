@@ -94,8 +94,19 @@ body{font-family:var(--font);background:var(--bg);color:var(--text);font-size:14
 
 /* Wrap a wide .tbl in this to scroll horizontally while keeping the
    identifying column (marked .sticky-col) pinned in view, like a frozen
-   column in a spreadsheet. */
-.tbl-scroll{overflow-x:auto;}
+   column in a spreadsheet. overflow-y is pinned to hidden (not left as the
+   implicit "visible") because the CSS overflow spec silently promotes a
+   visible overflow-y to auto whenever overflow-x isn't visible -- with no
+   explicit height on this element that never clips anything in practice,
+   but it turns this into an unintended second scroll container nested
+   inside the page's own scroll, which breaks position:sticky table headers
+   (Leads.tsx: a sticky <th> computed its stuck offset against this
+   container's scrollport instead of the viewport and rendered hundreds of
+   pixels off from its own <tr>). Pinning it to hidden opts out of that
+   promotion for every .tbl-scroll table, not just the ones with sticky
+   headers, since there's no known case where the auto-promotion was ever
+   wanted here. */
+.tbl-scroll{overflow-x:auto;overflow-y:hidden;}
 .tbl td.sticky-col,.tbl th.sticky-col{position:sticky;left:0;z-index:1;background:var(--surface);}
 .tbl tbody tr:hover td.sticky-col{background:var(--border);}
 
