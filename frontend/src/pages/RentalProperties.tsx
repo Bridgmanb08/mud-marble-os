@@ -1,6 +1,6 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { IconPlus, IconHome2, IconMapPin } from '@tabler/icons-react';
+import { IconPlus, IconHome2, IconMapPin, IconChevronUp, IconChevronDown } from '@tabler/icons-react';
 import { api, ApiError } from '../api/client';
 import { useToast } from '../components/ui/Toast';
 import { fmt, fmtD } from '../lib/format';
@@ -24,12 +24,141 @@ function leaseEndColor(endDate: string | null): string | undefined {
   return undefined;
 }
 
+type SortKey = 'property' | 'tenant' | 'rent' | 'current_due' | 'past_due' | 'last_visited' | 'lease_end' | 'renewal' | 'rent_increase';
+
+const RENEWAL_RANK: Record<string, number> = { renewing: 0, undecided: 1, not_renewing: 2 };
+
+function sortValue(r: RentRollRow, key: SortKey): string | number | null {
+  switch (key) {
+    case 'property':
+      return `${r.property_address} ${r.unit_label}`;
+    case 'tenant':
+      return r.tenant_name;
+    case 'rent':
+      return r.monthly_rent;
+    case 'current_due':
+      return r.lease_id ? r.current_month_due - r.current_month_paid : null;
+    case 'past_due':
+      return r.past_due_total || null;
+    case 'last_visited':
+      // "Never visited" is the most urgent case, not a blank -- rank it
+      // ahead of everything instead of letting the normal null-sorts-last
+      // rule bury it at the bottom.
+      return r.days_since_visit === null ? -1 : r.days_since_visit;
+    case 'lease_end':
+      return r.lease_end_date;
+    case 'renewal':
+      return r.renewal_status ? RENEWAL_RANK[r.renewal_status] ?? 99 : null;
+    case 'rent_increase':
+      return r.renewal_rent_increase;
+    default:
+      return null;
+  }
+}
+
+// Click-to-edit text/number cell -- same component shape as Leads.tsx's
+// EditableCell, reused here rather than imported since it's page-local
+// styling (no shared component existed for this before either page needed
+// it).
+function EditableCell({
+  value,
+  onCommit,
+  placeholder = '—',
+  type = 'text',
+  displayValue,
+}: {
+  value: string;
+  onCommit: (v: string) => void;
+  placeholder?: string;
+  type?: string;
+  displayValue?: React.ReactNode;
+}) {
+  const [editing, setEditing] = useState(false);
+  const [draft, setDraft] = useState(value);
+
+  useEffect(() => {
+    if (!editing) setDraft(value);
+  }, [value, editing]);
+
+  function commit(next: string) {
+    setEditing(false);
+    if (next !== value) onCommit(next);
+  }
+
+  if (editing) {
+    return (
+      <input
+        className="fi"
+        autoFocus
+        type={type}
+        value={draft}
+        onClick={(e) => e.stopPropagation()}
+        onChange={(e) => setDraft(e.target.value)}
+        onBlur={() => commit(draft)}
+        onKeyDown={(e) => {
+          if (e.key === 'Enter') commit(draft);
+          if (e.key === 'Escape') {
+            setDraft(value);
+            setEditing(false);
+          }
+        }}
+        style={{ fontSize: 12, width: '100%' }}
+      />
+    );
+  }
+  return (
+    <div
+      onClick={(e) => {
+        e.stopPropagation();
+        setEditing(true);
+      }}
+      title="Click to edit"
+      style={{ cursor: 'text', minHeight: 16 }}
+    >
+      {displayValue !== undefined ? displayValue : value || <span style={{ color: 'var(--t3)' }}>{placeholder}</span>}
+    </div>
+  );
+}
+
+const theadThStyle = { top: 0 };
+
+// Hoisted to module scope (not defined inside RentalProperties()) so it
+// keeps a stable component identity across renders -- a component defined
+// inside another component's body gets a new function identity every
+// render, which makes React tear down and remount the whole subtree (here,
+// the header row) on every state change instead of just updating it.
+function SortTh({
+  label,
+  sortKeyValue,
+  sortKey,
+  sortDir,
+  onToggle,
+}: {
+  label: string;
+  sortKeyValue: SortKey;
+  sortKey: SortKey;
+  sortDir: 'asc' | 'desc';
+  onToggle: (key: SortKey) => void;
+}) {
+  const active = sortKey === sortKeyValue;
+  return (
+    <th className="sortable" style={theadThStyle} onClick={() => onToggle(sortKeyValue)}>
+      <span style={{ display: 'inline-flex', alignItems: 'center', gap: 3, whiteSpace: 'nowrap' }}>
+        {label}
+        {active ? (sortDir === 'asc' ? <IconChevronUp size={12} /> : <IconChevronDown size={12} />) : null}
+      </span>
+    </th>
+  );
+}
+
 export default function RentalProperties() {
   const toast = useToast();
   const [properties, setProperties] = useState<RentalProperty[] | null>(null);
   const [leases, setLeases] = useState<RentalLease[]>([]);
   const [rentRoll, setRentRoll] = useState<RentRollRow[] | null>(null);
   const [showNew, setShowNew] = useState(false);
+  const [sortKey, setSortKey] = useState<SortKey>('property');
+  const [sortDir, setSortDir] = useState<'asc' | 'desc'>('asc');
 
   function load() {
     api
@@ -85,13 +214,71 @@ export default function RentalProperties() {
   }
 
   async function updateLease(leaseId: string, body: Record<string, unknown>) {
+    // Optimistic update, same pattern used throughout this app's other
+    // inline-editable tables (Leads.tsx) -- reflects the change instantly
+    // instead of waiting on the reload.
+    setRentRoll((prev) => (prev ? prev.map((r) => (r.lease_id === leaseId ? { ...r, ...body } : r)) : prev));
     try {
       await api.patch(`/rental-leases/${leaseId}`, body);
       loadRentRoll();
     } catch (err) {
       toast(err instanceof ApiError ? err.message : 'Failed to save', true);
+      loadRentRoll();
     }
   }
+
+  function toggleSort(key: SortKey) {
+    if (sortKey === key) {
+      setSortDir((d) => (d === 'asc' ? 'desc' : 'asc'));
+    } else {
+      setSortKey(key);
+      setSortDir('asc');
+    }
+  }
+
+  const sortedRentRoll = useMemo(() => {
+    if (!rentRoll) return [];
+    return [...rentRoll].sort((a, b) => {
+      const av = sortValue(a, sortKey);
+      const bv = sortValue(b, sortKey);
+      if (av == null && bv == null) return 0;
+      if (av == null) return 1;
+      if (bv == null) return -1;
+      const cmp = typeof av === 'number' && typeof bv === 'number' ? av - bv : String(av).localeCompare(String(bv));
+      return sortDir === 'asc' ? cmp : -cmp;
+    });
+  }, [rentRoll, sortKey, sortDir]);
+
+  // The Rent Roll table gets its own bounded-height, internally-scrolling
+  // box instead of relying on page scroll -- same technique used on
+  // Leads.tsx, and for the same reason: a naive sticky <th> inside a plain
+  // overflow-x:auto wrapper silently breaks (any ancestor with non-visible
+  // overflow becomes the sticky containing block, and since it never
+  // actually scrolls itself, the header just sits at a constant offset).
+  // This also directly satisfies "keep the metrics/financials visible while
+  // scrolling the roll" for free -- the page itself never needs to scroll
+  // past them since only the table body scrolls, in its own box.
+  const tableCardRef = useRef<HTMLDivElement>(null);
+  const [tableMaxHeight, setTableMaxHeight] = useState('60vh');
+  useEffect(() => {
+    function update() {
+      const el = tableCardRef.current;
+      if (!el) return;
+      const top = el.getBoundingClientRect().top;
+      // Floor at a sensible minimum -- when the metrics/financials/lease
+      // timeline sections above push the card's top past the viewport
+      // height (a big portfolio, lots of leases), `100vh - top` goes
+      // negative and the browser silently clamps a negative max-height to
+      // 0, collapsing the whole table to nothing. A fixed floor keeps
+      // several rows visible and scrollable even then.
+      const available = Math.max(320, window.innerHeight - top - 24);
+      setTableMaxHeight(`${available}px`);
+    }
+    update();
+    window.addEventListener('resize', update);
+    return () => window.removeEventListener('resize', update);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [hasFinancials, leases.length, properties]);
 
   return (
     <>
@@ -182,23 +369,23 @@ export default function RentalProperties() {
           <div className="empty-s">Add your first property to start tracking units, leases, and rent.</div>
         </div>
       ) : (
-        <div className="card" style={{ padding: 0, overflow: 'hidden' }}>
+        <div className="card" style={{ padding: 0, overflow: 'hidden' }} ref={tableCardRef}>
           <div className="ibt" style={{ fontSize: 13, textTransform: 'none', letterSpacing: 0, border: 'none', padding: '16px 20px 0' }}>
             Rent roll
           </div>
-          <div className="tbl-scroll">
-            <table className="tbl tbl-zebra">
+          <div style={{ overflow: 'auto', maxHeight: tableMaxHeight, marginTop: 10 }}>
+            <table className="tbl tbl-zebra tbl-sticky-head">
               <thead>
                 <tr>
-                  <th>Property / Unit</th>
-                  <th>Tenant</th>
-                  <th>Rent</th>
-                  <th>Current due</th>
-                  <th>Past due</th>
-                  <th>Last visited</th>
-                  <th>Lease ends</th>
-                  <th>Renewing?</th>
-                  <th>Rent increase</th>
+                  <SortTh label="Property / Unit" sortKeyValue="property" sortKey={sortKey} sortDir={sortDir} onToggle={toggleSort} />
+                  <SortTh label="Tenant" sortKeyValue="tenant" sortKey={sortKey} sortDir={sortDir} onToggle={toggleSort} />
+                  <SortTh label="Rent" sortKeyValue="rent" sortKey={sortKey} sortDir={sortDir} onToggle={toggleSort} />
+                  <SortTh label="Current due" sortKeyValue="current_due" sortKey={sortKey} sortDir={sortDir} onToggle={toggleSort} />
+                  <SortTh label="Past due" sortKeyValue="past_due" sortKey={sortKey} sortDir={sortDir} onToggle={toggleSort} />
+                  <SortTh label="Last visited" sortKeyValue="last_visited" sortKey={sortKey} sortDir={sortDir} onToggle={toggleSort} />
+                  <SortTh label="Lease ends" sortKeyValue="lease_end" sortKey={sortKey} sortDir={sortDir} onToggle={toggleSort} />
+                  <SortTh label="Renewing?" sortKeyValue="renewal" sortKey={sortKey} sortDir={sortDir} onToggle={toggleSort} />
+                  <SortTh label="Rent increase" sortKeyValue="rent_increase" sortKey={sortKey} sortDir={sortDir} onToggle={toggleSort} />
                 </tr>
               </thead>
               <tbody>
@@ -209,7 +396,7 @@ export default function RentalProperties() {
                     </td>
                   </tr>
                 ) : (
-                  rentRoll.map((r) => (
+                  sortedRentRoll.map((r) => (
                     <tr key={r.unit_id}>
                       <td>
                         <Link to={`/rentals/${r.property_id}`} style={{ color: 'var(--blue)', fontWeight: 500 }}>
@@ -218,9 +405,22 @@ export default function RentalProperties() {
                         <div style={{ fontSize: 11, color: 'var(--t3)' }}>{r.unit_label}</div>
                       </td>
                       <td>
-                        {r.tenant_name ? r.tenant_name : <span className="badge bg-gray">Vacant</span>}
+                        {r.tenant_name ? (
+                          <span title="Change the tenant from the property's Units & Tenants tab">{r.tenant_name}</span>
+                        ) : (
+                          <span className="badge bg-gray">Vacant</span>
+                        )}
                       </td>
-                      <td>{r.monthly_rent !== null ? `${fmt(r.monthly_rent)}/mo` : '—'}</td>
+                      <td onClick={(e) => e.stopPropagation()} style={{ minWidth: 100 }}>
+                        {r.lease_id ? (
+                          <MoneyField
+                            value={r.monthly_rent !== null ? String(r.monthly_rent) : ''}
+                            onCommit={(v) => updateLease(r.lease_id!, { monthly_rent: v.trim() === '' ? 0 : parseFloat(v) })}
+                          />
+                        ) : (
+                          '—'
+                        )}
+                      </td>
                       <td>
                         {r.lease_id ? (
                           <span style={{ color: r.current_month_paid >= r.current_month_due ? undefined : 'var(--red)' }}>
@@ -256,8 +456,23 @@ export default function RentalProperties() {
                           </button>
                         </div>
                       </td>
-                      <td style={{ color: leaseEndColor(r.lease_end_date) }}>{r.lease_end_date ? fmtD(r.lease_end_date) : '—'}</td>
-                      <td>
+                      <td onClick={(e) => e.stopPropagation()} style={{ minWidth: 120 }}>
+                        {r.lease_id ? (
+                          <EditableCell
+                            value={r.lease_end_date ? r.lease_end_date.slice(0, 10) : ''}
+                            type="date"
+                            displayValue={
+                              <span style={{ color: leaseEndColor(r.lease_end_date) }}>
+                                {r.lease_end_date ? fmtD(r.lease_end_date) : '—'}
+                              </span>
+                            }
+                            onCommit={(v) => updateLease(r.lease_id!, { end_date: v })}
+                          />
+                        ) : (
+                          '—'
+                        )}
+                      </td>
+                      <td onClick={(e) => e.stopPropagation()}>
                         {r.lease_id ? (
                           <select
                             className="fi"
@@ -273,7 +488,7 @@ export default function RentalProperties() {
                           '—'
                         )}
                       </td>
-                      <td style={{ width: 130 }}>
+                      <td onClick={(e) => e.stopPropagation()} style={{ width: 130 }}>
                         {r.lease_id ? (
                           <MoneyField
                             value={r.renewal_rent_increase !== null ? String(r.renewal_rent_increase) : ''}
