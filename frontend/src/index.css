@@ -299,7 +299,10 @@ textarea.fi{resize:vertical;min-height:80px;}
      drawer floats above it instead of pushing it over. */
   .main{margin-left:0;}
   .metrics{grid-template-columns:repeat(2,1fr);}
-  .board{grid-template-columns:1fr 1fr;}
+  /* Kanban: a real single stacked column, not a cramped 2-up grid -- each
+     column becomes collapsible on mobile (KanbanBoard.tsx) so the stack
+     doesn't turn into one very long scroll. */
+  .board{grid-template-columns:1fr;}
   .fr,.fr3{grid-template-columns:1fr;}
   .mb{padding:16px;}
   .ai-panel{width:calc(100vw - 24px);right:12px;bottom:80px;height:60vh;}

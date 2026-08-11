@@ -14,6 +14,8 @@ import { NewTaskModal } from '../components/tasks/NewTaskModal';
 import { TaskDetailDrawer } from '../components/tasks/TaskDetailDrawer';
 import { JobFilterSidebar } from '../components/tasks/JobFilterSidebar';
 import { FathomImportModal } from '../components/tasks/FathomImportModal';
+import { DesktopOnlyNotice } from '../components/ui/DesktopOnlyNotice';
+import { useIsMobile } from '../hooks/useMediaQuery';
 
 type TaskTab = 'all' | 'mine' | 'punch';
 type ViewMode = 'kanban' | 'table' | 'timeline';
@@ -42,6 +44,7 @@ function loadSavedState(): SavedViewState | null {
 export default function Tasks() {
   const saved = loadSavedState();
   const { user } = useAuth();
+  const isMobile = useIsMobile();
   const [searchParams, setSearchParams] = useSearchParams();
 
   const [tasks, setTasks] = useState<Task[] | null>(null);
@@ -327,6 +330,10 @@ export default function Tasks() {
             <KanbanBoard tasks={filtered} onTaskClick={openEdit} onAddTask={openNew} onChanged={load} filtersActive={filtersActive} />
           ) : view === 'table' ? (
             <TableView tasks={filtered} onTaskClick={openEdit} groupBy={groupBy} onGroupByChange={setGroupBy} onChanged={load} />
+          ) : isMobile ? (
+            // Timeline is a Gantt-style view, inherently wide -- rather than
+            // force-fitting it into a phone screen, point back to Board/Table.
+            <DesktopOnlyNotice label="Timeline" />
           ) : (
             <TimelineView tasks={filtered} onTaskClick={openEdit} />
           )}
