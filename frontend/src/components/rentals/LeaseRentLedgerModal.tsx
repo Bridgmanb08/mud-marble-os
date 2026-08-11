@@ -110,10 +110,11 @@ export function LeaseRentLedgerModal({ lease, onClose }: { lease: RentalLease; o
           <div className="empty-t">No payment rows yet</div>
         </div>
       ) : (
+        <div className="tbl-scroll">
         <table className="tbl tbl-zebra">
           <thead>
             <tr>
-              <th>Due date</th>
+              <th className="sticky-col">Due date</th>
               <th>Amount due</th>
               <th>Status</th>
               <th>Paid</th>
@@ -178,6 +179,7 @@ export function LeaseRentLedgerModal({ lease, onClose }: { lease: RentalLease; o
             ))}
           </tbody>
         </table>
+        </div>
       )}
 
       <div style={{ marginTop: 18, paddingTop: 14, borderTop: '1px solid var(--border)' }}>

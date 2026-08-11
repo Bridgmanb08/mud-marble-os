@@ -398,38 +398,40 @@ export default function RentalPropertyDetail() {
           {leases.length === 0 ? (
             <div style={{ fontSize: 13, color: 'var(--t2)' }}>No leases yet.</div>
           ) : (
-            <table className="tbl">
-              <thead>
-                <tr>
-                  <th>Unit</th>
-                  <th>Tenant</th>
-                  <th>Term</th>
-                  <th>Rent</th>
-                  <th>Status</th>
-                  <th></th>
-                </tr>
-              </thead>
-              <tbody>
-                {leases.map((l) => (
-                  <tr key={l.id}>
-                    <td>{l.rental_units?.unit_label || '—'}</td>
-                    <td>{l.tenants?.name || '—'}</td>
-                    <td>
-                      {fmtD(l.start_date)} – {fmtD(l.end_date)}
-                    </td>
-                    <td>{fmt(l.monthly_rent)}/mo</td>
-                    <td>
-                      <span className={`badge ${LEASE_STATUS_BADGE[l.lease_status] || 'bg-gray'}`}>{l.lease_status}</span>
-                    </td>
-                    <td>
-                      <button className="btn btn-sm" onClick={() => setLedgerLease(l)}>
-                        Rent ledger
-                      </button>
-                    </td>
+            <div className="tbl-scroll">
+              <table className="tbl">
+                <thead>
+                  <tr>
+                    <th className="sticky-col">Unit</th>
+                    <th>Tenant</th>
+                    <th>Term</th>
+                    <th>Rent</th>
+                    <th>Status</th>
+                    <th></th>
                   </tr>
-                ))}
-              </tbody>
-            </table>
+                </thead>
+                <tbody>
+                  {leases.map((l) => (
+                    <tr key={l.id}>
+                      <td className="sticky-col">{l.rental_units?.unit_label || '—'}</td>
+                      <td>{l.tenants?.name || '—'}</td>
+                      <td>
+                        {fmtD(l.start_date)} – {fmtD(l.end_date)}
+                      </td>
+                      <td>{fmt(l.monthly_rent)}/mo</td>
+                      <td>
+                        <span className={`badge ${LEASE_STATUS_BADGE[l.lease_status] || 'bg-gray'}`}>{l.lease_status}</span>
+                      </td>
+                      <td>
+                        <button className="btn btn-sm" onClick={() => setLedgerLease(l)}>
+                          Rent ledger
+                        </button>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
           )}
         </div>
 
