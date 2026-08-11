@@ -516,7 +516,8 @@ export function TaskDetailDrawer({ task, allTasks, onClose, onSaved, onDeleted, 
               <MentionTextarea
                 value={newComment}
                 onChange={setNewComment}
-                placeholder="Reply… type @ to mention someone"
+                onSubmit={postComment}
+                placeholder="Reply… type @ to mention someone (Enter to post, Shift+Enter for a new line)"
                 style={{ minHeight: 50 }}
               />
               <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: 6 }}>
