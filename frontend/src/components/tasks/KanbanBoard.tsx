@@ -461,7 +461,13 @@ export function KanbanBoard({
   }, [doneCollapsed]);
 
   useEffect(() => {
-    const grouped: Record<string, string[]> = { upcoming: [], in_progress: [], delayed: [], complete: [] };
+    // Derived from COLUMNS itself, not a hand-copied literal -- a hardcoded
+    // `{ upcoming: [], ... }` object here previously went stale the moment
+    // a 5th column (urgent_today) was added to COLUMNS: prev[overCol] in
+    // handleDragOver below was undefined for the new column, and spreading
+    // undefined (`[...prev[overCol], id]`) threw, crashing the whole board
+    // to a blank screen the instant a task was dropped into it.
+    const grouped: Record<string, string[]> = Object.fromEntries(COLUMNS.map((c) => [c.id, []]));
     for (const t of tasks) {
       const col = t.status === 'blocked' ? 'delayed' : grouped[t.status] ? t.status : 'upcoming';
       grouped[col].push(t.id);
