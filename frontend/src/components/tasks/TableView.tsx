@@ -60,7 +60,7 @@ function TaskTableRow({
         <input type="checkbox" checked={selected} onChange={() => onToggleSelect(task.id)} />
       </td>
       <td style={{ color: 'var(--t2)' }}>{displayOrder != null ? displayOrder + 1 : '—'}</td>
-      <td style={{ fontWeight: 500 }}>{task.title}</td>
+      <td className="sticky-col" style={{ fontWeight: 500 }}>{task.title}</td>
       <td>{task.projects?.name?.replace(/\|.*/, '').trim() || '—'}</td>
       <td>{task.assigned_to || '—'}</td>
       <td>
@@ -345,6 +345,7 @@ export function TableView({
               </div>
             )}
             <div className="card">
+              <div className="tbl-scroll">
               <table className="tbl tbl-zebra">
                 <thead>
                   <tr>
@@ -359,7 +360,7 @@ export function TableView({
                     >
                       Order
                     </th>
-                    <th className="sortable" onClick={() => toggleSort('title')}>
+                    <th className="sortable sticky-col" onClick={() => toggleSort('title')}>
                       Title
                     </th>
                     <th>Project</th>
@@ -387,6 +388,7 @@ export function TableView({
                   tbody
                 )}
               </table>
+              </div>
             </div>
           </div>
         );

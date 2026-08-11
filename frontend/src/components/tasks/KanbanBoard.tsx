@@ -23,6 +23,7 @@ import { useToast } from '../ui/Toast';
 import { fmtD } from '../../lib/format';
 import { colorForPerson } from '../../lib/personColor';
 import { hasUnseenComment } from '../../lib/commentSeen';
+import { useIsMobile } from '../../hooks/useMediaQuery';
 import type { Task, TaskSubtask, Project, UserDirectoryEntry } from '../../types';
 
 const COLUMNS = [
@@ -131,6 +132,9 @@ function TaskCard({
   onChanged,
   projects,
   directory,
+  isMobile,
+  onMoveStatus,
+  columnId,
 }: {
   task: Task;
   onClick: () => void;
@@ -138,6 +142,9 @@ function TaskCard({
   onChanged: () => void;
   projects: Project[];
   directory: UserDirectoryEntry[];
+  isMobile: boolean;
+  onMoveStatus: (taskId: string, newStatus: string) => void;
+  columnId: string;
 }) {
   const toast = useToast();
   const { user } = useAuth();
@@ -235,6 +242,28 @@ function TaskCard({
           {task.title}
         </span>
       </div>
+      {isMobile && (
+        // Mobile-primary way to move a task between columns -- dragging on
+        // a phone is unreliable even with TouchSensor tuned, and a native
+        // <select> gets the OS's own touch-optimized picker for free
+        // instead of a custom action sheet. Fires the exact same
+        // /tasks/reorder call a drag-and-drop move already makes, so
+        // desktop drag keeps working unchanged as a secondary path.
+        <select
+          className="fi"
+          value={columnId}
+          onClick={(e) => e.stopPropagation()}
+          onPointerDown={(e) => e.stopPropagation()}
+          onChange={(e) => onMoveStatus(task.id, e.target.value)}
+          style={{ fontSize: 11, padding: '3px 4px', marginTop: 4, maxWidth: '100%' }}
+        >
+          {COLUMNS.map((c) => (
+            <option key={c.id} value={c.id}>
+              {c.label}
+            </option>
+          ))}
+        </select>
+      )}
       {task.project_id ? (
         <div className="task-meta">{task.projects?.name?.replace(/\|.*/, '').trim() || 'No project'}</div>
       ) : (
@@ -390,6 +419,8 @@ function Column({
   collapsible,
   collapsed,
   onToggleCollapse,
+  isMobile,
+  onMoveStatus,
 }: {
   id: string;
   label: string;
@@ -404,6 +435,8 @@ function Column({
   collapsible?: boolean;
   collapsed?: boolean;
   onToggleCollapse?: () => void;
+  isMobile: boolean;
+  onMoveStatus: (taskId: string, newStatus: string) => void;
 }) {
   const { setNodeRef } = useDroppable({ id });
   return (
@@ -424,18 +457,21 @@ function Column({
           and-drop into this column keeps working without expanding it first. */}
       <div style={{ display: collapsed ? 'none' : undefined }}>
         <SortableContext items={taskIds} strategy={verticalListSortingStrategy}>
-          {taskIds.map((id) => {
-            const t = tasksById.get(id);
+          {taskIds.map((taskId) => {
+            const t = tasksById.get(taskId);
             if (!t) return null;
             return (
               <TaskCard
-                key={id}
+                key={taskId}
                 task={t}
-                onClick={() => onTaskClick(id)}
+                onClick={() => onTaskClick(taskId)}
                 dragDisabled={dragDisabled}
                 onChanged={onChanged}
                 projects={projects}
                 directory={directory}
+                isMobile={isMobile}
+                onMoveStatus={onMoveStatus}
+                columnId={id}
               />
             );
           })}
@@ -462,6 +498,7 @@ export function KanbanBoard({
   filtersActive?: boolean;
 }) {
   const toast = useToast();
+  const isMobile = useIsMobile();
   const [columns, setColumns] = useState<Record<string, string[]>>({});
   const [projects, setProjects] = useState<Project[]>([]);
   const [directory, setDirectory] = useState<UserDirectoryEntry[]>([]);
@@ -472,6 +509,12 @@ export function KanbanBoard({
       return false;
     }
   });
+  // Mobile-only: every column (not just Done) gets a collapse toggle since
+  // the board is a single vertical stack there instead of side-by-side
+  // columns -- without this, all five sections' full card lists would run
+  // together into one very long scroll. Session-only (not persisted like
+  // doneCollapsed) since it's a lighter-weight, more exploratory toggle.
+  const [mobileCollapsedCols, setMobileCollapsedCols] = useState<Set<string>>(new Set());
   const tasksById = new Map(tasks.map((t) => [t.id, t]));
   const snapshotRef = useRef<Record<string, string[]> | null>(null);
 
@@ -630,6 +673,32 @@ export function KanbanBoard({
     }
   }
 
+  // Mobile-primary path for moving a task to a different status -- fires
+  // the exact same single-item shape handleDragEnd already sends for a
+  // filtered cross-column drag, so this is a second UI entry point into
+  // the existing move logic, not a new backend contract.
+  async function handleMobileStatusChange(taskId: string, newStatus: string) {
+    const originalCol = findColumn(taskId);
+    if (!originalCol || originalCol === newStatus) return;
+    const rollback = columns;
+    const cleaned: Record<string, string[]> = {};
+    for (const colId of Object.keys(columns)) {
+      cleaned[colId] = columns[colId].filter((id) => id !== taskId);
+    }
+    cleaned[newStatus] = [...(cleaned[newStatus] || []), taskId];
+    setColumns(cleaned);
+    try {
+      await api.patch('/tasks/reorder', {
+        items: [{ id: taskId, status: newStatus, expected_version: tasksById.get(taskId)?.version }],
+      });
+      onChanged();
+    } catch (e) {
+      setColumns(rollback);
+      const message = e instanceof ApiError ? e.message : e instanceof Error ? e.message : 'Failed to move task';
+      toast(message, true);
+    }
+  }
+
   return (
     <>
       {filtersActive && (
@@ -646,24 +715,45 @@ export function KanbanBoard({
         onDragEnd={handleDragEnd}
       >
         <div className="board">
-          {COLUMNS.map((col) => (
-            <Column
-              key={col.id}
-              id={col.id}
-              label={col.label}
-              taskIds={columns[col.id] || []}
-              tasksById={tasksById}
-              onTaskClick={onTaskClick}
-              onAddTask={() => onAddTask(col.id)}
-              dragDisabled={false}
-              onChanged={onChanged}
-              projects={projects}
-              directory={directory}
-              collapsible={col.id === 'complete'}
-              collapsed={col.id === 'complete' && doneCollapsed}
-              onToggleCollapse={col.id === 'complete' ? () => setDoneCollapsed((v) => !v) : undefined}
-            />
-          ))}
+          {COLUMNS.map((col) => {
+            // 'complete' keeps its existing desktop behavior (and
+            // persisted collapse state) unchanged. On mobile, every column
+            // is also collapsible via a separate, session-only Set, since
+            // the board is one long vertical stack there instead of
+            // side-by-side columns.
+            const isDoneCol = col.id === 'complete';
+            const collapsible = isDoneCol || isMobile;
+            const collapsed = isDoneCol ? doneCollapsed : isMobile && mobileCollapsedCols.has(col.id);
+            const onToggleCollapse = isDoneCol
+              ? () => setDoneCollapsed((v) => !v)
+              : () =>
+                  setMobileCollapsedCols((prev) => {
+                    const next = new Set(prev);
+                    if (next.has(col.id)) next.delete(col.id);
+                    else next.add(col.id);
+                    return next;
+                  });
+            return (
+              <Column
+                key={col.id}
+                id={col.id}
+                label={col.label}
+                taskIds={columns[col.id] || []}
+                tasksById={tasksById}
+                onTaskClick={onTaskClick}
+                onAddTask={() => onAddTask(col.id)}
+                dragDisabled={false}
+                onChanged={onChanged}
+                projects={projects}
+                directory={directory}
+                collapsible={collapsible}
+                collapsed={collapsed}
+                onToggleCollapse={onToggleCollapse}
+                isMobile={isMobile}
+                onMoveStatus={handleMobileStatusChange}
+              />
+            );
+          })}
         </div>
       </DndContext>
     </>
