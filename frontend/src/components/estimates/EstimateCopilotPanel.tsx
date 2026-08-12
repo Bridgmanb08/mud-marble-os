@@ -3,6 +3,7 @@ import { IconSparkles, IconChevronsRight, IconChevronsLeft } from '@tabler/icons
 import { api, ApiError } from '../../api/client';
 import { useToast } from '../ui/Toast';
 import { useReferenceData } from '../../reference-data/ReferenceDataContext';
+import { useIsMobile } from '../../hooks/useMediaQuery';
 import { SuggestionCard } from './SuggestionCard';
 import { SocraticGapCard } from './SocraticGapCard';
 import { LineItemModal } from './LineItemModal';
@@ -22,8 +23,14 @@ export function EstimateCopilotPanel({
   const { costCodes: costCodesData } = useReferenceData();
   const costCodes = costCodesData ?? [];
   const toast = useToast();
-
-  const [collapsed, setCollapsed] = useState(false);
+  // Fixed 340px-wide sidebar sitting next to a flex:1 main column has no
+  // room to share with the worksheet on a phone -- default it to its
+  // collapsed icon-button form on mobile so the page is usable without the
+  // user having to know to tap the collapse chevron themselves first. They
+  // can still expand it if they want the copilot on a phone; it just isn't
+  // forced open.
+  const isMobile = useIsMobile();
+  const [collapsed, setCollapsed] = useState(isMobile);
   const [mode, setMode] = useState<Mode>('gap');
   const [checking, setChecking] = useState(false);
   const [questions, setQuestions] = useState<GapQuestion[]>([]);
@@ -97,7 +104,7 @@ export function EstimateCopilotPanel({
   }
 
   return (
-    <div className="card" style={{ width: 340, flexShrink: 0, padding: 16, height: 'fit-content', position: 'sticky', top: 76 }}>
+    <div className="card" style={{ width: 'min(340px, 100%)', flexShrink: 0, padding: 16, height: 'fit-content', position: isMobile ? undefined : 'sticky', top: 76 }}>
       <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 12 }}>
         <IconSparkles size={16} />
         <div style={{ fontWeight: 600, fontSize: 14 }}>Estimating copilot</div>

@@ -209,12 +209,12 @@ export default function EstimateTemplateWorksheet() {
         <IconArrowLeft size={14} /> Back to templates
       </button>
 
-      <div className="ph">
+      <div className="ph" style={{ flexWrap: 'wrap', gap: 12 }}>
         <div>
           <h1>{template.name}</h1>
           {template.category && <p>{template.category}</p>}
         </div>
-        <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+        <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
           <button className="btn btn-p btn-sm" onClick={() => setShowApply(true)}>
             <IconRocket size={14} /> Use for new estimate
           </button>
@@ -256,9 +256,9 @@ export default function EstimateTemplateWorksheet() {
         </div>
       </div>
 
-      <div className="sh">
+      <div className="sh" style={{ flexWrap: 'wrap', gap: 8 }}>
         <div className="st">Worksheet</div>
-        <div style={{ display: 'flex', gap: 8 }}>
+        <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
           <button className="btn btn-sm" onClick={() => setShowNewGroupPrompt(true)}>
             <IconPlus size={14} /> Add group
           </button>
@@ -269,7 +269,7 @@ export default function EstimateTemplateWorksheet() {
       </div>
 
       {showNewGroupPrompt && (
-        <div className="card" style={{ padding: 12, marginBottom: 12, display: 'flex', gap: 8, alignItems: 'center' }}>
+        <div className="card" style={{ padding: 12, marginBottom: 12, display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
           <input
             className="fi"
             autoFocus

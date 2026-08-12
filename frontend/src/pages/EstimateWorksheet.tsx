@@ -273,9 +273,9 @@ export default function EstimateWorksheet() {
         </button>
       </div>
 
-      <div style={{ display: 'flex', gap: 16, alignItems: 'flex-start' }}>
+      <div style={{ display: 'flex', flexWrap: 'wrap', gap: 16, alignItems: 'flex-start' }}>
       <div style={{ flex: 1, minWidth: 0 }}>
-      <div className="ph">
+      <div className="ph" style={{ flexWrap: 'wrap', gap: 12 }}>
         <div>
           <h1>{estimate.projects?.name?.replace(/\|.*/, '').trim() || 'Estimate'}</h1>
           <p>
@@ -294,7 +294,7 @@ export default function EstimateWorksheet() {
             </select>
           </p>
         </div>
-        <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+        <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
           {siblings.length > 1 && (
             <select
               className="fi"
@@ -395,9 +395,9 @@ export default function EstimateWorksheet() {
         )}
       </div>
 
-      <div className="sh">
+      <div className="sh" style={{ flexWrap: 'wrap', gap: 8 }}>
         <div className="st">Worksheet</div>
-        <div style={{ display: 'flex', gap: 8 }}>
+        <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
           <button className="btn btn-sm" onClick={() => setShowInsertFromTemplate(true)}>
             <IconTemplate size={14} /> Insert from template
           </button>
@@ -411,7 +411,7 @@ export default function EstimateWorksheet() {
       </div>
 
       {showNewGroupPrompt && (
-        <div className="card" style={{ padding: 12, marginBottom: 12, display: 'flex', gap: 8, alignItems: 'center' }}>
+        <div className="card" style={{ padding: 12, marginBottom: 12, display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
           <input
             className="fi"
             autoFocus
