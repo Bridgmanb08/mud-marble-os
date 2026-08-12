@@ -104,7 +104,7 @@ export function LineItemGroupCard<T extends LineItemLike>({
 
   return (
     <div className="card" style={{ padding: 16, marginBottom: 12 }}>
-      <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: collapsed ? 0 : 8 }}>
+      <div style={{ display: 'flex', alignItems: 'center', flexWrap: 'wrap', gap: 8, marginBottom: collapsed ? 0 : 8 }}>
         <button type="button" className="btn-reset" onClick={onToggleCollapse} style={{ display: 'flex', color: 'var(--t2)' }}>
           {collapsed ? <IconChevronRight size={16} /> : <IconChevronDown size={16} />}
         </button>
