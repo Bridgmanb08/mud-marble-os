@@ -1,8 +1,9 @@
 import { useEffect, useRef, useState, type FormEvent } from 'react';
-import { IconSend, IconPhoto, IconVideo, IconFileTypePdf, IconFile, IconMessages, IconAlertCircle, IconPencil, IconRefresh } from '@tabler/icons-react';
+import { IconSend, IconPhoto, IconVideo, IconFileTypePdf, IconFile, IconMessages, IconAlertCircle, IconPencil, IconRefresh, IconArrowLeft } from '@tabler/icons-react';
 import { api, ApiError } from '../api/client';
 import { useToast } from '../components/ui/Toast';
 import { useReferenceData } from '../reference-data/ReferenceDataContext';
+import { useIsMobile } from '../hooks/useMediaQuery';
 import type { Message, MessageThread, InboundMedia, Project, Subcontractor } from '../types';
 
 const DELIVERY_LABELS: Record<string, string> = {
@@ -269,6 +270,11 @@ export default function Messages() {
   const [sending, setSending] = useState(false);
   const toast = useToast();
   const bottomRef = useRef<HTMLDivElement>(null);
+  // Side-by-side thread-list + conversation panes don't fit a phone screen
+  // -- below the mobile breakpoint this becomes a real list/detail split
+  // (show the list, tap a thread, see the conversation full-width with a
+  // back arrow), same pattern as a standard messaging app.
+  const isMobile = useIsMobile();
 
   async function loadThreads() {
     try {
@@ -338,7 +344,16 @@ export default function Messages() {
       </div>
 
       <div style={{ display: 'flex', gap: 16, height: 'calc(100vh - 180px)' }}>
-        <div className="card" style={{ width: 280, flexShrink: 0, padding: 0, overflowY: 'auto' }}>
+        <div
+          className="card"
+          style={{
+            width: isMobile ? '100%' : 280,
+            flexShrink: 0,
+            padding: 0,
+            overflowY: 'auto',
+            display: isMobile && selectedPhone ? 'none' : undefined,
+          }}
+        >
           {threads === null ? (
             <div className="empty-s" style={{ padding: 16 }}>
               Loading…
@@ -393,7 +408,16 @@ export default function Messages() {
           )}
         </div>
 
-        <div className="card" style={{ flex: 1, display: 'flex', flexDirection: 'column', padding: 16, minWidth: 0 }}>
+        <div
+          className="card"
+          style={{
+            flex: 1,
+            display: isMobile && !selectedPhone ? 'none' : 'flex',
+            flexDirection: 'column',
+            padding: 16,
+            minWidth: 0,
+          }}
+        >
           {!selectedPhone ? (
             <div className="empty" style={{ margin: 'auto' }}>
               <div className="empty-t">Select a conversation</div>
@@ -401,13 +425,26 @@ export default function Messages() {
           ) : (
             <>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10, paddingBottom: 10, borderBottom: '1px solid var(--border)' }}>
-                <div>
-                  <div style={{ fontWeight: 600, fontSize: 14 }}>
-                    {threads?.find((t) => t.phone_number === selectedPhone)?.contact_name || selectedPhone}
-                  </div>
-                  {threads?.find((t) => t.phone_number === selectedPhone)?.contact_name && (
-                    <div style={{ fontSize: 11, color: 'var(--t3)' }}>{selectedPhone}</div>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8, minWidth: 0 }}>
+                  {isMobile && (
+                    <button
+                      type="button"
+                      className="btn-reset"
+                      onClick={() => setSelectedPhone(null)}
+                      title="Back to conversations"
+                      style={{ display: 'flex', flexShrink: 0, color: 'var(--t2)' }}
+                    >
+                      <IconArrowLeft size={18} />
+                    </button>
                   )}
+                  <div style={{ minWidth: 0 }}>
+                    <div style={{ fontWeight: 600, fontSize: 14 }}>
+                      {threads?.find((t) => t.phone_number === selectedPhone)?.contact_name || selectedPhone}
+                    </div>
+                    {threads?.find((t) => t.phone_number === selectedPhone)?.contact_name && (
+                      <div style={{ fontSize: 11, color: 'var(--t3)' }}>{selectedPhone}</div>
+                    )}
+                  </div>
                 </div>
                 <button type="button" className="btn btn-sm" onClick={() => setEditingContact((v) => !v)}>
                   <IconPencil size={13} /> {editingContact ? 'Close' : 'Edit contact'}
