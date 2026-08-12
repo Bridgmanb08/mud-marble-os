@@ -72,6 +72,20 @@ body{font-family:var(--font);background:var(--bg);color:var(--text);font-size:14
 .m-val{font-size:22px;font-weight:600;color:var(--text);line-height:1;}
 .m-sub{font-size:11px;color:var(--t3);margin-top:4px;}
 
+/* Small KPI clusters inside dashboard widgets (win-rate/jobs-overdue/lead-
+   pipeline/cash-position cards) -- flex-wrap so 2-3 stats reflow to a second
+   row instead of squeezing on a narrow widget slot at mobile width. */
+.kpi-row{display:flex;flex-wrap:wrap;gap:10px;}
+.kpi{flex:1 1 80px;text-align:center;padding:10px;background:var(--bg);border-radius:8px;}
+.kpi-val{font-size:20px;font-weight:700;line-height:1.1;}
+.kpi-label{font-size:10px;color:var(--t2);text-transform:uppercase;margin-top:4px;}
+
+/* Dashboard.tsx's own widget grid -- previously an inline
+   gridTemplateColumns:'1fr 1fr' with no mobile handling at all (unlike
+   .metrics below it), so every widget rendered at half-width and forced the
+   whole page to scroll horizontally on a phone. */
+.dashboard-widgets{display:grid;grid-template-columns:1fr 1fr;gap:16px;}
+
 /* Page header */
 .ph{display:flex;align-items:flex-start;justify-content:space-between;margin-bottom:20px;}
 .ph h1{font-size:18px;font-weight:600;}
@@ -308,6 +322,7 @@ textarea.fi{resize:vertical;min-height:80px;}
      drawer floats above it instead of pushing it over. */
   .main{margin-left:0;}
   .metrics{grid-template-columns:repeat(2,1fr);}
+  .dashboard-widgets{grid-template-columns:1fr;}
   /* Kanban: a real single stacked column, not a cramped 2-up grid -- each
      column becomes collapsible on mobile (KanbanBoard.tsx) so the stack
      doesn't turn into one very long scroll. */
