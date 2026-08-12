@@ -158,6 +158,19 @@ body{font-family:var(--font);background:var(--bg);color:var(--text);font-size:14
 .lc{background:var(--surface);border:1px solid var(--border);border-radius:var(--rl);padding:14px 18px;margin-bottom:6px;cursor:pointer;}
 .lc:hover{border-color:var(--border-md);}
 
+/* Change order card (ChangeOrders.tsx) -- .coc/.coh had no rules anywhere
+   in the app (unstyled divs, block-stacked with no card chrome) until this
+   pass; .coh wraps so the price drops below the title/badges row rather
+   than squeezing it when both don't fit one line. */
+.coc{background:var(--surface);border:1px solid var(--border);border-radius:var(--rl);padding:14px 18px;margin-bottom:6px;}
+.coh{display:flex;align-items:flex-start;justify-content:space-between;gap:10px;flex-wrap:wrap;}
+
+/* Invoice row (Invoices.tsx) -- .invr had no rules anywhere either; matches
+   .pc/.cc's card-row shape, with the same flex:1/min-width:0 + ellipsis
+   truncation on the identifying text .pc/.cc already use for long names. */
+.invr{background:var(--surface);border:1px solid var(--border);border-radius:var(--rl);padding:14px 18px;margin-bottom:6px;display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap;transition:border-color .1s;}
+.invr:hover{border-color:var(--border-md);}
+
 /* Forms */
 .fg{margin-bottom:14px;}
 .fl{display:block;font-size:11px;font-weight:500;color:var(--t2);margin-bottom:5px;text-transform:uppercase;letter-spacing:.4px;}
