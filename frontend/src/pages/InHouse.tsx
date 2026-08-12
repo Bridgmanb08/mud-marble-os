@@ -56,7 +56,7 @@ export default function InHouse() {
           </div>
         </div>
         {rollup && (
-          <div style={{ display: 'flex', gap: 14, flexShrink: 0, fontSize: 12 }}>
+          <div style={{ display: 'flex', gap: 14, flexWrap: 'wrap', minWidth: 0, fontSize: 12 }}>
             <span style={{ color: 'var(--green)' }}>{fmt(rollup.income)}</span>
             <span style={{ color: 'var(--red)' }}>{fmt(rollup.expense)}</span>
           </div>

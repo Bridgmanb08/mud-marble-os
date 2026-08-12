@@ -70,11 +70,11 @@ export default function JobImportWizard() {
       </div>
 
       <div className="card" style={{ padding: 20, marginBottom: 16 }}>
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 14 }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 8, marginBottom: 14 }}>
           <div className="ibt" style={{ fontSize: 13, textTransform: 'none', letterSpacing: 0, border: 'none', padding: 0 }}>
             Invoices &amp; Change Orders
           </div>
-          <div style={{ display: 'flex', gap: 8 }}>
+          <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
             <button className="btn btn-sm" onClick={() => setShowInvoiceScan((v) => !v)}>
               <IconUpload size={14} /> Upload invoice scan
             </button>
@@ -120,13 +120,13 @@ export default function JobImportWizard() {
         {invoices.length === 0 && changeOrders.length === 0 ? (
           <div style={{ fontSize: 13, color: 'var(--t2)' }}>No invoices or change orders added yet.</div>
         ) : (
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 20 }}>
+          <div className="fr" style={{ gap: 20 }}>
             <div>
               <div style={{ fontSize: 11, fontWeight: 600, color: 'var(--t2)', textTransform: 'uppercase', marginBottom: 6 }}>
                 Invoices ({invoices.length})
               </div>
               {invoices.map((inv) => (
-                <div key={inv.id} style={{ display: 'flex', justifyContent: 'space-between', padding: '6px 0', borderBottom: '1px solid var(--border)', fontSize: 12.5 }}>
+                <div key={inv.id} style={{ display: 'flex', justifyContent: 'space-between', flexWrap: 'wrap', gap: 6, padding: '6px 0', borderBottom: '1px solid var(--border)', fontSize: 12.5 }}>
                   <span>{inv.invoice_number || '—'} · {fmtD(inv.due_date)}</span>
                   <span>
                     {fmt(inv.amount_due)} <span className={`badge ${INVOICE_STATUS_BADGE[inv.status] || 'bg-gray'}`}>{inv.status}</span>
@@ -139,7 +139,7 @@ export default function JobImportWizard() {
                 Change Orders ({changeOrders.length})
               </div>
               {changeOrders.map((co) => (
-                <div key={co.id} style={{ display: 'flex', justifyContent: 'space-between', padding: '6px 0', borderBottom: '1px solid var(--border)', fontSize: 12.5 }}>
+                <div key={co.id} style={{ display: 'flex', justifyContent: 'space-between', flexWrap: 'wrap', gap: 6, padding: '6px 0', borderBottom: '1px solid var(--border)', fontSize: 12.5 }}>
                   <span>#{co.co_number ?? '—'} {co.title}</span>
                   <span>
                     {fmt(co.owner_price)} <span className={`badge ${CO_STATUS_BADGE[co.status] || 'bg-gray'}`}>{co.status}</span>
