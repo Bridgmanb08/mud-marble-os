@@ -109,15 +109,15 @@ export default function Invoices() {
       ) : (
         filtered.map((i) => (
           <Link key={i.id} to={`/invoices/${i.id}`} className="invr" style={{ textDecoration: 'none', color: 'inherit' }}>
-            <div>
-              <div style={{ fontSize: 13, fontWeight: 500 }}>
+            <div style={{ flex: 1, minWidth: 0 }}>
+              <div style={{ fontSize: 13, fontWeight: 500, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
                 {i.invoice_number || 'Draft'} <span style={{ color: 'var(--t2)', fontWeight: 400 }}>· {i.projects?.name || ''}</span>
               </div>
-              <div style={{ fontSize: 11, color: 'var(--t3)' }}>
+              <div style={{ fontSize: 11, color: 'var(--t3)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
                 {i.invoice_type} · Due {fmtD(i.due_date)}
               </div>
             </div>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexShrink: 0 }}>
               <span style={{ fontSize: 14, fontWeight: 600 }}>{fmt(i.amount_due)}</span>
               <span className={`badge ${STATUS_BADGE[i.status] || 'bg-gray'}`}>{i.status}</span>
             </div>
