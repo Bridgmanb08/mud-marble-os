@@ -352,6 +352,11 @@ class RentalDashboardSummary(BaseModel):
     on_time_rate_90: Optional[float] = None
     leases_expiring_60d: int = 0
     open_work_orders: int = 0
+    # Count of active properties whose most recent visit (or total absence of
+    # one) is at least notification_settings.visit_reminder_days old --
+    # threshold is admin-configurable on the Settings > Notification
+    # settings tab, same source TeamReminders.tsx reads for its own toast.
+    properties_needing_visit: int = 0
 
 
 RentalPropertyOut.model_rebuild()

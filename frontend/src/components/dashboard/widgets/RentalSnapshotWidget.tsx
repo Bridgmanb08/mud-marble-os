@@ -45,6 +45,12 @@ export function RentalSnapshotWidget() {
           </div>
           <div style={{ fontSize: 11, color: 'var(--t2)' }}>Open work orders</div>
         </div>
+        <div>
+          <div style={{ fontSize: 22, fontWeight: 600, color: summary.properties_needing_visit ? 'var(--amber)' : undefined }}>
+            {summary.properties_needing_visit}
+          </div>
+          <div style={{ fontSize: 11, color: 'var(--t2)' }}>Need a visit</div>
+        </div>
       </div>
       <button className="btn btn-sm" onClick={() => navigate('/rentals')}>
         <IconHome2 size={14} /> View rental properties

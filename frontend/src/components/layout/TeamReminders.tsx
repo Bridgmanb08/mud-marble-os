@@ -11,6 +11,7 @@ import {
   IconBriefcase,
   IconClockHour3,
   IconSparkles,
+  IconHome2,
 } from '@tabler/icons-react';
 import { api } from '../../api/client';
 import { useAuth } from '../../auth/AuthContext';
@@ -18,7 +19,7 @@ import { DashboardTaskDrawer } from '../dashboard/DashboardTaskDrawer';
 import { PulseCheckinModal } from '../dashboard/PulseCheckinModal';
 import { RYAN_HOLIDAY_QUOTES } from '../../data/ryanHolidayQuotes';
 import { addReminderHistoryEntry } from '../../lib/reminderHistory';
-import type { Task, PulseCheckinOut, DashboardSummary } from '../../types';
+import type { Task, PulseCheckinOut, DashboardSummary, RentalProperty } from '../../types';
 
 /**
  * Proactive, personality-driven reminders for the current user's own tasks
@@ -38,7 +39,8 @@ export type Category =
   | 'morning_briefing'
   | 'job_context'
   | 'closeout_briefing'
-  | 'greeting';
+  | 'greeting'
+  | 'visit_overdue';
 
 interface ReminderToast {
   id: string;
@@ -47,6 +49,7 @@ interface ReminderToast {
   message: string;
   taskId?: string;
   projectId?: string;
+  propertyId?: string;
   phase: 'enter' | 'shown' | 'leave';
 }
 
@@ -117,6 +120,7 @@ export const CATEGORY_META: Record<Category, { Icon: typeof IconFlame; color: st
   job_context: { Icon: IconBriefcase, color: 'var(--blue)' },
   closeout_briefing: { Icon: IconClockHour3, color: 'var(--accent)' },
   greeting: { Icon: IconSparkles, color: 'var(--accent)' },
+  visit_overdue: { Icon: IconHome2, color: 'var(--amber)' },
 };
 
 function pick<T>(arr: T[]): T {
@@ -233,11 +237,19 @@ export function TeamReminders() {
   const shownRef = useRef<Set<string>>(loadShown());
   const nextIdRef = useRef(1);
   const smartLearningEnabledRef = useRef(false);
+  const visitReminderDaysRef = useRef(30);
   const lastActivityRef = useRef<number>(Date.now());
 
-  function queueToast(category: Category, message: string, key: string, taskId?: string, projectId?: string) {
+  function queueToast(
+    category: Category,
+    message: string,
+    key: string,
+    taskId?: string,
+    projectId?: string,
+    propertyId?: string
+  ) {
     const id = `tr-${nextIdRef.current++}`;
-    const toast: ReminderToast = { id, key, category, message, taskId, projectId, phase: 'enter' };
+    const toast: ReminderToast = { id, key, category, message, taskId, projectId, propertyId, phase: 'enter' };
     setToasts((prev) => [...prev, toast]);
     // Recorded separately from the shownRef dedupe-key set so the bell can show
     // "what fired today" -- clearing an entry there never affects this toast's
@@ -284,6 +296,7 @@ export function TeamReminders() {
     await pollMorningBriefing();
     await pollJobContext(tasks);
     await pollCloseoutBriefing();
+    await pollVisitOverdue();
   }
 
   async function pollPulse() {
@@ -335,6 +348,31 @@ export function TeamReminders() {
     const firstName = user.name.split(' ')[0] || user.name;
     const quote = pick(RYAN_HOLIDAY_QUOTES);
     queueToast('greeting', `Hi ${firstName}! "${quote.text}" — Ryan Holiday, ${quote.source}`, `greeting:${Date.now()}`);
+  }
+
+  async function pollVisitOverdue() {
+    if (!user) return;
+    const today = todayStr();
+    const properties = await api.get<RentalProperty[]>('/rental-properties').catch(() => []);
+    const threshold = visitReminderDaysRef.current;
+    for (const p of properties) {
+      const isStale = p.days_since_visit === null || p.days_since_visit >= threshold;
+      if (!isStale) continue;
+      const key = `${today}:visit:${p.id}`;
+      if (shownRef.current.has(key)) continue;
+      // Marked synchronously up front for the same StrictMode-double-invoke
+      // reason as every other poll function in this file -- see pollPulse
+      // above. Once-per-day (not the greeting's 4-hour recurrence) since
+      // this is informational staleness, not something that needs repeat
+      // visibility the same day it first fires.
+      shownRef.current.add(key);
+      saveShown(shownRef.current);
+      const message =
+        p.days_since_visit === null
+          ? `"${p.address}" has no recorded visits yet.`
+          : `"${p.address}" hasn't had a visit in ${p.days_since_visit} days -- might be time to swing by.`;
+      queueToast('visit_overdue', message, key, undefined, undefined, p.id);
+    }
   }
 
   async function pollMorningBriefing() {
@@ -411,14 +449,15 @@ export function TeamReminders() {
 
   useEffect(() => {
     if (!user) return;
-    // Fetched once per mount (not every 5-minute poll cycle) -- this is a
-    // rarely-changed, admin-controlled company-wide switch, so a full page
+    // Fetched once per mount (not every 5-minute poll cycle) -- these are
+    // rarely-changed, admin-controlled company-wide settings, so a full page
     // reload picking up a flip is an acceptable trade-off for not adding an
     // extra request to every poll tick.
     api
-      .get<{ smart_learning_enabled: boolean }>('/notification-settings')
+      .get<{ smart_learning_enabled: boolean; visit_reminder_days: number }>('/notification-settings')
       .then((s) => {
         smartLearningEnabledRef.current = s.smart_learning_enabled;
+        visitReminderDaysRef.current = s.visit_reminder_days;
       })
       .catch(() => {
         smartLearningEnabledRef.current = false;
@@ -459,6 +498,7 @@ export function TeamReminders() {
                 else if (t.category === 'risk_nudge') navigate('/');
                 else if (t.category === 'morning_briefing' || t.category === 'closeout_briefing') navigate('/tasks');
                 else if (t.category === 'job_context') navigate(`/projects/${t.projectId}`);
+                else if (t.category === 'visit_overdue') navigate(`/rentals/${t.propertyId}`);
                 else if (t.category === 'greeting') dismiss(t.id);
                 else setOpenTaskId(t.taskId!);
               }}

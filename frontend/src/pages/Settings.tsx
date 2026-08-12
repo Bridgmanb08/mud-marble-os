@@ -670,10 +670,13 @@ function NotificationSettingsTab() {
   const toast = useToast();
   const [settings, setSettings] = useState<NotificationSettings | null>(null);
   const [saving, setSaving] = useState(false);
+  const [visitDaysInput, setVisitDaysInput] = useState('');
 
   async function load() {
     try {
-      setSettings(await api.get<NotificationSettings>('/notification-settings'));
+      const s = await api.get<NotificationSettings>('/notification-settings');
+      setSettings(s);
+      setVisitDaysInput(String(s.visit_reminder_days));
     } catch (e) {
       toast(e instanceof Error ? e.message : 'Failed to load notification settings', true);
     }
@@ -695,6 +698,28 @@ function NotificationSettingsTab() {
       toast(updated.smart_learning_enabled ? 'Smart learning enabled' : 'Smart learning disabled');
     } catch (e) {
       toast(e instanceof ApiError ? e.message : 'Failed to update notification settings', true);
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  async function saveVisitDays() {
+    if (!settings) return;
+    const days = Math.round(Number(visitDaysInput));
+    if (!Number.isFinite(days) || days < 1) {
+      setVisitDaysInput(String(settings.visit_reminder_days));
+      return;
+    }
+    if (days === settings.visit_reminder_days) return;
+    setSaving(true);
+    try {
+      const updated = await api.patch<NotificationSettings>('/notification-settings', { visit_reminder_days: days });
+      setSettings(updated);
+      setVisitDaysInput(String(updated.visit_reminder_days));
+      toast(`Visit reminder now fires after ${updated.visit_reminder_days} days`);
+    } catch (e) {
+      toast(e instanceof ApiError ? e.message : 'Failed to update notification settings', true);
+      setVisitDaysInput(String(settings.visit_reminder_days));
     } finally {
       setSaving(false);
     }
@@ -725,6 +750,25 @@ function NotificationSettingsTab() {
       {settings.updated_at && (
         <p style={{ fontSize: 11, color: 'var(--t3)', marginTop: 10 }}>Last changed {fmtD(settings.updated_at)}</p>
       )}
+
+      <div style={{ marginTop: 24, paddingTop: 20, borderTop: '1px solid var(--border)' }}>
+        <p style={{ fontSize: 12, color: 'var(--t2)', marginBottom: 10 }}>
+          Rental properties that haven't had a logged visit in this many days show up as a reminder toast and count
+          toward "Need a visit" on the Rental Snapshot dashboard widget.
+        </p>
+        <div className="fg" style={{ maxWidth: 220 }}>
+          <label className="fl">Visit reminder threshold (days)</label>
+          <input
+            className="fi"
+            type="number"
+            min={1}
+            value={visitDaysInput}
+            onChange={(e) => setVisitDaysInput(e.target.value)}
+            onBlur={saveVisitDays}
+            disabled={saving}
+          />
+        </div>
+      </div>
     </>
   );
 }
