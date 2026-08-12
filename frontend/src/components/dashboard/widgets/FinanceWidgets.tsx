@@ -12,7 +12,7 @@ const BUCKET_LABELS: Record<string, string> = {
 export function ARAgingWidget({ data }: { data: DashboardSummary }) {
   return (
     <>
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(5,1fr)', gap: 8, marginBottom: 14 }}>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(70px, 1fr))', gap: 8, marginBottom: 14 }}>
         {data.ar_aging.map((b) => (
           <div key={b.bucket} style={{ textAlign: 'center', padding: 10, background: 'var(--bg)', borderRadius: 8 }}>
             <div style={{ fontSize: 16, fontWeight: 700, color: b.bucket === '90+' ? 'var(--red)' : undefined }}>
@@ -46,48 +46,50 @@ export function ProjectProfitabilityWidget({ data }: { data: DashboardSummary })
   if (!data.project_profitability.length)
     return <div style={{ fontSize: 13, color: 'var(--t2)' }}>No project financial data yet.</div>;
   return (
-    <table className="tbl tbl-zebra">
-      <thead>
-        <tr>
-          <th>Project</th>
-          <th>Estimated</th>
-          <th>Actual spend</th>
-          <th>Variance</th>
-        </tr>
-      </thead>
-      <tbody>
-        {data.project_profitability.map((p) => (
-          <tr key={p.project_id}>
-            <td style={{ fontWeight: 500 }}>{p.project_name}</td>
-            <td>{fmt(p.estimated)}</td>
-            <td>{fmt(p.actual_spend)}</td>
-            <td style={{ color: p.variance < 0 ? 'var(--red)' : 'var(--green)', fontWeight: 600 }}>{fmt(p.variance)}</td>
+    <div className="tbl-scroll">
+      <table className="tbl tbl-zebra">
+        <thead>
+          <tr>
+            <th className="sticky-col">Project</th>
+            <th>Estimated</th>
+            <th>Actual spend</th>
+            <th>Variance</th>
           </tr>
-        ))}
-      </tbody>
-    </table>
+        </thead>
+        <tbody>
+          {data.project_profitability.map((p) => (
+            <tr key={p.project_id}>
+              <td className="sticky-col" style={{ fontWeight: 500 }}>{p.project_name}</td>
+              <td>{fmt(p.estimated)}</td>
+              <td>{fmt(p.actual_spend)}</td>
+              <td style={{ color: p.variance < 0 ? 'var(--red)' : 'var(--green)', fontWeight: 600 }}>{fmt(p.variance)}</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
   );
 }
 
 export function QBOSyncWidget({ data }: { data: DashboardSummary }) {
   const { unsynced_count, total_count, most_recent_transaction_date } = data.qbo_sync;
   return (
-    <div style={{ display: 'flex', gap: 12 }}>
-      <div className="kpi" style={{ flex: 1, textAlign: 'center', padding: 12, background: 'var(--bg)', borderRadius: 8 }}>
+    <div className="kpi-row">
+      <div className="kpi">
         <div style={{ fontSize: 20, fontWeight: 700, color: unsynced_count > 0 ? 'var(--atx)' : 'var(--green)' }}>
           {unsynced_count}
         </div>
-        <div style={{ fontSize: 10, color: 'var(--t2)', textTransform: 'uppercase' }}>Unsynced</div>
+        <div className="kpi-label">Unsynced</div>
       </div>
-      <div className="kpi" style={{ flex: 1, textAlign: 'center', padding: 12, background: 'var(--bg)', borderRadius: 8 }}>
+      <div className="kpi">
         <div style={{ fontSize: 20, fontWeight: 700 }}>{total_count}</div>
-        <div style={{ fontSize: 10, color: 'var(--t2)', textTransform: 'uppercase' }}>Total txns</div>
+        <div className="kpi-label">Total txns</div>
       </div>
-      <div className="kpi" style={{ flex: 1, textAlign: 'center', padding: 12, background: 'var(--bg)', borderRadius: 8 }}>
+      <div className="kpi">
         <div style={{ fontSize: 12, fontWeight: 600, marginTop: 4 }}>
           {most_recent_transaction_date ? new Date(most_recent_transaction_date).toLocaleDateString() : '—'}
         </div>
-        <div style={{ fontSize: 10, color: 'var(--t2)', textTransform: 'uppercase' }}>Most recent txn</div>
+        <div className="kpi-label">Most recent txn</div>
       </div>
     </div>
   );

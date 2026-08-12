@@ -2,11 +2,12 @@ import { useEffect, useState } from 'react';
 import { DndContext, PointerSensor, useSensor, useSensors, type DragEndEvent } from '@dnd-kit/core';
 import { SortableContext, verticalListSortingStrategy, useSortable, arrayMove } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
-import { IconGripVertical } from '@tabler/icons-react';
+import { IconGripVertical, IconChevronUp, IconChevronDown } from '@tabler/icons-react';
 import { fmt, fmtD } from '../../../lib/format';
 import { DashboardTaskDrawer } from '../DashboardTaskDrawer';
 import { api, ApiError } from '../../../api/client';
 import { useToast } from '../../ui/Toast';
+import { useIsMobile } from '../../../hooks/useMediaQuery';
 import type { DashboardSummary } from '../../../types';
 
 const HEALTH_DOT: Record<string, string> = { green: 'dot-g', yellow: 'dot-a', red: 'dot-r' };
@@ -63,12 +64,24 @@ function SortableUpcomingRow({
   task,
   onMarkComplete,
   onOpen,
+  onMoveUp,
+  onMoveDown,
+  canMoveUp,
+  canMoveDown,
 }: {
   task: UpcomingTaskItem;
   onMarkComplete: (id: string) => void;
   onOpen: (id: string) => void;
+  onMoveUp: () => void;
+  onMoveDown: () => void;
+  canMoveUp: boolean;
+  canMoveDown: boolean;
 }) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: task.id });
+  // Same drag-is-unreliable-on-touch call as the widget-reorder handle above
+  // it -- a tap-to-move pair of buttons replaces the drag handle on mobile,
+  // calling the exact same reorder-priority path as a drag would.
+  const isMobile = useIsMobile();
   return (
     <div
       ref={setNodeRef}
@@ -86,16 +99,41 @@ function SortableUpcomingRow({
         zIndex: isDragging ? 1 : undefined,
       }}
     >
-      <button
-        type="button"
-        className="btn-reset"
-        {...attributes}
-        {...listeners}
-        style={{ display: 'flex', flexShrink: 0, color: 'var(--t3)', cursor: 'grab', touchAction: 'none' }}
-        title="Drag to reorder"
-      >
-        <IconGripVertical size={14} />
-      </button>
+      {isMobile ? (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 0, flexShrink: 0 }}>
+          <button
+            type="button"
+            className="btn-reset"
+            onClick={onMoveUp}
+            disabled={!canMoveUp}
+            title="Move up"
+            style={{ display: 'flex', color: 'var(--t3)', opacity: canMoveUp ? 1 : 0.35 }}
+          >
+            <IconChevronUp size={12} />
+          </button>
+          <button
+            type="button"
+            className="btn-reset"
+            onClick={onMoveDown}
+            disabled={!canMoveDown}
+            title="Move down"
+            style={{ display: 'flex', color: 'var(--t3)', opacity: canMoveDown ? 1 : 0.35 }}
+          >
+            <IconChevronDown size={12} />
+          </button>
+        </div>
+      ) : (
+        <button
+          type="button"
+          className="btn-reset"
+          {...attributes}
+          {...listeners}
+          style={{ display: 'flex', flexShrink: 0, color: 'var(--t3)', cursor: 'grab', touchAction: 'none' }}
+          title="Drag to reorder"
+        >
+          <IconGripVertical size={14} />
+        </button>
+      )}
       <input
         type="checkbox"
         title="Mark complete"
@@ -143,15 +181,11 @@ export function UpcomingTasksWidget({ data }: { data: DashboardSummary }) {
     }
   }
 
-  async function handleDragEnd(event: DragEndEvent) {
-    const { active, over } = event;
-    if (!over || active.id === over.id) return;
-    const oldIndex = visible.findIndex((t) => t.id === active.id);
-    const newIndex = visible.findIndex((t) => t.id === over.id);
-    if (oldIndex === -1 || newIndex === -1) return;
-
+  // Shared by both the drag handle (desktop) and the up/down buttons
+  // (mobile) -- reorders `visible` to `reordered` and persists via the same
+  // reorder-priority call either path takes.
+  async function applyReorder(reordered: UpcomingTaskItem[]) {
     const previous = items;
-    const reordered = arrayMove(visible, oldIndex, newIndex);
     const dismissedItems = items.filter((t) => dismissed.has(t.id));
     setItems([...reordered, ...dismissedItems]);
 
@@ -165,13 +199,38 @@ export function UpcomingTasksWidget({ data }: { data: DashboardSummary }) {
     }
   }
 
+  async function handleDragEnd(event: DragEndEvent) {
+    const { active, over } = event;
+    if (!over || active.id === over.id) return;
+    const oldIndex = visible.findIndex((t) => t.id === active.id);
+    const newIndex = visible.findIndex((t) => t.id === over.id);
+    if (oldIndex === -1 || newIndex === -1) return;
+    await applyReorder(arrayMove(visible, oldIndex, newIndex));
+  }
+
+  async function moveTask(id: string, direction: -1 | 1) {
+    const index = visible.findIndex((t) => t.id === id);
+    const target = index + direction;
+    if (index === -1 || target < 0 || target >= visible.length) return;
+    await applyReorder(arrayMove(visible, index, target));
+  }
+
   if (!visible.length) return <div style={{ fontSize: 13, color: 'var(--t2)' }}>No upcoming tasks.</div>;
   return (
     <>
       <DndContext sensors={sensors} onDragEnd={handleDragEnd}>
         <SortableContext items={visible.map((t) => t.id)} strategy={verticalListSortingStrategy}>
-          {visible.map((t) => (
-            <SortableUpcomingRow key={t.id} task={t} onMarkComplete={markComplete} onOpen={setOpenTaskId} />
+          {visible.map((t, i) => (
+            <SortableUpcomingRow
+              key={t.id}
+              task={t}
+              onMarkComplete={markComplete}
+              onOpen={setOpenTaskId}
+              onMoveUp={() => moveTask(t.id, -1)}
+              onMoveDown={() => moveTask(t.id, 1)}
+              canMoveUp={i > 0}
+              canMoveDown={i < visible.length - 1}
+            />
           ))}
         </SortableContext>
       </DndContext>

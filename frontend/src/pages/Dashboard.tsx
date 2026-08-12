@@ -86,6 +86,20 @@ export default function Dashboard() {
     persist(next);
   }
 
+  // Mobile's tap-to-move alternative to drag-to-reorder -- swaps this widget
+  // with its neighbor and persists through the exact same path as a drag.
+  function moveWidget(id: string, direction: -1 | 1) {
+    setWidgets((prev) => {
+      if (!prev) return prev;
+      const index = prev.findIndex((w) => w.id === id);
+      const target = index + direction;
+      if (index === -1 || target < 0 || target >= prev.length) return prev;
+      const next = arrayMove(prev, index, target);
+      persist(next);
+      return next;
+    });
+  }
+
   function toggleVisible(id: string) {
     setWidgets((prev) => {
       if (!prev) return prev;
@@ -162,7 +176,7 @@ export default function Dashboard() {
       </div>
 
       {!data || !widgets ? (
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
+        <div className="dashboard-widgets">
           {Array.from({ length: 4 }).map((_, i) => (
             <div key={i} className="card" style={{ padding: 18 }}>
               <Skeleton width={100} height={12} style={{ marginBottom: 14 }} />
@@ -174,8 +188,8 @@ export default function Dashboard() {
       ) : (
         <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
           <SortableContext items={widgets.map((w) => w.id)} strategy={verticalListSortingStrategy}>
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
-              {widgets.map((w) => {
+            <div className="dashboard-widgets">
+              {widgets.map((w, i) => {
                 const custom = w.id.startsWith('custom:') ? customWidgetById.get(w.id) : undefined;
                 const def = custom ? undefined : WIDGET_REGISTRY[w.id as WidgetId];
                 if (!custom && !def) return null;
@@ -188,6 +202,10 @@ export default function Dashboard() {
                     visible={w.visible}
                     onToggleVisible={() => toggleVisible(w.id)}
                     onRemove={() => removeWidget(w.id)}
+                    onMoveUp={() => moveWidget(w.id, -1)}
+                    onMoveDown={() => moveWidget(w.id, 1)}
+                    canMoveUp={i > 0}
+                    canMoveDown={i < widgets.length - 1}
                     wide={custom ? true : def!.wide}
                   >
                     {custom ? <CustomWidgetRenderer spec={custom.spec} data={data} /> : (() => {

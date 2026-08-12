@@ -26,7 +26,7 @@ export function RentalSnapshotWidget() {
 
   return (
     <div>
-      <div style={{ display: 'flex', gap: 20, marginBottom: 10 }}>
+      <div style={{ display: 'flex', flexWrap: 'wrap', gap: 20, marginBottom: 10 }}>
         <div>
           <div style={{ fontSize: 22, fontWeight: 600, color: onTime === null ? 'var(--t3)' : onTime >= 90 ? 'var(--green)' : onTime >= 75 ? 'var(--amber)' : 'var(--red)' }}>
             {onTime === null ? '—' : `${onTime}%`}

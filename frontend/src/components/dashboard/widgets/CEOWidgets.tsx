@@ -120,7 +120,7 @@ export function JobsOverdueToCloseWidget({ data }: { data: DashboardSummary }) {
           <div className="kpi-label">Potential revenue</div>
         </div>
       </div>
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3,1fr)', gap: 8, marginBottom: 12 }}>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(80px, 1fr))', gap: 8, marginBottom: 12 }}>
         <div style={{ textAlign: 'center', padding: 8, background: 'var(--bg)', borderRadius: 8 }}>
           <div style={{ fontSize: 13, fontWeight: 600 }}>{fmt(construction_total)}</div>
           <div style={{ fontSize: 10, color: 'var(--t2)' }}>Construction</div>

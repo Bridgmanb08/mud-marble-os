@@ -41,49 +41,51 @@ export function JobImportWidget() {
       ) : statuses.length === 0 ? (
         <div style={{ fontSize: 13, color: 'var(--t2)' }}>No jobs yet — click "New job" to add the first one.</div>
       ) : (
-        <div>
-          <div
-            style={{
-              display: 'grid',
-              gridTemplateColumns: '1fr 90px 130px 90px',
-              gap: 8,
-              padding: '6px 0',
-              fontSize: 11,
-              fontWeight: 600,
-              color: 'var(--t2)',
-              textTransform: 'uppercase',
-              borderBottom: '1px solid var(--border)',
-            }}
-          >
-            <div>Job</div>
-            <div>Estimate</div>
-            <div>Invoices/COs</div>
-            <div>In-House</div>
-          </div>
-          {statuses.map((s) => (
-            <Link
-              key={s.project_id}
-              to={`/job-import/${s.project_id}`}
+        <div className="tbl-scroll">
+          <div style={{ minWidth: 460 }}>
+            <div
               style={{
                 display: 'grid',
                 gridTemplateColumns: '1fr 90px 130px 90px',
                 gap: 8,
-                alignItems: 'center',
-                padding: '8px 0',
+                padding: '6px 0',
+                fontSize: 11,
+                fontWeight: 600,
+                color: 'var(--t2)',
+                textTransform: 'uppercase',
                 borderBottom: '1px solid var(--border)',
-                fontSize: 12.5,
-                color: 'inherit',
-                textDecoration: 'none',
               }}
             >
-              <div style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                {s.project_name.replace(/\|.*/, '').trim()}
-              </div>
-              <StatusDot done={s.has_estimate} />
-              <StatusDot done={s.has_financials} />
-              <StatusDot done={s.has_inhouse} />
-            </Link>
-          ))}
+              <div>Job</div>
+              <div>Estimate</div>
+              <div>Invoices/COs</div>
+              <div>In-House</div>
+            </div>
+            {statuses.map((s) => (
+              <Link
+                key={s.project_id}
+                to={`/job-import/${s.project_id}`}
+                style={{
+                  display: 'grid',
+                  gridTemplateColumns: '1fr 90px 130px 90px',
+                  gap: 8,
+                  alignItems: 'center',
+                  padding: '8px 0',
+                  borderBottom: '1px solid var(--border)',
+                  fontSize: 12.5,
+                  color: 'inherit',
+                  textDecoration: 'none',
+                }}
+              >
+                <div style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                  {s.project_name.replace(/\|.*/, '').trim()}
+                </div>
+                <StatusDot done={s.has_estimate} />
+                <StatusDot done={s.has_financials} />
+                <StatusDot done={s.has_inhouse} />
+              </Link>
+            ))}
+          </div>
         </div>
       )}
 
