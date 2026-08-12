@@ -115,7 +115,7 @@ export default function Subcontractors() {
                   {s.contact_name || ''}
                 </div>
               </div>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexShrink: 0 }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap', minWidth: 0 }}>
                 {s.phone && <span style={{ fontSize: 12, color: 'var(--t2)' }}>{s.phone}</span>}
                 {s.sms_contacts.length > 0 && (
                   <span className="badge bg-blue">

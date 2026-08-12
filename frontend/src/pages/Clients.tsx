@@ -149,7 +149,7 @@ export default function Clients() {
                   {c.phone || ''}
                 </div>
               </div>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexShrink: 0 }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap', minWidth: 0 }}>
                 {referredByLabel && <span style={{ fontSize: 11, color: 'var(--t3)' }}>Ref: {referredByLabel}</span>}
                 {c.is_advocate && <span className="badge bg-green">Advocate</span>}
                 {c.is_repeat_client && <span className="badge bg-blue">Repeat</span>}

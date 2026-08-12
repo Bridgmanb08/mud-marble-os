@@ -56,7 +56,7 @@ export default function Users() {
               <div style={{ fontSize: 13, fontWeight: 500 }}>{u.name}</div>
               <div style={{ fontSize: 12, color: 'var(--t2)', marginTop: 2 }}>{u.email}</div>
             </div>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexShrink: 0 }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap', minWidth: 0 }}>
               <span className="badge bg-blue">{u.role}</span>
               {u.is_admin && (
                 <span className="badge bg-green">
