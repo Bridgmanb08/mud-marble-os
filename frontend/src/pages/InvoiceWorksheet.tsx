@@ -216,7 +216,7 @@ export default function InvoiceWorksheet() {
               <table className="tbl tbl-zebra">
                 <thead>
                   <tr>
-                    <th>Title</th>
+                    <th className="sticky-col">Title</th>
                     <th>Cost code</th>
                     <th>Description</th>
                     <th>Amount</th>
@@ -233,7 +233,7 @@ export default function InvoiceWorksheet() {
                         setShowItemModal(true);
                       }}
                     >
-                      <td>{it.title}</td>
+                      <td className="sticky-col">{it.title}</td>
                       <td>{it.cost_codes ? `${it.cost_codes.code} - ${it.cost_codes.name}` : '—'}</td>
                       <td style={{ color: 'var(--t2)' }}>{it.description || '—'}</td>
                       <td>{fmt(it.amount)}</td>
