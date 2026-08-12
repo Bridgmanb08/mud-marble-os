@@ -107,7 +107,7 @@ export default function Review() {
                   </span>
                 </div>
                 {item.body && <div style={{ fontSize: 12, color: 'var(--t2)', margin: '6px 0' }}>"{item.body}"</div>}
-                <div style={{ display: 'flex', gap: 6, marginTop: 8 }}>
+                <div style={{ display: 'flex', gap: 6, marginTop: 8, flexWrap: 'wrap' }}>
                   <select
                     className="fi"
                     style={{ fontSize: 12, padding: '4px 6px' }}
