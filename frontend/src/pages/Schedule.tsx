@@ -155,11 +155,12 @@ export default function Schedule() {
                   <div className="empty-t">No scheduled tasks</div>
                 </div>
               ) : (
-                <table className="tbl tbl-zebra">
+                <div className="tbl-scroll">
+                  <table className="tbl tbl-zebra">
                   <thead>
                     <tr>
                       <th>Date</th>
-                      <th>Title</th>
+                      <th className="sticky-col">Title</th>
                       <th>Project</th>
                       <th>Assignee</th>
                       <th>Status</th>
@@ -169,7 +170,7 @@ export default function Schedule() {
                     {datedSorted.map((t) => (
                       <tr key={t.id} onClick={() => openTask(t.id)} style={{ cursor: 'pointer' }}>
                         <td>{fmtD(t.scheduled_end || t.scheduled_start)}</td>
-                        <td style={{ fontWeight: 500 }}>{t.title}</td>
+                        <td className="sticky-col" style={{ fontWeight: 500 }}>{t.title}</td>
                         <td style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
                           <span
                             style={{
@@ -189,7 +190,8 @@ export default function Schedule() {
                       </tr>
                     ))}
                   </tbody>
-                </table>
+                  </table>
+                </div>
               )}
             </div>
           ) : (
