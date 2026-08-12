@@ -329,6 +329,14 @@ textarea.fi{resize:vertical;min-height:80px;}
   .board{grid-template-columns:1fr;}
   .fr,.fr3{grid-template-columns:1fr;}
   .mb{padding:16px;}
+  /* .cc (Clients/Subcontractors/Users roster rows): avatar + name stay on
+     one line (name already shrinks via flex:1/min-width:0), but the
+     flex-shrink:0 metadata cluster on the right -- which can carry several
+     badges plus text at once (Ref/Advocate/Repeat/Gift/$ on Clients, W9/
+     insurance/SMS on Subcontractors, role/admin/Reset-password on Users) --
+     wraps to its own line instead of forcing the row wider than the
+     viewport. */
+  .cc{flex-wrap:wrap;}
   .ai-panel{width:calc(100vw - 24px);right:12px;bottom:80px;height:60vh;}
   .ai-fab{right:16px;bottom:16px;}
 }
