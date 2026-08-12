@@ -56,6 +56,33 @@ const AUTO_DISMISS_MS = 9000;
 const LEAVE_MS = 350;
 const STAGGER_MS = 450;
 
+// The greeting/quote toast used to be gated on a once-per-calendar-day key,
+// which in practice meant "once at first load" since everyone stays logged in
+// and rarely reloads -- most people just never saw it. It now recurs on a
+// rolling elapsed-time window instead, gated separately on the tab actually
+// being visible and someone having interacted with the page recently, so it
+// never fires into an empty room just because a background tab sat open
+// overnight.
+const GREETING_INTERVAL_MS = 4 * 60 * 60 * 1000;
+const GREETING_ACTIVITY_WINDOW_MS = 5 * 60 * 1000;
+const GREETING_STORAGE_KEY = 'mm_greeting_last_shown_v1';
+
+function loadGreetingLastShown(): number {
+  try {
+    return Number(localStorage.getItem(GREETING_STORAGE_KEY)) || 0;
+  } catch {
+    return 0;
+  }
+}
+
+function saveGreetingLastShown(ts: number) {
+  try {
+    localStorage.setItem(GREETING_STORAGE_KEY, String(ts));
+  } catch {
+    // localStorage unavailable (private mode etc.) -- greeting just re-fires more often, not worth failing over
+  }
+}
+
 const OVERDUE_MESSAGES = [
   (t: string) => `"${t}" snuck past its deadline. Let's go rescue it!`,
   (t: string) => `"${t}" is overdue -- no drama, just knock it out.`,
@@ -91,12 +118,6 @@ export const CATEGORY_META: Record<Category, { Icon: typeof IconFlame; color: st
   closeout_briefing: { Icon: IconClockHour3, color: 'var(--accent)' },
   greeting: { Icon: IconSparkles, color: 'var(--accent)' },
 };
-
-function dayOfYear(date: Date = new Date()): number {
-  const start = new Date(date.getFullYear(), 0, 0);
-  const diff = date.getTime() - start.getTime();
-  return Math.floor(diff / 86400000);
-}
 
 function pick<T>(arr: T[]): T {
   return arr[Math.floor(Math.random() * arr.length)];
@@ -212,6 +233,7 @@ export function TeamReminders() {
   const shownRef = useRef<Set<string>>(loadShown());
   const nextIdRef = useRef(1);
   const smartLearningEnabledRef = useRef(false);
+  const lastActivityRef = useRef<number>(Date.now());
 
   function queueToast(category: Category, message: string, key: string, taskId?: string, projectId?: string) {
     const id = `tr-${nextIdRef.current++}`;
@@ -300,18 +322,19 @@ export function TeamReminders() {
 
   function pollGreeting() {
     if (!user) return;
-    const key = `${todayStr()}:greeting`;
-    if (shownRef.current.has(key)) return;
-    // Marked synchronously up front for the same StrictMode-double-invoke reason
-    // as every other poll function in this file -- see pollPulse above. This one
-    // is synchronous (no fetch) since it's just a fixed local quote list, but the
-    // ordering rule still applies since a second effect invocation could still
-    // race the state update otherwise.
-    shownRef.current.add(key);
-    saveShown(shownRef.current);
+    // Only pop into a tab someone's actually looking at right now -- a
+    // background tab or an idle machine shouldn't burn the interval just
+    // because it happened to be open when the timer ticked.
+    if (document.visibilityState !== 'visible') return;
+    if (Date.now() - lastActivityRef.current > GREETING_ACTIVITY_WINDOW_MS) return;
+    if (Date.now() - loadGreetingLastShown() < GREETING_INTERVAL_MS) return;
+    // Marked synchronously (before anything else) for the same StrictMode-
+    // double-invoke reason as every other poll function in this file -- see
+    // pollPulse above.
+    saveGreetingLastShown(Date.now());
     const firstName = user.name.split(' ')[0] || user.name;
-    const quote = RYAN_HOLIDAY_QUOTES[dayOfYear() % RYAN_HOLIDAY_QUOTES.length];
-    queueToast('greeting', `Hi ${firstName}! "${quote.text}" — Ryan Holiday, ${quote.source}`, key);
+    const quote = pick(RYAN_HOLIDAY_QUOTES);
+    queueToast('greeting', `Hi ${firstName}! "${quote.text}" — Ryan Holiday, ${quote.source}`, `greeting:${Date.now()}`);
   }
 
   async function pollMorningBriefing() {
@@ -374,6 +397,18 @@ export function TeamReminders() {
     queueToast('closeout_briefing', res.message, key);
   }
 
+  // Tracks real page activity (mouse/keyboard/scroll/touch) so pollGreeting
+  // can tell "tab open in the background all day" apart from "someone's
+  // actually here right now" -- independent of auth state, mounted once.
+  useEffect(() => {
+    const markActive = () => {
+      lastActivityRef.current = Date.now();
+    };
+    const events: Array<keyof WindowEventMap> = ['mousemove', 'keydown', 'click', 'scroll', 'touchstart'];
+    events.forEach((e) => window.addEventListener(e, markActive, { passive: true }));
+    return () => events.forEach((e) => window.removeEventListener(e, markActive));
+  }, []);
+
   useEffect(() => {
     if (!user) return;
     // Fetched once per mount (not every 5-minute poll cycle) -- this is a
@@ -390,7 +425,21 @@ export function TeamReminders() {
       });
     poll();
     const interval = setInterval(poll, POLL_MS);
-    return () => clearInterval(interval);
+    // Returning to a background tab counts as "interacting" and re-checks
+    // right away instead of waiting up to 5 minutes for the next tick --
+    // this is the common case for the greeting (tab was open, unattended,
+    // for hours; someone just tabbed back in).
+    function onVisibilityChange() {
+      if (document.visibilityState === 'visible') {
+        lastActivityRef.current = Date.now();
+        poll();
+      }
+    }
+    document.addEventListener('visibilitychange', onVisibilityChange);
+    return () => {
+      clearInterval(interval);
+      document.removeEventListener('visibilitychange', onVisibilityChange);
+    };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [user]);
 
