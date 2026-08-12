@@ -357,30 +357,32 @@ export default function ProjectDetail() {
               <div className="empty-s">Start an estimate to build out a proposal worksheet with grouped line items, markup, and PDF export.</div>
             </div>
           ) : (
-            <table className="tbl tbl-zebra">
-              <thead>
-                <tr>
-                  <th>Title</th>
-                  <th>Version</th>
-                  <th style={{ textAlign: 'right' }}>Grand total</th>
-                  <th>Status</th>
-                </tr>
-              </thead>
-              <tbody>
-                {[...estimates]
-                  .sort((a, b) => b.version - a.version)
-                  .map((e) => (
-                    <tr key={e.id} onClick={() => navigate(`/estimates/${e.id}`)} style={{ cursor: 'pointer' }}>
-                      <td style={{ fontWeight: 500 }}>{e.title || `Version ${e.version}`}</td>
-                      <td>v{e.version}</td>
-                      <td style={{ textAlign: 'right' }}>{fmt(e.grand_total_owner_price)}</td>
-                      <td>
-                        <span className={`badge ${ESTIMATE_STATUS_BADGE[e.status] || 'bg-gray'}`}>{e.status.replace(/_/g, ' ')}</span>
-                      </td>
-                    </tr>
-                  ))}
-              </tbody>
-            </table>
+            <div className="tbl-scroll">
+              <table className="tbl tbl-zebra">
+                <thead>
+                  <tr>
+                    <th className="sticky-col">Title</th>
+                    <th>Version</th>
+                    <th style={{ textAlign: 'right' }}>Grand total</th>
+                    <th>Status</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {[...estimates]
+                    .sort((a, b) => b.version - a.version)
+                    .map((e) => (
+                      <tr key={e.id} onClick={() => navigate(`/estimates/${e.id}`)} style={{ cursor: 'pointer' }}>
+                        <td className="sticky-col" style={{ fontWeight: 500 }}>{e.title || `Version ${e.version}`}</td>
+                        <td>v{e.version}</td>
+                        <td style={{ textAlign: 'right' }}>{fmt(e.grand_total_owner_price)}</td>
+                        <td>
+                          <span className={`badge ${ESTIMATE_STATUS_BADGE[e.status] || 'bg-gray'}`}>{e.status.replace(/_/g, ' ')}</span>
+                        </td>
+                      </tr>
+                    ))}
+                </tbody>
+              </table>
+            </div>
           )}
         </div>
 
@@ -397,31 +399,33 @@ export default function ProjectDetail() {
           {changeOrders.length === 0 ? (
             <div className="empty-s">No change orders yet.</div>
           ) : (
-            <table className="tbl tbl-zebra">
-              <thead>
-                <tr>
-                  <th>CO #</th>
-                  <th>Title</th>
-                  <th>Type</th>
-                  <th style={{ textAlign: 'right' }}>Owner price</th>
-                  <th>Status</th>
-                </tr>
-              </thead>
-              <tbody>
-                {changeOrders.map((co) => (
-                  <tr key={co.id}>
-                    <td>{co.co_number ?? '—'}</td>
-                    <td style={{ fontWeight: 500 }}>{co.title}</td>
-                    <td><span className={`badge ${CO_TYPE_BADGE[co.co_type] || 'bg-gray'}`}>{co.co_type.replace('_', ' ')}</span></td>
-                    <td style={{ textAlign: 'right' }}>{fmt(co.owner_price)}</td>
-                    <td>
-                      <span className={`badge ${CO_STATUS_BADGE[co.status] || 'bg-gray'}`}>{co.status}</span>
-                      {co.sop_breach && <span className="badge bg-red" style={{ marginLeft: 6 }}>SOP breach</span>}
-                    </td>
+            <div className="tbl-scroll">
+              <table className="tbl tbl-zebra">
+                <thead>
+                  <tr>
+                    <th>CO #</th>
+                    <th className="sticky-col">Title</th>
+                    <th>Type</th>
+                    <th style={{ textAlign: 'right' }}>Owner price</th>
+                    <th>Status</th>
                   </tr>
-                ))}
-              </tbody>
-            </table>
+                </thead>
+                <tbody>
+                  {changeOrders.map((co) => (
+                    <tr key={co.id}>
+                      <td>{co.co_number ?? '—'}</td>
+                      <td className="sticky-col" style={{ fontWeight: 500 }}>{co.title}</td>
+                      <td><span className={`badge ${CO_TYPE_BADGE[co.co_type] || 'bg-gray'}`}>{co.co_type.replace('_', ' ')}</span></td>
+                      <td style={{ textAlign: 'right' }}>{fmt(co.owner_price)}</td>
+                      <td>
+                        <span className={`badge ${CO_STATUS_BADGE[co.status] || 'bg-gray'}`}>{co.status}</span>
+                        {co.sop_breach && <span className="badge bg-red" style={{ marginLeft: 6 }}>SOP breach</span>}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
           )}
         </div>
 
@@ -438,30 +442,32 @@ export default function ProjectDetail() {
           {invoices.length === 0 ? (
             <div className="empty-s">No invoices yet.</div>
           ) : (
-            <table className="tbl tbl-zebra">
-              <thead>
-                <tr>
-                  <th>Invoice #</th>
-                  <th>Type</th>
-                  <th style={{ textAlign: 'right' }}>Amount due</th>
-                  <th style={{ textAlign: 'right' }}>Paid</th>
-                  <th>Due</th>
-                  <th>Status</th>
-                </tr>
-              </thead>
-              <tbody>
-                {invoices.map((inv) => (
-                  <tr key={inv.id}>
-                    <td style={{ fontWeight: 500 }}>{inv.invoice_number || 'Draft'}</td>
-                    <td>{inv.invoice_type}</td>
-                    <td style={{ textAlign: 'right' }}>{fmt(inv.amount_due)}</td>
-                    <td style={{ textAlign: 'right' }}>{fmt(inv.amount_paid)}</td>
-                    <td>{fmtD(inv.due_date)}</td>
-                    <td><span className={`badge ${INVOICE_STATUS_BADGE[inv.status] || 'bg-gray'}`}>{inv.status}</span></td>
+            <div className="tbl-scroll">
+              <table className="tbl tbl-zebra">
+                <thead>
+                  <tr>
+                    <th className="sticky-col">Invoice #</th>
+                    <th>Type</th>
+                    <th style={{ textAlign: 'right' }}>Amount due</th>
+                    <th style={{ textAlign: 'right' }}>Paid</th>
+                    <th>Due</th>
+                    <th>Status</th>
                   </tr>
-                ))}
-              </tbody>
-            </table>
+                </thead>
+                <tbody>
+                  {invoices.map((inv) => (
+                    <tr key={inv.id}>
+                      <td className="sticky-col" style={{ fontWeight: 500 }}>{inv.invoice_number || 'Draft'}</td>
+                      <td>{inv.invoice_type}</td>
+                      <td style={{ textAlign: 'right' }}>{fmt(inv.amount_due)}</td>
+                      <td style={{ textAlign: 'right' }}>{fmt(inv.amount_paid)}</td>
+                      <td>{fmtD(inv.due_date)}</td>
+                      <td><span className={`badge ${INVOICE_STATUS_BADGE[inv.status] || 'bg-gray'}`}>{inv.status}</span></td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
           )}
         </div>
 
@@ -527,28 +533,30 @@ export default function ProjectDetail() {
             ) : filteredTasks.length === 0 ? (
               <div className="empty-s">No tasks scheduled yet.</div>
             ) : (
-              <table className="tbl tbl-zebra">
-                <thead>
-                  <tr>
-                    <th>Title</th>
-                    <th>Assignee</th>
-                    <th>Status</th>
-                    <th>Priority</th>
-                    <th>Due</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {filteredTasks.map((t) => (
-                    <tr key={t.id} onClick={() => openTask(t.id)} style={{ cursor: 'pointer' }}>
-                      <td style={{ fontWeight: 500 }}>{t.title}</td>
-                      <td>{t.assigned_to || '—'}</td>
-                      <td><span className="badge bg-gray">{t.status.replace('_', ' ')}</span></td>
-                      <td>{t.priority}</td>
-                      <td>{fmtD(t.scheduled_end)}</td>
+              <div className="tbl-scroll">
+                <table className="tbl tbl-zebra">
+                  <thead>
+                    <tr>
+                      <th className="sticky-col">Title</th>
+                      <th>Assignee</th>
+                      <th>Status</th>
+                      <th>Priority</th>
+                      <th>Due</th>
                     </tr>
-                  ))}
-                </tbody>
-              </table>
+                  </thead>
+                  <tbody>
+                    {filteredTasks.map((t) => (
+                      <tr key={t.id} onClick={() => openTask(t.id)} style={{ cursor: 'pointer' }}>
+                        <td className="sticky-col" style={{ fontWeight: 500 }}>{t.title}</td>
+                        <td>{t.assigned_to || '—'}</td>
+                        <td><span className="badge bg-gray">{t.status.replace('_', ' ')}</span></td>
+                        <td>{t.priority}</td>
+                        <td>{fmtD(t.scheduled_end)}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
             )}
           </div>
         </div>
