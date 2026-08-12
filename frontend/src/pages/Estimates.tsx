@@ -80,34 +80,36 @@ export default function Estimates() {
             <div className="empty-s">Open a project and start an estimate from the Estimate tab.</div>
           </div>
         ) : (
-          <table className="tbl tbl-zebra">
-            <thead>
-              <tr>
-                <th>Project</th>
-                <th>Version</th>
-                <th>PM fee</th>
-                <th>Construction</th>
-                <th>Allowances</th>
-                <th>Grand total</th>
-                <th>Status</th>
-              </tr>
-            </thead>
-            <tbody>
-              {estimates.map((e) => (
-                <tr key={e.id} onClick={() => navigate(`/estimates/${e.id}`)} style={{ cursor: 'pointer' }}>
-                  <td style={{ fontWeight: 500 }}>{e.title || e.projects?.name || '—'}</td>
-                  <td>v{e.version}</td>
-                  <td>{fmt(e.pm_fee_total)}</td>
-                  <td>{fmt(e.construction_total_owner_price)}</td>
-                  <td>{fmt(e.allowance_total)}</td>
-                  <td style={{ fontWeight: 600 }}>{fmt(e.grand_total_owner_price)}</td>
-                  <td>
-                    <span className={`badge ${STATUS_BADGE[e.status] || 'bg-gray'}`}>{e.status.replace(/_/g, ' ')}</span>
-                  </td>
+          <div className="tbl-scroll">
+            <table className="tbl tbl-zebra">
+              <thead>
+                <tr>
+                  <th className="sticky-col">Project</th>
+                  <th>Version</th>
+                  <th>PM fee</th>
+                  <th>Construction</th>
+                  <th>Allowances</th>
+                  <th>Grand total</th>
+                  <th>Status</th>
                 </tr>
-              ))}
-            </tbody>
-          </table>
+              </thead>
+              <tbody>
+                {estimates.map((e) => (
+                  <tr key={e.id} onClick={() => navigate(`/estimates/${e.id}`)} style={{ cursor: 'pointer' }}>
+                    <td className="sticky-col" style={{ fontWeight: 500 }}>{e.title || e.projects?.name || '—'}</td>
+                    <td>v{e.version}</td>
+                    <td>{fmt(e.pm_fee_total)}</td>
+                    <td>{fmt(e.construction_total_owner_price)}</td>
+                    <td>{fmt(e.allowance_total)}</td>
+                    <td style={{ fontWeight: 600 }}>{fmt(e.grand_total_owner_price)}</td>
+                    <td>
+                      <span className={`badge ${STATUS_BADGE[e.status] || 'bg-gray'}`}>{e.status.replace(/_/g, ' ')}</span>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
         )}
       </div>
     </>

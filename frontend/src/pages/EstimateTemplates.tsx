@@ -168,31 +168,33 @@ export default function EstimateTemplates() {
             <div className="empty-s">Build one from scratch, or save an existing estimate as a template.</div>
           </div>
         ) : (
-          <table className="tbl tbl-zebra">
-            <thead>
-              <tr>
-                <th>Name</th>
-                <th>Category</th>
-                <th></th>
-              </tr>
-            </thead>
-            <tbody>
-              {templates.map((t) => (
-                <tr key={t.id} onClick={() => navigate(`/estimates/templates/${t.id}`)} style={{ cursor: 'pointer' }}>
-                  <td style={{ fontWeight: 500 }}>{t.name}</td>
-                  <td>{t.category ? <span className="badge bg-gray">{t.category}</span> : '—'}</td>
-                  <td style={{ textAlign: 'right' }}>
-                    <button className="btn btn-ghost btn-sm" onClick={(e) => duplicateTemplate(t.id, e)} title="Duplicate">
-                      <IconCopy size={13} />
-                    </button>
-                    <button className="btn btn-ghost btn-sm" onClick={(e) => deleteTemplate(t.id, e)} title="Delete">
-                      <IconTrash size={13} />
-                    </button>
-                  </td>
+          <div className="tbl-scroll">
+            <table className="tbl tbl-zebra">
+              <thead>
+                <tr>
+                  <th className="sticky-col">Name</th>
+                  <th>Category</th>
+                  <th></th>
                 </tr>
-              ))}
-            </tbody>
-          </table>
+              </thead>
+              <tbody>
+                {templates.map((t) => (
+                  <tr key={t.id} onClick={() => navigate(`/estimates/templates/${t.id}`)} style={{ cursor: 'pointer' }}>
+                    <td className="sticky-col" style={{ fontWeight: 500 }}>{t.name}</td>
+                    <td>{t.category ? <span className="badge bg-gray">{t.category}</span> : '—'}</td>
+                    <td style={{ textAlign: 'right' }}>
+                      <button className="btn btn-ghost btn-sm" onClick={(e) => duplicateTemplate(t.id, e)} title="Duplicate">
+                        <IconCopy size={13} />
+                      </button>
+                      <button className="btn btn-ghost btn-sm" onClick={(e) => deleteTemplate(t.id, e)} title="Delete">
+                        <IconTrash size={13} />
+                      </button>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
         )}
       </div>
 
