@@ -235,6 +235,14 @@ textarea.fi{resize:vertical;min-height:80px;}
 .board{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-top:4px;}
 .col{background:var(--bg);border-radius:var(--rl);padding:12px;}
 .col-hd{font-size:12px;font-weight:600;margin-bottom:10px;display:flex;align-items:center;justify-content:space-between;}
+/* Mobile Kanban column switcher (KanbanBoard.tsx) -- only rendered on mobile.
+   Horizontally scrollable row of pills, mirroring the .fb filter pills. */
+.board-tabs{display:flex;gap:6px;overflow-x:auto;margin:4px 0 10px;padding-bottom:4px;-webkit-overflow-scrolling:touch;scrollbar-width:none;}
+.board-tabs::-webkit-scrollbar{display:none;}
+.board-tab{flex:0 0 auto;display:inline-flex;align-items:center;gap:6px;padding:6px 12px;font-size:12px;font-weight:600;border-radius:20px;border:1px solid var(--border-md);background:var(--surface);color:var(--t2);cursor:pointer;white-space:nowrap;transition:all .1s;}
+.board-tab.active{background:var(--accent);color:#fff;border-color:var(--accent);}
+.board-tab-count{background:var(--border);color:var(--t2);border-radius:10px;padding:0 6px;font-size:11px;line-height:16px;min-width:18px;text-align:center;}
+.board-tab.active .board-tab-count{background:rgba(255,255,255,.25);color:#fff;}
 .task-card{background:var(--surface);border:1px solid var(--border);border-radius:var(--r);padding:10px 12px;margin-bottom:8px;cursor:pointer;}
 .task-card:hover{border-color:var(--border-md);}
 .task-title{font-size:12px;font-weight:500;margin-bottom:4px;}
@@ -336,9 +344,9 @@ textarea.fi{resize:vertical;min-height:80px;}
   .main{margin-left:0;}
   .metrics{grid-template-columns:repeat(2,1fr);}
   .dashboard-widgets{grid-template-columns:1fr;}
-  /* Kanban: a real single stacked column, not a cramped 2-up grid -- each
-     column becomes collapsible on mobile (KanbanBoard.tsx) so the stack
-     doesn't turn into one very long scroll. */
+  /* Kanban: a single full-width column. On mobile only one column renders at
+     a time, chosen via the .board-tabs switcher (KanbanBoard.tsx), instead of
+     stacking all five into one very long scroll. */
   .board{grid-template-columns:1fr;}
   .fr,.fr3{grid-template-columns:1fr;}
   .mb{padding:16px;}

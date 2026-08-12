@@ -28,12 +28,15 @@ import { useIsMobile } from '../../hooks/useMediaQuery';
 import type { Task, TaskSubtask, Project, UserDirectoryEntry } from '../../types';
 import { taskAssignees } from '../../lib/taskAssignees';
 
+// `short` is the mobile tab label -- the full `label` is too long to fit a
+// row of five tab pills on a phone (esp. urgent_today), so each column
+// carries a compact name used only by the mobile column switcher.
 const COLUMNS = [
-  { id: 'upcoming', label: 'Recently Imported Tasks' },
-  { id: 'in_progress', label: 'In Progress' },
-  { id: 'delayed', label: 'Delayed / Blocked' },
-  { id: 'urgent_today', label: 'Extremely Important / Urgent — Must Be Done Today' },
-  { id: 'complete', label: 'Done' },
+  { id: 'upcoming', label: 'Recently Imported Tasks', short: 'Imported' },
+  { id: 'in_progress', label: 'In Progress', short: 'In Progress' },
+  { id: 'delayed', label: 'Delayed / Blocked', short: 'Blocked' },
+  { id: 'urgent_today', label: 'Extremely Important / Urgent — Must Be Done Today', short: 'Urgent' },
+  { id: 'complete', label: 'Done', short: 'Done' },
 ];
 
 const DONE_COLLAPSED_KEY = 'mm.tasks.doneCollapsed';
@@ -558,12 +561,12 @@ export function KanbanBoard({
       return false;
     }
   });
-  // Mobile-only: every column (not just Done) gets a collapse toggle since
-  // the board is a single vertical stack there instead of side-by-side
-  // columns -- without this, all five sections' full card lists would run
-  // together into one very long scroll. Session-only (not persisted like
-  // doneCollapsed) since it's a lighter-weight, more exploratory toggle.
-  const [mobileCollapsedCols, setMobileCollapsedCols] = useState<Set<string>>(new Set());
+  // Mobile-only: the board becomes a tabbed single-column view instead of a
+  // side-by-side grid, so exactly one column is shown at a time and the user
+  // taps a tab to switch rather than scrolling past all five stacked
+  // sections. Session-only (not persisted) -- it's a lightweight view toggle.
+  // Defaults to 'in_progress', the column people live in day to day.
+  const [activeMobileCol, setActiveMobileCol] = useState('in_progress');
   // Drives <DragOverlay> -- see TaskCardPreview's comment for why this
   // exists at all.
   const [activeId, setActiveId] = useState<string | null>(null);
@@ -785,25 +788,40 @@ export function KanbanBoard({
         onDragEnd={handleDragEnd}
         onDragCancel={() => setActiveId(null)}
       >
+        {isMobile && (
+          // Mobile column switcher: one pill per column (with its live task
+          // count) that swaps which single column is shown below, so a phone
+          // shows one focused column at a time instead of a long scroll past
+          // all five. Horizontally scrollable so all five pills fit any width.
+          <div className="board-tabs" role="tablist" aria-label="Task columns">
+            {COLUMNS.map((col) => {
+              const active = col.id === activeMobileCol;
+              return (
+                <button
+                  key={col.id}
+                  type="button"
+                  role="tab"
+                  aria-selected={active}
+                  className={`board-tab${active ? ' active' : ''}`}
+                  onClick={() => setActiveMobileCol(col.id)}
+                >
+                  {col.short}
+                  <span className="board-tab-count">{(columns[col.id] || []).length}</span>
+                </button>
+              );
+            })}
+          </div>
+        )}
         <div className="board">
-          {COLUMNS.map((col) => {
-            // 'complete' keeps its existing desktop behavior (and
-            // persisted collapse state) unchanged. On mobile, every column
-            // is also collapsible via a separate, session-only Set, since
-            // the board is one long vertical stack there instead of
-            // side-by-side columns.
+          {COLUMNS.filter((col) => !isMobile || col.id === activeMobileCol).map((col) => {
+            // Desktop 'complete' keeps its existing collapse toggle and
+            // persisted state. On mobile the board is a tabbed single-column
+            // view (only the active column renders above), so no column is
+            // collapsible there -- the tab already scopes what's shown.
             const isDoneCol = col.id === 'complete';
-            const collapsible = isDoneCol || isMobile;
-            const collapsed = isDoneCol ? doneCollapsed : isMobile && mobileCollapsedCols.has(col.id);
-            const onToggleCollapse = isDoneCol
-              ? () => setDoneCollapsed((v) => !v)
-              : () =>
-                  setMobileCollapsedCols((prev) => {
-                    const next = new Set(prev);
-                    if (next.has(col.id)) next.delete(col.id);
-                    else next.add(col.id);
-                    return next;
-                  });
+            const collapsible = !isMobile && isDoneCol;
+            const collapsed = !isMobile && isDoneCol && doneCollapsed;
+            const onToggleCollapse = () => setDoneCollapsed((v) => !v);
             return (
               <Column
                 key={col.id}
