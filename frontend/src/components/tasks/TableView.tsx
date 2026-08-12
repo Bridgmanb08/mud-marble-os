@@ -7,6 +7,7 @@ import { api } from '../../api/client';
 import { useToast } from '../ui/Toast';
 import { fmtD } from '../../lib/format';
 import type { Task, UserDirectoryEntry } from '../../types';
+import { taskAssignees } from '../../lib/taskAssignees';
 
 type SortKey = 'title' | 'status' | 'priority' | 'scheduled_end' | 'assigned_to' | 'manual_position';
 export type TaskGroupBy = 'none' | 'project' | 'assigned_to' | 'status';
@@ -62,7 +63,7 @@ function TaskTableRow({
       <td style={{ color: 'var(--t2)' }}>{displayOrder != null ? displayOrder + 1 : '—'}</td>
       <td className="sticky-col" style={{ fontWeight: 500 }}>{task.title}</td>
       <td>{task.projects?.name?.replace(/\|.*/, '').trim() || '—'}</td>
-      <td>{task.assigned_to || '—'}</td>
+      <td>{taskAssignees(task).join(', ') || '—'}</td>
       <td>
         <span className="badge bg-gray">{task.status.replace('_', ' ')}</span>
       </td>
@@ -139,6 +140,15 @@ export function TableView({
         if (av !== bv) return sortDir === 'asc' ? av - bv : bv - av;
         return (a.scheduled_end || '').localeCompare(b.scheduled_end || '');
       });
+    } else if (sortKey === 'assigned_to') {
+      // Sort by the real assignee list (falls back to the legacy singular
+      // field only when `assignees` is empty), not the raw stale field.
+      copy.sort((a, b) => {
+        const av = taskAssignees(a).join(', ');
+        const bv = taskAssignees(b).join(', ');
+        const cmp = av.localeCompare(bv);
+        return sortDir === 'asc' ? cmp : -cmp;
+      });
     } else {
       copy.sort((a, b) => {
         const av = String(a[sortKey] ?? '');
@@ -158,7 +168,11 @@ export function TableView({
         groupBy === 'project'
           ? t.projects?.name?.replace(/\|.*/, '').trim() || 'No project'
           : groupBy === 'assigned_to'
-            ? t.assigned_to || 'Unassigned'
+            ? // A multi-assignee task groups under its first assignee -- grouping
+              // is inherently one-task-to-one-bucket, unlike the "does this task
+              // match" filters elsewhere, so this picks a single representative
+              // name rather than duplicating the row into every assignee's group.
+              taskAssignees(t)[0] || 'Unassigned'
             : t.status;
       if (!out[key]) out[key] = [];
       out[key].push(t);

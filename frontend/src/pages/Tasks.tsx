@@ -7,6 +7,7 @@ import { useToast } from '../components/ui/Toast';
 import { Modal } from '../components/ui/Modal';
 import { Skeleton } from '../components/ui/Skeleton';
 import type { BoardView, Task } from '../types';
+import { taskAssignees } from '../lib/taskAssignees';
 import { KanbanBoard } from '../components/tasks/KanbanBoard';
 import { TableView, type TaskGroupBy } from '../components/tasks/TableView';
 import { TimelineView } from '../components/tasks/TimelineView';
@@ -165,16 +166,17 @@ export default function Tasks() {
 
   const assigneeOptions = useMemo(() => {
     const seen = new Set<string>();
-    for (const t of tasks || []) if (t.assigned_to) seen.add(t.assigned_to);
+    for (const t of tasks || []) for (const name of taskAssignees(t)) seen.add(name);
     return Array.from(seen);
   }, [tasks]);
 
   const filtered = useMemo(() => {
     return (tasks || []).filter((t) => {
+      const assignees = taskAssignees(t);
       if (projectFilter && t.project_id !== projectFilter) return false;
-      if (assigneeFilter && t.assigned_to !== assigneeFilter) return false;
+      if (assigneeFilter && !assignees.includes(assigneeFilter)) return false;
       if (statusFilter && t.status !== statusFilter) return false;
-      if (tab === 'mine' && t.assigned_to !== (user?.name || '')) return false;
+      if (tab === 'mine' && !assignees.includes(user?.name || '')) return false;
       if (tab === 'punch' && !t.is_punch_list) return false;
       return true;
     });
