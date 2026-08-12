@@ -2,6 +2,8 @@ import { useEffect, useState } from 'react';
 import { IconBulb } from '@tabler/icons-react';
 import { api } from '../api/client';
 import { useToast } from '../components/ui/Toast';
+import { DesktopOnlyNotice } from '../components/ui/DesktopOnlyNotice';
+import { useIsMobile } from '../hooks/useMediaQuery';
 import { fmt, fmtD } from '../lib/format';
 import type { SubIntelligenceSummary } from '../types';
 
@@ -44,6 +46,7 @@ const STATUS_BADGE: Record<string, string> = {
 export default function SubIntelligence() {
   const [data, setData] = useState<SubIntelligenceSummary | null>(null);
   const toast = useToast();
+  const isMobile = useIsMobile();
 
   useEffect(() => {
     api
@@ -81,6 +84,14 @@ export default function SubIntelligence() {
         </div>
       </div>
 
+      {isMobile ? (
+        // This page is dense analytics -- scorecards, comparison charts, an
+        // 11-column subcontractor table (the widest table in the app) --
+        // force-fitting it into a phone screen would be technically
+        // scrollable but practically useless. Point back to a desktop/tablet.
+        <DesktopOnlyNotice label="Business Intelligence" />
+      ) : (
+        <>
       <div className="metrics">
         <div className="metric">
           <div className="m-label">Avg project value</div>
@@ -269,6 +280,8 @@ export default function SubIntelligence() {
           </table>
         )}
       </div>
+        </>
+      )}
     </>
   );
 }
