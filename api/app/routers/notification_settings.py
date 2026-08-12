@@ -17,5 +17,7 @@ async def update_settings(body: NotificationSettingsUpdate, current_user: Curren
     fields = body.model_dump(exclude_unset=True)
     if not fields:
         raise HTTPException(status_code=400, detail="No fields to update")
+    if fields.get("visit_reminder_days") is not None and fields["visit_reminder_days"] < 1:
+        raise HTTPException(status_code=400, detail="visit_reminder_days must be at least 1")
     fields["updated_by"] = current_user.id
     return await update_notification_settings(fields)

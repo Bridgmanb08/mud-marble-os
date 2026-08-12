@@ -1020,6 +1020,7 @@ export interface CustomWidget {
 export interface NotificationSettings {
   id: string;
   smart_learning_enabled: boolean;
+  visit_reminder_days: number;
   updated_at: string;
   updated_by: string | null;
 }
@@ -1350,6 +1351,7 @@ export interface RentalDashboardSummary {
   on_time_rate_90: number | null;
   leases_expiring_60d: number;
   open_work_orders: number;
+  properties_needing_visit: number;
 }
 
 export interface RentalPayment {
