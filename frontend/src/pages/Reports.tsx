@@ -17,6 +17,8 @@ import {
 import { IconBookmark, IconPlus, IconTrash } from '@tabler/icons-react';
 import { api } from '../api/client';
 import { useToast } from '../components/ui/Toast';
+import { DesktopOnlyNotice } from '../components/ui/DesktopOnlyNotice';
+import { useIsMobile } from '../hooks/useMediaQuery';
 import { fmt } from '../lib/format';
 import { CATEGORICAL_COLORS, OTHER_COLOR } from '../lib/reportPalette';
 import type { ReportFilter, ReportRunResult, ReportSource, ReportSpec, SavedReport } from '../types';
@@ -131,6 +133,7 @@ function defaultSpec(): ReportSpec {
 
 export default function Reports() {
   const toast = useToast();
+  const isMobile = useIsMobile();
   const [spec, setSpec] = useState<ReportSpec>(defaultSpec());
   const [result, setResult] = useState<ReportRunResult | null>(null);
   const [running, setRunning] = useState(false);
@@ -247,6 +250,13 @@ export default function Reports() {
         </div>
       </div>
 
+      {isMobile ? (
+        // A report-builder with source/group-by/filter pickers, a saved-report
+        // list, and a chart+table output -- genuinely a desk tool, not
+        // something worth force-fitting into a phone screen.
+        <DesktopOnlyNotice label="Reports" />
+      ) : (
+        <>
       <div className="card" style={{ padding: 20, marginBottom: 16 }}>
         <div className="fr3">
           <div className="fg">
@@ -493,6 +503,8 @@ export default function Reports() {
             </div>
           </div>
         </div>
+      )}
+        </>
       )}
     </>
   );
