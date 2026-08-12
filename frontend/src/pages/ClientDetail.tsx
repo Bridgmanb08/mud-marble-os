@@ -163,7 +163,7 @@ export default function ClientDetail() {
         <IconArrowLeft size={14} /> Back
       </button>
 
-      <div className="ph">
+      <div className="ph" style={{ flexWrap: 'wrap', gap: 12 }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
           <div className="av" style={{ width: 46, height: 46, fontSize: 16 }}>
             {(client.first_name || '?')[0]}
@@ -326,7 +326,7 @@ export default function ClientDetail() {
             ) : (
               client.referred.map((r) => (
                 <div key={r.id} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '6px 0', borderBottom: '1px solid var(--border)' }}>
-                  <Link to={`/clients/${r.id}`} style={{ flex: 1, fontSize: 13, color: 'inherit', textDecoration: 'none' }}>
+                  <Link to={`/clients/${r.id}`} style={{ flex: 1, minWidth: 0, fontSize: 13, color: 'inherit', textDecoration: 'none' }}>
                     {r.first_name} {r.last_name || ''}
                   </Link>
                   <button
@@ -384,6 +384,7 @@ export default function ClientDetail() {
               style={{
                 display: 'flex',
                 alignItems: 'center',
+                flexWrap: 'wrap',
                 gap: 12,
                 padding: '10px 0',
                 borderBottom: '1px solid var(--border)',
