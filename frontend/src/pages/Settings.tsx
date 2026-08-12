@@ -185,40 +185,42 @@ function CostCodesTab() {
       ) : costCodes.length === 0 ? (
         <div className="empty-s">No cost codes yet.</div>
       ) : (
-        <table className="tbl tbl-zebra">
-          <thead>
-            <tr>
-              <th>Code</th>
-              <th>Name</th>
-              <th>Description</th>
-              <th>Status</th>
-              <th></th>
-            </tr>
-          </thead>
-          <tbody>
-            {costCodes.map((cc) => (
-              <tr key={cc.id} onClick={() => setEditing(cc)} style={{ cursor: 'pointer' }}>
-                <td style={{ fontWeight: 500 }}>{cc.code}</td>
-                <td>{cc.name}</td>
-                <td>
-                  {cc.default_description ? (
-                    <span className="badge bg-green">Set</span>
-                  ) : (
-                    <span className="badge bg-amber">Not set</span>
-                  )}
-                </td>
-                <td>
-                  <span className={`badge ${cc.is_active ? 'bg-green' : 'bg-gray'}`}>{cc.is_active ? 'Active' : 'Inactive'}</span>
-                </td>
-                <td onClick={(e) => e.stopPropagation()}>
-                  <button className="btn btn-ghost btn-sm" onClick={() => toggleActive(cc)}>
-                    {cc.is_active ? 'Deactivate' : 'Reactivate'}
-                  </button>
-                </td>
+        <div className="tbl-scroll">
+          <table className="tbl tbl-zebra">
+            <thead>
+              <tr>
+                <th className="sticky-col">Code</th>
+                <th>Name</th>
+                <th>Description</th>
+                <th>Status</th>
+                <th></th>
               </tr>
-            ))}
-          </tbody>
-        </table>
+            </thead>
+            <tbody>
+              {costCodes.map((cc) => (
+                <tr key={cc.id} onClick={() => setEditing(cc)} style={{ cursor: 'pointer' }}>
+                  <td className="sticky-col" style={{ fontWeight: 500 }}>{cc.code}</td>
+                  <td>{cc.name}</td>
+                  <td>
+                    {cc.default_description ? (
+                      <span className="badge bg-green">Set</span>
+                    ) : (
+                      <span className="badge bg-amber">Not set</span>
+                    )}
+                  </td>
+                  <td>
+                    <span className={`badge ${cc.is_active ? 'bg-green' : 'bg-gray'}`}>{cc.is_active ? 'Active' : 'Inactive'}</span>
+                  </td>
+                  <td onClick={(e) => e.stopPropagation()}>
+                    <button className="btn btn-ghost btn-sm" onClick={() => toggleActive(cc)}>
+                      {cc.is_active ? 'Deactivate' : 'Reactivate'}
+                    </button>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
       )}
 
       {showNew && (
@@ -271,29 +273,31 @@ function SubcontractorsTab() {
       ) : subs.length === 0 ? (
         <div className="empty-s">No subcontractors yet. Add your trade partners to build the roster.</div>
       ) : (
-        <table className="tbl tbl-zebra">
-          <thead>
-            <tr>
-              <th>Company</th>
-              <th>Trade</th>
-              <th>Contact</th>
-              <th>Status</th>
-            </tr>
-          </thead>
-          <tbody>
-            {subs.map((s) => (
-              <tr key={s.id} onClick={() => setEditing(s)} style={{ cursor: 'pointer' }}>
-                <td style={{ fontWeight: 500 }}>{s.company_name}</td>
-                <td>{s.trade || '—'}</td>
-                <td>{s.contact_name || '—'}</td>
-                <td style={{ display: 'flex', gap: 6 }}>
-                  {s.preferred && <span className="badge bg-green">Preferred</span>}
-                  {s.w9_on_file ? <span className="badge bg-green">W9 ✓</span> : <span className="badge bg-amber">W9 needed</span>}
-                </td>
+        <div className="tbl-scroll">
+          <table className="tbl tbl-zebra">
+            <thead>
+              <tr>
+                <th className="sticky-col">Company</th>
+                <th>Trade</th>
+                <th>Contact</th>
+                <th>Status</th>
               </tr>
-            ))}
-          </tbody>
-        </table>
+            </thead>
+            <tbody>
+              {subs.map((s) => (
+                <tr key={s.id} onClick={() => setEditing(s)} style={{ cursor: 'pointer' }}>
+                  <td className="sticky-col" style={{ fontWeight: 500 }}>{s.company_name}</td>
+                  <td>{s.trade || '—'}</td>
+                  <td>{s.contact_name || '—'}</td>
+                  <td style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+                    {s.preferred && <span className="badge bg-green">Preferred</span>}
+                    {s.w9_on_file ? <span className="badge bg-green">W9 ✓</span> : <span className="badge bg-amber">W9 needed</span>}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
       )}
 
       {showNew && (
