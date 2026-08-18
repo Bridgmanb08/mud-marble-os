@@ -1,28 +1,39 @@
-import { useState } from 'react';
-import { IconSparkles, IconChevronsRight, IconChevronsLeft } from '@tabler/icons-react';
+import { useEffect, useRef, useState } from 'react';
+import { IconSparkles, IconChevronsRight, IconChevronsLeft, IconSend, IconPencil, IconSearch } from '@tabler/icons-react';
 import { api, ApiError } from '../../api/client';
-import { useToast } from '../ui/Toast';
-import { useReferenceData } from '../../reference-data/ReferenceDataContext';
 import { useIsMobile } from '../../hooks/useMediaQuery';
-import { SuggestionCard } from './SuggestionCard';
-import { SocraticGapCard } from './SocraticGapCard';
-import { LineItemModal } from './LineItemModal';
-import type { EstimateSuggestion, GapCheckResponse, GapQuestion, TranscriptExtractResponse } from '../../types';
+import type { ChatMessage, EstimateCopilotChatResponse, ToolCallLog } from '../../types';
 
-type Mode = 'gap' | 'transcript';
+interface DisplayMessage extends ChatMessage {
+  toolCalls?: ToolCallLog[];
+  isError?: boolean;
+}
+
+const SUGGESTIONS = [
+  'Check this estimate for gaps',
+  'Add gutters and downspouts to the exterior scope',
+  'What has tile work run on other jobs?',
+];
+
+const WRITE_TOOLS = new Set(['add_line_item', 'update_line_item', 'remove_line_item']);
+
+function toolLabel(name: string): string {
+  return name.replace(/_/g, ' ');
+}
+
+function toolRowLabel(calls: ToolCallLog[]): { icon: 'search' | 'write'; text: string } {
+  const wrote = calls.some((t) => WRITE_TOOLS.has(t.name));
+  const names = [...new Set(calls.map((t) => toolLabel(t.name)))].join(', ');
+  return wrote ? { icon: 'write', text: `Updated the estimate (${names})` } : { icon: 'search', text: `Checked ${names}` };
+}
 
 export function EstimateCopilotPanel({
   estimateId,
-  existingGroups,
   onItemAdded,
 }: {
   estimateId: string;
-  existingGroups: string[];
   onItemAdded: () => void;
 }) {
-  const { costCodes: costCodesData } = useReferenceData();
-  const costCodes = costCodesData ?? [];
-  const toast = useToast();
   // Fixed 340px-wide sidebar sitting next to a flex:1 main column has no
   // room to share with the worksheet on a phone -- default it to its
   // collapsed icon-button form on mobile so the page is usable without the
@@ -31,61 +42,38 @@ export function EstimateCopilotPanel({
   // forced open.
   const isMobile = useIsMobile();
   const [collapsed, setCollapsed] = useState(isMobile);
-  const [mode, setMode] = useState<Mode>('gap');
-  const [checking, setChecking] = useState(false);
-  const [questions, setQuestions] = useState<GapQuestion[]>([]);
-  const [suggestions, setSuggestions] = useState<EstimateSuggestion[]>([]);
-  const [dropped, setDropped] = useState<string[]>([]);
-  const [hasCheckedGap, setHasCheckedGap] = useState(false);
-  const [hasCheckedTranscript, setHasCheckedTranscript] = useState(false);
-  const [transcript, setTranscript] = useState('');
-  const [addingSuggestion, setAddingSuggestion] = useState<EstimateSuggestion | undefined>(undefined);
-  const [addedSuggestions, setAddedSuggestions] = useState<EstimateSuggestion[]>([]);
+  const [messages, setMessages] = useState<DisplayMessage[]>([]);
+  const [input, setInput] = useState('');
+  const [sending, setSending] = useState(false);
+  const bodyRef = useRef<HTMLDivElement>(null);
 
-  async function runGapCheck() {
-    setChecking(true);
-    try {
-      const result = await api.post<GapCheckResponse>(`/estimates/${estimateId}/copilot/gap-check`);
-      setQuestions(result.questions);
-      setDropped(result.dropped);
-      setAddedSuggestions([]);
-      setHasCheckedGap(true);
-    } catch (e) {
-      toast(e instanceof ApiError ? e.message : 'Failed to check for gaps', true);
-    } finally {
-      setChecking(false);
+  useEffect(() => {
+    if (bodyRef.current) {
+      bodyRef.current.scrollTop = bodyRef.current.scrollHeight;
     }
-  }
+  }, [messages, sending, collapsed]);
 
-  async function runTranscriptExtract() {
-    if (!transcript.trim()) return;
-    setChecking(true);
+  async function send(text: string) {
+    const trimmed = text.trim();
+    if (!trimmed || sending) return;
+
+    const history: ChatMessage[] = messages.map((m) => ({ role: m.role, content: m.content }));
+    setMessages((prev) => [...prev, { role: 'user', content: trimmed }]);
+    setInput('');
+    setSending(true);
     try {
-      const result = await api.post<TranscriptExtractResponse>(`/estimates/${estimateId}/copilot/transcript-extract`, {
-        transcript: transcript.trim(),
+      const res = await api.post<EstimateCopilotChatResponse>(`/estimates/${estimateId}/copilot/chat`, {
+        message: trimmed,
+        history,
       });
-      setSuggestions(result.suggestions);
-      setDropped(result.dropped);
-      setHasCheckedTranscript(true);
+      setMessages((prev) => [...prev, { role: 'assistant', content: res.reply, toolCalls: res.tool_calls }]);
+      if (res.items_changed) onItemAdded();
     } catch (e) {
-      toast(e instanceof ApiError ? e.message : 'Failed to extract items from that transcript', true);
+      const message = e instanceof ApiError ? e.message : 'Something went wrong reaching the estimating copilot.';
+      setMessages((prev) => [...prev, { role: 'assistant', content: message, isError: true }]);
     } finally {
-      setChecking(false);
+      setSending(false);
     }
-  }
-
-  function dismiss(suggestion: EstimateSuggestion) {
-    setSuggestions((prev) => prev.filter((s) => s !== suggestion));
-  }
-
-  function handleAdded() {
-    setAddingSuggestion(undefined);
-    if (mode === 'gap') {
-      setAddedSuggestions((prev) => [...prev, addingSuggestion!]);
-    } else {
-      setSuggestions((prev) => prev.filter((s) => s !== addingSuggestion));
-    }
-    onItemAdded();
   }
 
   if (collapsed) {
@@ -104,8 +92,21 @@ export function EstimateCopilotPanel({
   }
 
   return (
-    <div className="card" style={{ width: 'min(340px, 100%)', flexShrink: 0, padding: 16, height: 'fit-content', position: isMobile ? undefined : 'sticky', top: 76 }}>
-      <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 12 }}>
+    <div
+      className="card"
+      style={{
+        width: 'min(340px, 100%)',
+        flexShrink: 0,
+        padding: 0,
+        display: 'flex',
+        flexDirection: 'column',
+        height: isMobile ? 480 : 600,
+        position: isMobile ? undefined : 'sticky',
+        top: 76,
+        overflow: 'hidden',
+      }}
+    >
+      <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '14px 16px', borderBottom: '1px solid var(--border)' }}>
         <IconSparkles size={16} />
         <div style={{ fontWeight: 600, fontSize: 14 }}>Estimating copilot</div>
         <div style={{ flex: 1 }} />
@@ -114,115 +115,67 @@ export function EstimateCopilotPanel({
         </button>
       </div>
 
-      <div className="tabs" style={{ marginBottom: 12 }}>
-        <button
-          className={`tab${mode === 'gap' ? ' on' : ''}`}
-          onClick={() => {
-            setMode('gap');
-            setDropped([]);
-          }}
-        >
-          Gap check
-        </button>
-        <button
-          className={`tab${mode === 'transcript' ? ' on' : ''}`}
-          onClick={() => {
-            setMode('transcript');
-            setDropped([]);
-          }}
-        >
-          Import transcript
-        </button>
+      <div className="ai-body" ref={bodyRef} style={{ flex: 1 }}>
+        {messages.length === 0 && (
+          <div className="ai-empty">
+            <p>
+              Talk through this estimate with me like you would with Shannon — I can check it for commonly-missed
+              complementary scope, add/update/remove line items directly, or look up what similar work has cost on
+              other jobs.
+            </p>
+            <div className="ai-suggestions">
+              {SUGGESTIONS.map((s) => (
+                <button key={s} type="button" className="ai-suggestion" onClick={() => send(s)}>
+                  {s}
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {messages.map((m, i) => {
+          const row = m.role === 'assistant' && m.toolCalls && m.toolCalls.length > 0 ? toolRowLabel(m.toolCalls) : null;
+          return (
+            <div key={i} className={`ai-msg ai-msg-${m.role}${m.isError ? ' ai-msg-error' : ''}`}>
+              {row && (
+                <div className="ai-tool-row">
+                  {row.icon === 'write' ? <IconPencil size={11} /> : <IconSearch size={11} />}
+                  {row.text}
+                </div>
+              )}
+              <div className="ai-bubble">{m.content}</div>
+            </div>
+          );
+        })}
+
+        {sending && (
+          <div className="ai-msg ai-msg-assistant">
+            <div className="ai-bubble ai-typing">
+              <span />
+              <span />
+              <span />
+            </div>
+          </div>
+        )}
       </div>
 
-      {mode === 'gap' && (
-        <>
-          <p style={{ fontSize: 12, color: 'var(--t2)', marginBottom: 10 }}>
-            Asks a few yes/no questions about your current line items to walk through commonly-missed
-            complementary scope (e.g. drywall usually needs paint), with follow-up questions where it helps.
-          </p>
-          <button type="button" className="btn btn-p btn-sm" onClick={runGapCheck} disabled={checking} style={{ marginBottom: 12 }}>
-            {checking ? 'Checking…' : 'Check for gaps'}
-          </button>
-        </>
-      )}
-
-      {mode === 'transcript' && (
-        <>
-          <p style={{ fontSize: 12, color: 'var(--t2)', marginBottom: 10 }}>
-            Paste a walkthrough transcript to suggest line items and flag likely-missing scope.
-          </p>
-          <textarea
-            className="fi"
-            style={{ minHeight: 100, marginBottom: 8 }}
-            value={transcript}
-            onChange={(e) => setTranscript(e.target.value)}
-            placeholder="Paste transcript here…"
-          />
-          <button
-            type="button"
-            className="btn btn-p btn-sm"
-            onClick={runTranscriptExtract}
-            disabled={checking || !transcript.trim()}
-            style={{ marginBottom: 12 }}
-          >
-            {checking ? 'Extracting…' : 'Extract items'}
-          </button>
-        </>
-      )}
-
-      {dropped.length > 0 && (
-        <div style={{ fontSize: 11, color: 'var(--t3)', marginBottom: 10 }}>
-          {dropped.length} suggestion{dropped.length !== 1 ? 's' : ''} needed a manual cost-code check.
-        </div>
-      )}
-
-      {mode === 'gap' && (
-        <>
-          {questions.length === 0 && hasCheckedGap && !checking && (
-            <div className="empty-s">Nothing looks missing right now.</div>
-          )}
-          {questions.map((q, i) => (
-            <SocraticGapCard
-              key={`${q.question}-${i}`}
-              question={q}
-              costCodes={costCodes}
-              isAdded={(s) => addedSuggestions.includes(s)}
-              onAdd={(s) => setAddingSuggestion(s)}
-            />
-          ))}
-        </>
-      )}
-
-      {mode === 'transcript' && (
-        <>
-          {suggestions.length === 0 && hasCheckedTranscript && !checking && (
-            <div className="empty-s">Nothing to extract from that transcript.</div>
-          )}
-          {suggestions.map((s, i) => (
-            <SuggestionCard
-              key={`${s.title}-${i}`}
-              suggestion={s}
-              costCodes={costCodes}
-              onAdd={() => setAddingSuggestion(s)}
-              onDismiss={() => dismiss(s)}
-            />
-          ))}
-        </>
-      )}
-
-      {addingSuggestion && (
-        <LineItemModal
-          estimateId={estimateId}
-          defaultTitle={addingSuggestion.title}
-          defaultCostCodeId={addingSuggestion.cost_code_id || undefined}
-          defaultGroupName={addingSuggestion.suggested_group_name || undefined}
-          defaultNotesExternal={addingSuggestion.rationale}
-          existingGroups={existingGroups}
-          onClose={() => setAddingSuggestion(undefined)}
-          onSaved={handleAdded}
+      <form
+        className="ai-input-row"
+        onSubmit={(e) => {
+          e.preventDefault();
+          send(input);
+        }}
+      >
+        <input
+          className="ai-input"
+          value={input}
+          onChange={(e) => setInput(e.target.value)}
+          placeholder="Ask, or tell me what to add…"
         />
-      )}
+        <button type="submit" className="btn btn-p btn-sm" disabled={sending || !input.trim()}>
+          <IconSend size={14} />
+        </button>
+      </form>
     </div>
   );
 }

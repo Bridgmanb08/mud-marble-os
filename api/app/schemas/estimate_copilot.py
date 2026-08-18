@@ -1,17 +1,17 @@
 from pydantic import BaseModel
 
-from ..ai_provider import EstimateSuggestion, GapQuestion
+from .ai import ChatMessage, ToolCallLog
 
 
-class TranscriptExtractRequest(BaseModel):
-    transcript: str
+class EstimateCopilotChatRequest(BaseModel):
+    message: str
+    history: list[ChatMessage] = []
 
 
-class GapCheckResponse(BaseModel):
-    questions: list[GapQuestion]
-    dropped: list[str] = []
-
-
-class TranscriptExtractResponse(BaseModel):
-    suggestions: list[EstimateSuggestion]
-    dropped: list[str] = []
+class EstimateCopilotChatResponse(BaseModel):
+    reply: str
+    tool_calls: list[ToolCallLog] = []
+    # True if any tool call in this turn actually mutated the estimate --
+    # lets the frontend know whether to refetch the worksheet's line items
+    # instead of doing it after every single message.
+    items_changed: bool = False
