@@ -315,51 +315,6 @@ export interface ImportCommitResponse {
   dropped: string[];
 }
 
-export interface EstimateSuggestion {
-  kind: 'gap' | 'transcript_item';
-  title: string;
-  cost_code_id: string | null;
-  suggested_group_name: string | null;
-  rationale: string;
-  quantity: number | null;
-  unit: string | null;
-  source_quote: string | null;
-}
-
-export interface GapResolution {
-  advice: string;
-  suggestion: EstimateSuggestion | null;
-}
-
-export interface GapFollowUp {
-  question: string;
-  yes: GapResolution;
-  no: GapResolution;
-}
-
-export interface GapBranch {
-  advice: string;
-  suggestion: EstimateSuggestion | null;
-  follow_up: GapFollowUp | null;
-}
-
-export interface GapQuestion {
-  id: string;
-  question: string;
-  context: string | null;
-  yes: GapBranch;
-  no: GapBranch;
-}
-
-export interface GapCheckResponse {
-  questions: GapQuestion[];
-  dropped: string[];
-}
-
-export interface TranscriptExtractResponse {
-  suggestions: EstimateSuggestion[];
-  dropped: string[];
-}
 
 export interface LineItemReference {
   id: string;
@@ -1122,6 +1077,12 @@ export interface ToolCallLog {
 export interface AskResponse {
   reply: string;
   tool_calls: ToolCallLog[];
+}
+
+export interface EstimateCopilotChatResponse {
+  reply: string;
+  tool_calls: ToolCallLog[];
+  items_changed: boolean;
 }
 
 export interface JobImportStatus {

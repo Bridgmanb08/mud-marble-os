@@ -555,7 +555,7 @@ export default function EstimateWorksheet() {
       )}
       </div>
 
-      {id && <EstimateCopilotPanel estimateId={id} existingGroups={existingGroups} onItemAdded={load} />}
+      {id && <EstimateCopilotPanel estimateId={id} onItemAdded={load} />}
       </div>
     </>
   );
