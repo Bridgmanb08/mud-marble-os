@@ -52,6 +52,8 @@ export function FathomImportModal({ onClose, onImported }: { onClose: () => void
         tasks,
         meeting_date: result.meeting_date,
         attendees: result.attendees,
+        meeting_title: result.meeting_title,
+        summary: result.summary,
       });
       toast(`${res.imported} task${res.imported !== 1 ? 's' : ''} imported to the Task Board`);
       onImported();

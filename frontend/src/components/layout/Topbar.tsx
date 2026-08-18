@@ -5,6 +5,7 @@ import { useAuth } from '../../auth/AuthContext';
 import { NotificationBell } from './NotificationBell';
 import { JobSwitcher } from './JobSwitcher';
 import { PulseCheckinModal } from '../dashboard/PulseCheckinModal';
+import { FathomImportHistoryPanel } from '../fathom/FathomImportHistoryPanel';
 
 interface TopbarProps {
   onOpenSidebar: () => void;
@@ -58,6 +59,7 @@ export function Topbar({ onOpenSidebar }: TopbarProps) {
         <Link to="/settings" className="btn btn-sm btn-ghost" title="Settings">
           <IconSettings size={16} />
         </Link>
+        <FathomImportHistoryPanel />
         <NotificationBell />
         <button className="btn btn-sm btn-ghost" onClick={() => setMenuOpen((v) => !v)}>
           {user?.name || user?.email}
