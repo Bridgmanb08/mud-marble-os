@@ -94,6 +94,43 @@ async def _gather_related(id_filter: str):
     return subtasks, comments, deps
 
 
+async def _notify_new_assignees(
+    old_names: list[str],
+    new_names: list[str],
+    task: TaskOut,
+    actor: CurrentUser,
+) -> None:
+    """Fires a notification.task_assigned row for anyone newly present in
+    new_names that wasn't already in old_names -- i.e. only the actual
+    assignment event, not every edit to a task someone's already on.
+    Mirrors mentions.py's create_mention_notifications exactly: same
+    name -> app_users.id resolution, same notifications-table insert shape.
+    TeamReminders.tsx polls these and surfaces them as an on-screen toast,
+    on top of the existing NotificationBell entry this also produces for
+    free."""
+    added = [n for n in new_names if n and n not in old_names]
+    if not added:
+        return
+    users = await db_get("app_users", "?select=id,name")
+    project_name = task.projects.name if task.projects else None
+    message = f'{actor.name} assigned you "{task.title}"' + (f" on {project_name}" if project_name else "")
+    for name in added:
+        match = next((u for u in users if u.get("name") == name), None)
+        if not match or match["id"] == actor.id:
+            continue
+        await db_post(
+            "notifications",
+            {
+                "user_id": match["id"],
+                "type": "task_assigned",
+                "source_type": "task",
+                "source_id": task.id,
+                "project_id": task.project_id,
+                "message": message,
+            },
+        )
+
+
 @router.get("", response_model=list[TaskOut])
 async def list_tasks(
     project_id: Optional[str] = None,
@@ -113,7 +150,7 @@ async def list_tasks(
 
 
 @router.post("", response_model=TaskOut)
-async def create_task(body: TaskCreate, _: CurrentUser = Depends(get_current_user)):
+async def create_task(body: TaskCreate, current_user: CurrentUser = Depends(get_current_user)):
     data = body.model_dump(exclude_none=True)
     if data.get("assignees"):
         data["assignees"] = [normalize_assignee_name(a) for a in data["assignees"]]
@@ -131,7 +168,10 @@ async def create_task(body: TaskCreate, _: CurrentUser = Depends(get_current_use
     rows = await db_post("schedule_items", data)
     full = await db_get("schedule_items", f"?id=eq.{rows[0]['id']}&select=*,projects(name),subcontractors(company_name,trade)")
     enriched = await _enrich(full)
-    return enriched[0]
+    task = enriched[0]
+    new_names = data.get("assignees") or ([data["assigned_to"]] if data.get("assigned_to") else [])
+    await _notify_new_assignees([], new_names, task, current_user)
+    return task
 
 
 @router.patch("/reorder")
@@ -433,8 +473,8 @@ async def toggle_comment_reaction(
 
 
 @router.patch("/{task_id}", response_model=TaskOut)
-async def update_task(task_id: str, body: TaskUpdate, _: CurrentUser = Depends(get_current_user)):
-    current = await db_get("schedule_items", f"?id=eq.{task_id}&select=version,status")
+async def update_task(task_id: str, body: TaskUpdate, current_user: CurrentUser = Depends(get_current_user)):
+    current = await db_get("schedule_items", f"?id=eq.{task_id}&select=version,status,assigned_to,assignees")
     if not current:
         raise HTTPException(status_code=404, detail="Task not found")
     if body.expected_version is not None and body.expected_version != current[0]["version"]:
@@ -480,7 +520,12 @@ async def update_task(task_id: str, body: TaskUpdate, _: CurrentUser = Depends(g
     await db_patch("schedule_items", task_id, updates)
     full = await db_get("schedule_items", f"?id=eq.{task_id}&select=*,projects(name),subcontractors(company_name,trade)")
     enriched = await _enrich(full)
-    return enriched[0]
+    task = enriched[0]
+    if "assignees" in updates or "assigned_to" in updates:
+        old_names = current[0].get("assignees") or ([current[0]["assigned_to"]] if current[0].get("assigned_to") else [])
+        new_names = updates.get("assignees") or ([updates["assigned_to"]] if updates.get("assigned_to") else [])
+        await _notify_new_assignees(old_names, new_names, task, current_user)
+    return task
 
 
 @router.patch("/{task_id}/clarify", response_model=TaskOut)

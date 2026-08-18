@@ -1,3 +1,4 @@
+import hashlib
 import json
 from datetime import datetime, timezone
 from typing import Optional
@@ -12,6 +13,7 @@ from ..schemas.ai import (
     AskRequest,
     AskResponse,
     ExtractedTask,
+    FathomDuplicateInfo,
     FathomImportOut,
     ImportTasksRequest,
     ImportTasksResponse,
@@ -104,6 +106,50 @@ async def _active_project_names() -> list[str]:
     return [r["name"].split("|")[0].strip() for r in rows]
 
 
+def _transcript_hash(transcript: str) -> str:
+    # Whitespace-collapsed + lowercased before hashing -- two people pasting
+    # "the same" Fathom transcript can differ by trailing whitespace or a
+    # stray blank line from how each of them copied it, and that shouldn't
+    # defeat the duplicate check.
+    normalized = " ".join(transcript.split()).lower()
+    return hashlib.sha256(normalized.encode("utf-8")).hexdigest()
+
+
+async def _find_duplicate_import(transcript_hash: str) -> Optional[FathomDuplicateInfo]:
+    rows = await db_get(
+        "fathom_imports",
+        f"?transcript_hash=eq.{transcript_hash}&order=imported_at.desc&limit=1&select=id,imported_by,imported_at,meeting_title",
+    )
+    return FathomDuplicateInfo(**rows[0]) if rows else None
+
+
+async def _notify_duplicate_import(original: FathomDuplicateInfo, importer_name: str, meeting_title: Optional[str]) -> None:
+    """Same name -> app_users.id resolution as create_mention_notifications
+    in mentions.py and _notify_new_assignees in tasks.py -- fathom_imports
+    stores imported_by as a plain name, not a user_id, so it has to be
+    resolved the same way. Fetches the full roster and matches in Python
+    rather than a name=eq.<name> query filter, since a name containing a
+    space would need URL-encoding that db_get's raw query string doesn't do.
+    """
+    if original.imported_by == importer_name:
+        return
+    users = await db_get("app_users", "?select=id,name")
+    match = next((u for u in users if u.get("name") == original.imported_by), None)
+    if not match:
+        return
+    title = meeting_title or original.meeting_title or "a meeting"
+    await db_post(
+        "notifications",
+        {
+            "user_id": match["id"],
+            "type": "fathom_duplicate_import",
+            "source_type": "fathom_import",
+            "source_id": original.id,
+            "message": f'{importer_name} just imported "{title}" too -- looks like the same meeting you already imported. Worth checking for duplicate tasks.',
+        },
+    )
+
+
 @router.post("/parse-transcript", response_model=ParseTranscriptResponse)
 async def parse_transcript(body: ParseTranscriptRequest, _: CurrentUser = Depends(get_current_user)):
     if not settings.anthropic_api_key:
@@ -155,6 +201,9 @@ async def parse_transcript(body: ParseTranscriptRequest, _: CurrentUser = Depend
             status_code=502, detail=f"Claude's response couldn't be parsed as JSON -- try again. ({e})"
         ) from e
 
+    transcript_hash = _transcript_hash(body.transcript)
+    duplicate_of = await _find_duplicate_import(transcript_hash)
+
     return ParseTranscriptResponse(
         tasks=[ExtractedTask(**t) for t in parsed.get("tasks", [])],
         project_updates=parsed.get("project_updates", []),
@@ -162,6 +211,8 @@ async def parse_transcript(body: ParseTranscriptRequest, _: CurrentUser = Depend
         attendees=parsed.get("attendees") or [],
         meeting_title=parsed.get("meeting_title") or None,
         summary=parsed.get("summary") or None,
+        transcript_hash=transcript_hash,
+        duplicate_of=duplicate_of,
     )
 
 
@@ -181,6 +232,16 @@ async def import_tasks(body: ImportTasksRequest, current_user: CurrentUser = Dep
         "projects", "?is_archived=eq.false&status=in.(active,estimating,proposed,pre_construction)&select=id,name"
     )
     notes = _import_note(body.meeting_date, body.attendees)
+
+    # Re-check for a duplicate right before committing, not just trusting
+    # whatever /parse-transcript saw a moment earlier -- two people can
+    # paste the same meeting's notes within seconds of each other, and the
+    # first one to actually hit "import" is the one this needs to catch
+    # against. Never blocks the import either way (the frontend already
+    # surfaced this as a dismissible warning at parse time); this is purely
+    # about deciding whether the *original* importer gets told a duplicate
+    # just landed.
+    duplicate = await _find_duplicate_import(body.transcript_hash) if body.transcript_hash else None
 
     # Imported tasks should land at the top of "To Do" (same reasoning as a
     # manually-created task -- see create_task in routers/tasks.py), with the
@@ -237,10 +298,21 @@ async def import_tasks(body: ImportTasksRequest, current_user: CurrentUser = Dep
                 "attendees": body.attendees,
                 "task_count": imported,
                 "project_id": body.default_project_id,
+                "transcript_hash": body.transcript_hash,
             },
         )
     except Exception:
         pass
+
+    # Best-effort, same "never let this break the real import" convention as
+    # the history row above -- tell the person whose earlier import this
+    # duplicates, so they know to go check for/clean up duplicate tasks,
+    # rather than the duplicate silently sitting there unnoticed.
+    if duplicate and duplicate.imported_by and duplicate.imported_by != current_user.name:
+        try:
+            await _notify_duplicate_import(duplicate, current_user.name, body.meeting_title)
+        except Exception:
+            pass
 
     return ImportTasksResponse(imported=imported)
 
