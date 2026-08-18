@@ -12,6 +12,7 @@ from ..schemas.ai import (
     AskRequest,
     AskResponse,
     ExtractedTask,
+    FathomImportOut,
     ImportTasksRequest,
     ImportTasksResponse,
     ParseTranscriptRequest,
@@ -175,7 +176,7 @@ def _import_note(meeting_date: Optional[str], attendees: list[str]) -> str:
 
 
 @router.post("/import-tasks", response_model=ImportTasksResponse)
-async def import_tasks(body: ImportTasksRequest, _: CurrentUser = Depends(get_current_user)):
+async def import_tasks(body: ImportTasksRequest, current_user: CurrentUser = Depends(get_current_user)):
     projects = await db_get(
         "projects", "?is_archived=eq.false&status=in.(active,estimating,proposed,pre_construction)&select=id,name"
     )
@@ -222,7 +223,38 @@ async def import_tasks(body: ImportTasksRequest, _: CurrentUser = Depends(get_cu
         next_position += 1
         imported += 1
 
+    # Best-effort history row so the "Fathom imports" panel can show what was
+    # imported, when, and by whom -- never lets a logging failure break the
+    # actual import, same convention as _log_message in twilio_sms.py.
+    try:
+        await db_post(
+            "fathom_imports",
+            {
+                "imported_by": current_user.name,
+                "meeting_title": body.meeting_title,
+                "summary": body.summary,
+                "meeting_date": body.meeting_date,
+                "attendees": body.attendees,
+                "task_count": imported,
+                "project_id": body.default_project_id,
+            },
+        )
+    except Exception:
+        pass
+
     return ImportTasksResponse(imported=imported)
+
+
+@router.get("/fathom-imports", response_model=list[FathomImportOut])
+async def list_fathom_imports(_: CurrentUser = Depends(get_current_user)):
+    rows = await db_get(
+        "fathom_imports", "?order=imported_at.desc&limit=50&select=*,projects(name)"
+    )
+    out = []
+    for r in rows:
+        project = r.pop("projects", None) or {}
+        out.append(FathomImportOut(**r, project_name=project.get("name")))
+    return out
 
 
 @router.post("/chat", response_model=AskResponse)

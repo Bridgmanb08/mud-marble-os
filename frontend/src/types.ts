@@ -1096,6 +1096,19 @@ export interface ParseTranscriptResponse {
   summary: string | null;
 }
 
+export interface FathomImport {
+  id: string;
+  imported_at: string;
+  imported_by: string | null;
+  meeting_title: string | null;
+  summary: string | null;
+  meeting_date: string | null;
+  attendees: string[];
+  task_count: number;
+  project_id: string | null;
+  project_name: string | null;
+}
+
 export interface ChatMessage {
   role: 'user' | 'assistant';
   content: string;

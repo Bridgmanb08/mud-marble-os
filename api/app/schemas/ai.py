@@ -34,10 +34,25 @@ class ImportTasksRequest(BaseModel):
     meeting_date: Optional[str] = None
     attendees: list[str] = []
     default_project_id: Optional[str] = None
+    meeting_title: Optional[str] = None
+    summary: Optional[str] = None
 
 
 class ImportTasksResponse(BaseModel):
     imported: int
+
+
+class FathomImportOut(BaseModel):
+    id: str
+    imported_at: str
+    imported_by: Optional[str] = None
+    meeting_title: Optional[str] = None
+    summary: Optional[str] = None
+    meeting_date: Optional[str] = None
+    attendees: list[str] = []
+    task_count: int = 0
+    project_id: Optional[str] = None
+    project_name: Optional[str] = None
 
 
 class ChatMessage(BaseModel):

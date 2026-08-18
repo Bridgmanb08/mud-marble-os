@@ -72,6 +72,8 @@ export function FathomImportWidget({
           meeting_date: result.meeting_date,
           attendees: result.attendees,
           default_project_id: projectId,
+          meeting_title: result.meeting_title,
+          summary: result.summary,
         });
         importedCount = res.imported;
         onImported();
