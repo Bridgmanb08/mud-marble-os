@@ -3,6 +3,7 @@ import { IconWand } from '@tabler/icons-react';
 import { api, ApiError } from '../../api/client';
 import { Modal } from '../ui/Modal';
 import { useToast } from '../ui/Toast';
+import { FathomDuplicateWarning } from '../fathom/FathomDuplicateWarning';
 import type { ExtractedTask, ParseTranscriptResponse } from '../../types';
 
 // The Task Board's cross-project version of the Fathom import flow. Unlike
@@ -54,6 +55,7 @@ export function FathomImportModal({ onClose, onImported }: { onClose: () => void
         attendees: result.attendees,
         meeting_title: result.meeting_title,
         summary: result.summary,
+        transcript_hash: result.transcript_hash,
       });
       toast(`${res.imported} task${res.imported !== 1 ? 's' : ''} imported to the Task Board`);
       onImported();
@@ -89,6 +91,8 @@ export function FathomImportModal({ onClose, onImported }: { onClose: () => void
       >
         <IconWand size={14} /> {extracting ? 'Reading transcript…' : 'Extract tasks from transcript'}
       </button>
+
+      {result?.duplicate_of && <FathomDuplicateWarning duplicate={result.duplicate_of} />}
 
       {result && (
         <div style={{ background: 'var(--gbg)', borderRadius: 8, padding: 12, marginTop: 12 }}>

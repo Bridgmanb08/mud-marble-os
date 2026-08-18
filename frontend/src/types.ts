@@ -1042,6 +1042,13 @@ export interface ExtractedProjectUpdate {
   update: string;
 }
 
+export interface FathomDuplicateInfo {
+  id: string;
+  imported_by: string | null;
+  imported_at: string;
+  meeting_title: string | null;
+}
+
 export interface ParseTranscriptResponse {
   tasks: ExtractedTask[];
   project_updates: ExtractedProjectUpdate[];
@@ -1049,6 +1056,8 @@ export interface ParseTranscriptResponse {
   attendees: string[];
   meeting_title: string | null;
   summary: string | null;
+  transcript_hash: string;
+  duplicate_of: FathomDuplicateInfo | null;
 }
 
 export interface FathomImport {

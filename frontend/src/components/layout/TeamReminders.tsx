@@ -12,6 +12,7 @@ import {
   IconClockHour3,
   IconSparkles,
   IconHome2,
+  IconUserPlus,
 } from '@tabler/icons-react';
 import { api } from '../../api/client';
 import { useAuth } from '../../auth/AuthContext';
@@ -19,7 +20,7 @@ import { DashboardTaskDrawer } from '../dashboard/DashboardTaskDrawer';
 import { PulseCheckinModal } from '../dashboard/PulseCheckinModal';
 import { RYAN_HOLIDAY_QUOTES } from '../../data/ryanHolidayQuotes';
 import { addReminderHistoryEntry } from '../../lib/reminderHistory';
-import type { Task, PulseCheckinOut, DashboardSummary, RentalProperty } from '../../types';
+import type { Task, PulseCheckinOut, DashboardSummary, RentalProperty, AppNotification } from '../../types';
 
 /**
  * Proactive, personality-driven reminders for the current user's own tasks
@@ -40,7 +41,8 @@ export type Category =
   | 'job_context'
   | 'closeout_briefing'
   | 'greeting'
-  | 'visit_overdue';
+  | 'visit_overdue'
+  | 'task_assigned';
 
 interface ReminderToast {
   id: string;
@@ -121,6 +123,7 @@ export const CATEGORY_META: Record<Category, { Icon: typeof IconFlame; color: st
   closeout_briefing: { Icon: IconClockHour3, color: 'var(--accent)' },
   greeting: { Icon: IconSparkles, color: 'var(--accent)' },
   visit_overdue: { Icon: IconHome2, color: 'var(--amber)' },
+  task_assigned: { Icon: IconUserPlus, color: 'var(--blue)' },
 };
 
 function pick<T>(arr: T[]): T {
@@ -204,10 +207,21 @@ interface Candidate {
   task: Task;
 }
 
+// Trimmed + case-insensitive so a stray space or casing difference between
+// how a name was typed on a task (manual entry, an older import) and the
+// account's own name doesn't silently zero out every reminder for that
+// person -- exact-match was the original implementation and is the more
+// likely culprit if reminders never fire at all for someone.
+function sameName(a: string | null | undefined, b: string): boolean {
+  return !!a && a.trim().toLowerCase() === b.trim().toLowerCase();
+}
+
 function findCandidates(tasks: Task[], userName: string, shown: Set<string>): Candidate[] {
   const today = todayStr();
   const mine = tasks.filter(
-    (t) => t.status !== 'complete' && (t.assigned_to === userName || t.assignees?.includes(userName))
+    (t) =>
+      t.status !== 'complete' &&
+      (sameName(t.assigned_to, userName) || t.assignees?.some((a) => sameName(a, userName)))
   );
 
   const out: Candidate[] = [];
@@ -297,6 +311,29 @@ export function TeamReminders() {
     await pollJobContext(tasks);
     await pollCloseoutBriefing();
     await pollVisitOverdue();
+    await pollTaskAssigned();
+  }
+
+  // Surfaces the notifications.task_assigned rows tasks.py now creates the
+  // moment someone is newly added to a task's assignees -- same data the
+  // NotificationBell already lists, this just also pops it as an on-screen
+  // toast so an assignment feels like it actually just happened instead of
+  // sitting quietly until someone thinks to check the bell.
+  async function pollTaskAssigned() {
+    if (!user) return;
+    const today = todayStr();
+    const notifs = await api.get<AppNotification[]>('/notifications').catch(() => []);
+    const assigned = notifs.filter((n) => n.type === 'task_assigned');
+    for (const n of assigned) {
+      const key = `${today}:task_assigned:${n.id}`;
+      if (shownRef.current.has(key)) continue;
+      // Marked synchronously up front for the same StrictMode-double-invoke
+      // reason as every other poll function in this file -- see pollPulse
+      // below.
+      shownRef.current.add(key);
+      saveShown(shownRef.current);
+      queueToast('task_assigned', n.message, key, n.source_id || undefined, n.project_id || undefined);
+    }
   }
 
   async function pollPulse() {
@@ -394,7 +431,9 @@ export function TeamReminders() {
     if (!user || !smartLearningEnabledRef.current) return;
     const today = todayStr();
     const mine = tasks.filter(
-      (t) => t.status !== 'complete' && (t.assigned_to === user.name || t.assignees?.includes(user.name))
+      (t) =>
+        t.status !== 'complete' &&
+        (sameName(t.assigned_to, user.name) || t.assignees?.some((a) => sameName(a, user.name)))
     );
     const projectIds = new Set(
       mine

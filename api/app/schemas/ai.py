@@ -20,6 +20,13 @@ class ExtractedProjectUpdate(BaseModel):
     update: str
 
 
+class FathomDuplicateInfo(BaseModel):
+    id: str
+    imported_by: Optional[str] = None
+    imported_at: str
+    meeting_title: Optional[str] = None
+
+
 class ParseTranscriptResponse(BaseModel):
     tasks: list[ExtractedTask]
     project_updates: list[ExtractedProjectUpdate]
@@ -27,6 +34,12 @@ class ParseTranscriptResponse(BaseModel):
     attendees: list[str] = []
     meeting_title: Optional[str] = None
     summary: Optional[str] = None
+    # SHA-256 of the normalized transcript text -- forwarded back on
+    # /import-tasks so the same content can be recognized and flagged if
+    # someone else already imported it (e.g. Brent and Shannon both
+    # uploading notes from the same meeting).
+    transcript_hash: str
+    duplicate_of: Optional[FathomDuplicateInfo] = None
 
 
 class ImportTasksRequest(BaseModel):
@@ -36,6 +49,7 @@ class ImportTasksRequest(BaseModel):
     default_project_id: Optional[str] = None
     meeting_title: Optional[str] = None
     summary: Optional[str] = None
+    transcript_hash: Optional[str] = None
 
 
 class ImportTasksResponse(BaseModel):

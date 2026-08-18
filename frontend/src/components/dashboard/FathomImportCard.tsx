@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { IconFileImport, IconWand } from '@tabler/icons-react';
 import { api, ApiError } from '../../api/client';
 import { useToast } from '../ui/Toast';
+import { FathomDuplicateWarning } from '../fathom/FathomDuplicateWarning';
 import type { ExtractedTask, ParseTranscriptResponse } from '../../types';
 
 export function FathomImportCard() {
@@ -47,6 +48,7 @@ export function FathomImportCard() {
         attendees: result.attendees,
         meeting_title: result.meeting_title,
         summary: result.summary,
+        transcript_hash: result.transcript_hash,
       });
       toast(`${res.imported} task${res.imported !== 1 ? 's' : ''} imported to the Task Board`);
       setTranscript('');
@@ -86,6 +88,8 @@ export function FathomImportCard() {
       >
         <IconWand size={14} /> {extracting ? 'Reading transcript…' : 'Extract tasks from transcript'}
       </button>
+
+      {result?.duplicate_of && <FathomDuplicateWarning duplicate={result.duplicate_of} />}
 
       {result && (
         <div style={{ background: 'var(--gbg)', borderRadius: 8, padding: 12, marginTop: 10 }}>
