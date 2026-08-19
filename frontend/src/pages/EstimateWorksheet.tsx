@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { PointerSensor, useSensor, useSensors, type DragEndEvent } from '@dnd-kit/core';
 import { arrayMove } from '@dnd-kit/sortable';
@@ -10,6 +10,8 @@ import {
   IconCopy,
   IconSearch,
   IconTemplate,
+  IconSparkles,
+  IconX,
 } from '@tabler/icons-react';
 import { api, ApiError } from '../api/client';
 import { useToast } from '../components/ui/Toast';
@@ -21,7 +23,7 @@ import { LineItemGroupCard } from '../components/estimates/LineItemGroupCard';
 import { SaveAsTemplateModal } from '../components/estimates/SaveAsTemplateModal';
 import { InsertFromTemplateModal } from '../components/estimates/InsertFromTemplateModal';
 import { RichTextEditor } from '../components/ui/RichTextEditor';
-import type { Estimate, EstimateLineItem } from '../types';
+import type { Estimate, EstimateLineItem, NextItemSuggestion } from '../types';
 
 const STATUS_OPTIONS = [
   { value: 'draft', label: 'Draft' },
@@ -56,7 +58,19 @@ export default function EstimateWorksheet() {
   const [savingMeta, setSavingMeta] = useState(false);
   const [showItemModal, setShowItemModal] = useState(false);
   const [editingItem, setEditingItem] = useState<EstimateLineItem | undefined>(undefined);
-  const [newItemDefaults, setNewItemDefaults] = useState<{ bucket: string; groupName?: string } | undefined>(undefined);
+  const [newItemDefaults, setNewItemDefaults] = useState<
+    | {
+        bucket: string;
+        groupName?: string;
+        title?: string;
+        costCodeId?: string;
+        unitCost?: number;
+        unitCostHint?: string;
+      }
+    | undefined
+  >(undefined);
+  const [nextSuggestion, setNextSuggestion] = useState<NextItemSuggestion | null>(null);
+  const suggestReqRef = useRef(0);
   const [duplicating, setDuplicating] = useState(false);
   const [collapsedGroups, setCollapsedGroups] = useState<Record<string, boolean>>({});
   const [searchQuery, setSearchQuery] = useState('');
@@ -93,6 +107,32 @@ export default function EstimateWorksheet() {
     load();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [id]);
+
+  // Sorted id list, not the items array itself, so a pure reorder/rename
+  // (ids unchanged) doesn't refire the suggestion -- only an actual add or
+  // remove does. Each fire is one Claude call plus a pricing lookup, so this
+  // keeps it to "once per real change" rather than "once per load() call".
+  const itemsSignature = items
+    .map((i) => i.id)
+    .sort()
+    .join(',');
+
+  useEffect(() => {
+    if (!id) return;
+    setNextSuggestion(null);
+    if (!itemsSignature) return;
+    const reqId = ++suggestReqRef.current;
+    api
+      .post<NextItemSuggestion>(`/estimates/${id}/copilot/suggest-next`)
+      .then((res) => {
+        if (suggestReqRef.current !== reqId) return; // a newer request already superseded this one
+        setNextSuggestion(res.title ? res : null);
+      })
+      .catch(() => {
+        if (suggestReqRef.current === reqId) setNextSuggestion(null);
+      });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [id, itemsSignature]);
 
   if (!estimate) {
     return (
@@ -193,6 +233,22 @@ export default function EstimateWorksheet() {
   function openEditItem(item: EstimateLineItem) {
     setEditingItem(item);
     setNewItemDefaults(undefined);
+    setShowItemModal(true);
+  }
+  function acceptSuggestion() {
+    if (!nextSuggestion?.title) return;
+    setEditingItem(undefined);
+    setNewItemDefaults({
+      bucket: 'construction',
+      groupName: nextSuggestion.group_name || undefined,
+      title: nextSuggestion.title,
+      costCodeId: nextSuggestion.cost_code_id || undefined,
+      unitCost: nextSuggestion.suggested_unit_cost ?? undefined,
+      unitCostHint:
+        nextSuggestion.suggested_unit_cost != null && nextSuggestion.cost_sample_size > 0
+          ? `Suggested from ${nextSuggestion.cost_sample_size} similar line item${nextSuggestion.cost_sample_size !== 1 ? 's' : ''} on other jobs — adjust as needed.`
+          : undefined,
+    });
     setShowItemModal(true);
   }
 
@@ -491,12 +547,63 @@ export default function EstimateWorksheet() {
         ))
       )}
 
+      {nextSuggestion?.title && !query && (
+        <div
+          className="card"
+          style={{
+            padding: 12,
+            marginTop: 4,
+            marginBottom: 12,
+            border: '1px dashed var(--border-md)',
+            background: 'var(--bg)',
+            display: 'flex',
+            alignItems: 'center',
+            gap: 10,
+          }}
+        >
+          <IconSparkles size={14} style={{ color: 'var(--t3)', flexShrink: 0 }} />
+          <div style={{ flex: 1, minWidth: 0 }}>
+            <div style={{ fontSize: 13, color: 'var(--t2)', fontStyle: 'italic' }}>
+              {nextSuggestion.title}
+              {nextSuggestion.group_name && <span style={{ color: 'var(--t3)' }}> — {nextSuggestion.group_name}</span>}
+            </div>
+            {nextSuggestion.rationale && (
+              <div style={{ fontSize: 11, color: 'var(--t3)', marginTop: 2 }}>
+                {nextSuggestion.rationale}
+                {nextSuggestion.suggested_unit_cost != null && nextSuggestion.cost_sample_size > 0 && (
+                  <>
+                    {' '}
+                    — averaging {fmt(nextSuggestion.suggested_unit_cost)} across {nextSuggestion.cost_sample_size} past
+                    job{nextSuggestion.cost_sample_size !== 1 ? 's' : ''}
+                  </>
+                )}
+              </div>
+            )}
+          </div>
+          <button type="button" className="btn btn-sm" onClick={acceptSuggestion}>
+            Accept
+          </button>
+          <button
+            type="button"
+            className="btn btn-ghost btn-sm"
+            onClick={() => setNextSuggestion(null)}
+            title="Dismiss"
+          >
+            <IconX size={13} />
+          </button>
+        </div>
+      )}
+
       {showItemModal && id && (
         <LineItemModal
           estimateId={id}
           item={editingItem}
           defaultBucket={newItemDefaults?.bucket}
           defaultGroupName={newItemDefaults?.groupName}
+          defaultTitle={newItemDefaults?.title}
+          defaultCostCodeId={newItemDefaults?.costCodeId}
+          defaultUnitCost={newItemDefaults?.unitCost}
+          defaultUnitCostHint={newItemDefaults?.unitCostHint}
           existingGroups={existingGroups}
           onClose={() => setShowItemModal(false)}
           onSaved={() => {

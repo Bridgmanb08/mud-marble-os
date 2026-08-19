@@ -15,7 +15,7 @@ from ..estimate_copilot_tools import (
     run_estimate_tool,
 )
 from ..schemas.ai import ToolCallLog
-from ..schemas.estimate_copilot import EstimateCopilotChatRequest, EstimateCopilotChatResponse
+from ..schemas.estimate_copilot import EstimateCopilotChatRequest, EstimateCopilotChatResponse, NextItemSuggestion
 
 router = APIRouter(prefix="/estimates", tags=["estimate-copilot"])
 
@@ -134,3 +134,101 @@ async def copilot_chat(
         tool_calls=tool_log,
         items_changed=items_changed,
     )
+
+
+SUGGEST_NEXT_PROMPT = """You're helping build a real construction estimate for Mud & Marble, a luxury \
+residential builder, thinking like an experienced GC about what naturally comes next in the build sequence.
+
+{dependency_examples}
+
+Current line items on this estimate, in the order they were added:
+{line_items}
+
+Active cost codes (id: code - name):
+{cost_codes}
+
+Based on typical construction sequencing and what's already listed, propose exactly ONE line item that most \
+likely comes next -- the single most obvious next thing, given what's already there. Don't suggest something \
+already present (check titles/groups carefully), and don't force a suggestion that's too speculative -- if \
+nothing obvious comes next, say so honestly rather than reaching.
+
+Return ONLY a JSON object, no markdown, no explanation:
+{{"title": "...", "group_name": "an existing group this belongs with, or a sensible new one", "cost_code_id": \
+"exact id from the list above if confident, else null", "rationale": "one short sentence why this is next"}}
+or, if nothing obvious comes next:
+{{"title": null}}"""
+
+
+@router.post("/{estimate_id}/copilot/suggest-next", response_model=NextItemSuggestion)
+async def suggest_next_item(estimate_id: str, current_user: CurrentUser = Depends(get_current_user)):
+    """Ambient "what comes next" hint shown as a gray ghost row while someone
+    builds an estimate -- fires automatically after every line item add, not
+    a user-initiated action, so it follows the same silent-fail contract as
+    the Phase 13 smart nudges (no key / parse failure / nothing obvious ->
+    an empty NextItemSuggestion, never an HTTPException the frontend has to
+    surface as an error toast)."""
+    if not settings.anthropic_api_key:
+        return NextItemSuggestion()
+
+    ctx = await current_estimate_context(estimate_id)
+    if not ctx["items"]:
+        # Nothing built yet to sequence off of -- don't guess a starting
+        # point out of thin air.
+        return NextItemSuggestion()
+
+    client = AsyncAnthropic(api_key=settings.anthropic_api_key)
+    try:
+        message = await client.messages.create(
+            model=MODEL,
+            max_tokens=400,
+            messages=[
+                {
+                    "role": "user",
+                    "content": SUGGEST_NEXT_PROMPT.format(
+                        dependency_examples=DEPENDENCY_EXAMPLES,
+                        line_items=format_line_items(ctx["items"]),
+                        cost_codes=format_cost_codes(ctx["cost_codes"]),
+                    ),
+                }
+            ],
+        )
+        raw = "".join(b.text for b in message.content if b.type == "text")
+        raw = raw.replace("```json", "").replace("```", "").strip()
+        parsed = json.loads(raw)
+    except Exception:
+        return NextItemSuggestion()
+
+    title = parsed.get("title")
+    if not title:
+        return NextItemSuggestion()
+
+    cost_code_id = parsed.get("cost_code_id") or None
+    suggestion = NextItemSuggestion(
+        title=title,
+        group_name=parsed.get("group_name") or None,
+        cost_code_id=cost_code_id,
+        rationale=parsed.get("rationale") or None,
+    )
+
+    # Ground the unit cost in what this has actually cost on real jobs,
+    # instead of leaving the user to guess blind -- same "search before
+    # proposing a number" rule the chat copilot's own system prompt already
+    # follows. Best-effort: a lookup failure just means no price hint, not a
+    # broken suggestion.
+    try:
+        from .estimates import search_line_items
+
+        results = await search_line_items(
+            cost_code_id=cost_code_id,
+            q=None if cost_code_id else title,
+            exclude_estimate_id=estimate_id,
+            _=current_user,
+        )
+        costs = [r.unit_cost for r in results if r.unit_cost]
+        if costs:
+            suggestion.suggested_unit_cost = round(sum(costs) / len(costs), 2)
+            suggestion.cost_sample_size = len(costs)
+    except Exception:
+        pass
+
+    return suggestion

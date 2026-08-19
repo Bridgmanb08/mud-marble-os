@@ -1094,6 +1094,15 @@ export interface EstimateCopilotChatResponse {
   items_changed: boolean;
 }
 
+export interface NextItemSuggestion {
+  title: string | null;
+  group_name: string | null;
+  cost_code_id: string | null;
+  rationale: string | null;
+  suggested_unit_cost: number | null;
+  cost_sample_size: number;
+}
+
 export interface JobImportStatus {
   project_id: string;
   project_name: string;

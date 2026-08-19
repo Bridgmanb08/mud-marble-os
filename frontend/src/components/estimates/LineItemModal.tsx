@@ -15,6 +15,8 @@ interface LineItemModalProps {
   defaultTitle?: string;
   defaultCostCodeId?: string;
   defaultNotesExternal?: string;
+  defaultUnitCost?: number;
+  defaultUnitCostHint?: string;
   existingGroups?: string[];
   onClose: () => void;
   onSaved: () => void;
@@ -47,6 +49,8 @@ export function LineItemModal({
   defaultTitle,
   defaultCostCodeId,
   defaultNotesExternal,
+  defaultUnitCost,
+  defaultUnitCostHint,
   existingGroups,
   onClose,
   onSaved,
@@ -61,7 +65,7 @@ export function LineItemModal({
   const [groupName, setGroupName] = useState(item?.group_name || defaultGroupName || '');
   const [title, setTitle] = useState(item?.title || defaultTitle || '');
   const [quantity, setQuantity] = useState(String(item?.quantity ?? 1));
-  const [unitCost, setUnitCost] = useState(String(item?.unit_cost ?? 0));
+  const [unitCost, setUnitCost] = useState(String(item?.unit_cost ?? defaultUnitCost ?? 0));
   const [costType, setCostType] = useState(item?.cost_type || 'none');
   const [markupType, setMarkupType] = useState(item?.markup_type || 'percent');
   const [markupValue, setMarkupValue] = useState(String(item?.markup_value ?? 0));
@@ -356,6 +360,9 @@ export function LineItemModal({
           <div className="fg">
             <label className="fl">Unit cost ($)</label>
             <input className="fi" type="number" value={unitCost} onChange={(e) => setUnitCost(e.target.value)} />
+            {defaultUnitCostHint && (
+              <div style={{ fontSize: 11, color: 'var(--t3)', marginTop: 4 }}>{defaultUnitCostHint}</div>
+            )}
           </div>
           <div className="fg">
             <label className="fl">Markup type</label>
