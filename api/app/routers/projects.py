@@ -18,6 +18,25 @@ from ..supabase_client import db_get, db_patch, db_post
 router = APIRouter(prefix="/projects", tags=["projects"])
 
 
+async def _get_invoicing_estimate(project_id: str, select: str) -> Optional[dict]:
+    """The estimate invoicing (financial-summary, the "Add from Estimate"
+    picker) should be measured against -- the highest-version APPROVED
+    estimate if one exists, since that's what the client actually signed
+    off on. Falls back to the highest version overall only when nothing has
+    been approved yet (early in the sales process, before there's anything
+    better to reference). Previously this always took the highest version
+    number regardless of status, which meant an in-progress draft revision
+    could silently shadow an already-approved contract for invoicing
+    purposes -- a real bug, not a deliberate design choice."""
+    approved = await db_get(
+        "estimates", f"?project_id=eq.{project_id}&status=eq.approved&order=version.desc&limit=1&select={select}"
+    )
+    if approved:
+        return approved[0]
+    latest = await db_get("estimates", f"?project_id=eq.{project_id}&order=version.desc&limit=1&select={select}")
+    return latest[0] if latest else None
+
+
 @router.get("", response_model=list[ProjectOut])
 async def list_projects(
     include_archived: bool = False, _: CurrentUser = Depends(get_current_user)
@@ -63,16 +82,13 @@ async def get_financial_summary(project_id: str, _: CurrentUser = Depends(get_cu
         raise HTTPException(status_code=404, detail="Project not found")
     project = projects[0]
 
-    estimates = await db_get(
-        "estimates",
-        f"?project_id=eq.{project_id}&order=version.desc&limit=1&select=id,grand_total_owner_price",
-    )
-    owner_price = (estimates[0].get("grand_total_owner_price") or 0) if estimates else 0
+    estimate = await _get_invoicing_estimate(project_id, select="id,grand_total_owner_price")
+    owner_price = (estimate.get("grand_total_owner_price") or 0) if estimate else 0
 
     line_items = []
-    if estimates:
+    if estimate:
         line_items = await db_get(
-            "estimate_line_items", f"?estimate_id=eq.{estimates[0]['id']}&select=builder_cost"
+            "estimate_line_items", f"?estimate_id=eq.{estimate['id']}&select=builder_cost"
         )
     base_builder_cost = sum(i.get("builder_cost") or 0 for i in line_items)
 
@@ -94,7 +110,14 @@ async def get_financial_summary(project_id: str, _: CurrentUser = Depends(get_cu
     )
     paid_to_subs = sum(abs(t.get("amount") or 0) for t in sub_transactions)
 
-    existing_invoices = await db_get("invoices", f"?project_id=eq.{project_id}&select=amount_due")
+    # Only invoices actually sent count toward "invoiced" -- a draft that
+    # hasn't gone out yet, or one that's been voided, was previously summed
+    # in here too, which quietly deflated remaining_to_invoice (the exact
+    # number that pre-fills a new invoice's amount) and could cause real
+    # under-invoicing.
+    existing_invoices = await db_get(
+        "invoices", f"?project_id=eq.{project_id}&status=in.(sent,paid,overdue)&select=amount_due"
+    )
     invoiced_to_date = sum(i.get("amount_due") or 0 for i in existing_invoices)
 
     return FinancialSummaryOut(
@@ -117,15 +140,17 @@ async def get_financial_summary(project_id: str, _: CurrentUser = Depends(get_cu
 @router.get("/{project_id}/estimate-items-for-invoice", response_model=list[EstimateItemForInvoiceOut])
 async def get_estimate_items_for_invoice(project_id: str, _: CurrentUser = Depends(get_current_user)):
     """Backs the "Add from Estimate" invoice picker -- every line item on the
-    project's current (latest-version) estimate, each annotated with how
-    much of it has already been invoiced across every invoice for this
-    project, not just the one being built right now. That total is computed
-    live by summing invoice_line_items rather than trusting a stored
-    running total, so it can never drift out of sync with reality."""
-    estimates = await db_get("estimates", f"?project_id=eq.{project_id}&order=version.desc&limit=1&select=id")
-    if not estimates:
+    project's current estimate (the highest-version APPROVED one if any
+    exists, else the highest version overall -- see _get_invoicing_estimate),
+    each annotated with how much of it has already been invoiced across
+    every invoice for this project, not just the one being built right now.
+    That total is computed live by summing invoice_line_items rather than
+    trusting a stored running total, so it can never drift out of sync with
+    reality."""
+    estimate = await _get_invoicing_estimate(project_id, select="id")
+    if not estimate:
         return []
-    estimate_id = estimates[0]["id"]
+    estimate_id = estimate["id"]
 
     items = await db_get(
         "estimate_line_items",

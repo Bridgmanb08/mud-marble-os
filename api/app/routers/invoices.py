@@ -20,6 +20,64 @@ router = APIRouter(prefix="/invoices", tags=["invoices"])
 ITEM_SELECT = "*,cost_codes(code,name)"
 
 
+async def _validate_invoice_amounts(
+    items: list[tuple[Optional[str], float]], exclude_item_id: Optional[str] = None
+) -> None:
+    """Guards against invoicing more of an estimate line item than it's
+    actually worth, across every invoice on the project -- not just the one
+    being edited right now. The "Add from Estimate" picker already clamps
+    this in the UI, but that clamp used a snapshot fetched once on mount;
+    two invoices open in two tabs (or two sessions without a reload between
+    them) could each independently commit up to the full remaining amount,
+    double-invoicing the same scope. This is the actual, authoritative
+    check -- the client-side clamp is just a nicer first line of defense.
+    exclude_item_id lets an update recompute the already-invoiced sum
+    without double-counting the very row being changed."""
+    source_ids = {sid for sid, _ in items if sid}
+    if not source_ids:
+        return
+    id_filter = ",".join(source_ids)
+
+    est_items = await db_get("estimate_line_items", f"?id=in.({id_filter})&select=id,owner_price")
+    owner_price_by_id = {e["id"]: e.get("owner_price") or 0 for e in est_items}
+
+    existing = await db_get(
+        "invoice_line_items", f"?source_line_item_id=in.({id_filter})&select=id,source_line_item_id,amount"
+    )
+    already_invoiced: dict[str, float] = {}
+    for row in existing:
+        if exclude_item_id and row["id"] == exclude_item_id:
+            continue
+        sid = row.get("source_line_item_id")
+        if sid:
+            already_invoiced[sid] = already_invoiced.get(sid, 0) + (row.get("amount") or 0)
+
+    # Sum the newly-requested amounts per source id too, in case a single
+    # bulk call tries to invoice the same estimate line item more than once.
+    requested: dict[str, float] = {}
+    for sid, amount in items:
+        if sid:
+            requested[sid] = requested.get(sid, 0) + amount
+
+    for sid, new_amount in requested.items():
+        cap = owner_price_by_id.get(sid)
+        if cap is None:
+            continue  # estimate line item not found -- a data-integrity edge case, not this check's job to police
+        already = already_invoiced.get(sid, 0)
+        # Both sides rounded to the cent before comparing -- that alone
+        # absorbs ordinary float noise (e.g. 100.00000000001) without
+        # needing a manual epsilon on top, which would just as easily mask
+        # a genuine one-cent overage as it would a rounding artifact.
+        if round(already + new_amount, 2) > round(cap, 2):
+            raise HTTPException(
+                status_code=400,
+                detail=(
+                    f"That would invoice more than this line item's estimate total (${cap:,.2f}) -- "
+                    f"${already:,.2f} of it is already invoiced elsewhere on this project."
+                ),
+            )
+
+
 async def _recalc_invoice_total(invoice_id: str) -> None:
     """Keeps invoices.amount_due in sync with the sum of its line items --
     same pattern as _recalc_estimate_totals for estimates. Only ever called
@@ -80,6 +138,7 @@ async def list_invoice_items(invoice_id: str, _: CurrentUser = Depends(get_curre
 async def create_invoice_item(
     invoice_id: str, body: InvoiceLineItemCreate, _: CurrentUser = Depends(get_current_user)
 ):
+    await _validate_invoice_amounts([(body.source_line_item_id, body.amount)])
     rows = await db_post("invoice_line_items", {**body.model_dump(), "invoice_id": invoice_id})
     await _recalc_invoice_total(invoice_id)
     full = await db_get("invoice_line_items", f"?id=eq.{rows[0]['id']}&select={ITEM_SELECT}")
@@ -94,6 +153,7 @@ async def bulk_create_invoice_items(
     one call instead of one POST per row."""
     if not body.items:
         return []
+    await _validate_invoice_amounts([(item.source_line_item_id, item.amount) for item in body.items])
     rows = await db_post_many(
         "invoice_line_items", [{**item.model_dump(), "invoice_id": invoice_id} for item in body.items]
     )
@@ -107,7 +167,15 @@ async def update_invoice_item(
     invoice_id: str, item_id: str, body: InvoiceLineItemUpdate, _: CurrentUser = Depends(get_current_user)
 ):
     # exclude_unset -- same reasoning as update_invoice above.
-    await db_patch("invoice_line_items", item_id, body.model_dump(exclude_unset=True))
+    updates = body.model_dump(exclude_unset=True)
+    if updates.get("amount") is not None:
+        # source_line_item_id isn't part of InvoiceLineItemUpdate (it's
+        # immutable after creation), so it has to be looked up here to know
+        # which estimate line item to re-validate the new amount against.
+        current = await db_get("invoice_line_items", f"?id=eq.{item_id}&select=source_line_item_id")
+        source_line_item_id = current[0].get("source_line_item_id") if current else None
+        await _validate_invoice_amounts([(source_line_item_id, updates["amount"])], exclude_item_id=item_id)
+    await db_patch("invoice_line_items", item_id, updates)
     await _recalc_invoice_total(invoice_id)
     full = await db_get("invoice_line_items", f"?id=eq.{item_id}&select={ITEM_SELECT}")
     if not full:
