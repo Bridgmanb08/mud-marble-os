@@ -154,6 +154,11 @@ async def create_estimate(body: EstimateCreate, _: CurrentUser = Depends(get_cur
 
 @router.patch("/{estimate_id}", response_model=EstimateOut)
 async def update_estimate(estimate_id: str, body: EstimateUpdate, _: CurrentUser = Depends(get_current_user)):
+    current = await db_get("estimates", f"?id=eq.{estimate_id}&select=status")
+    if not current:
+        raise HTTPException(status_code=404, detail="Estimate not found")
+    old_status = current[0]["status"]
+
     # exclude_unset (not exclude_none) -- a caller may need to explicitly
     # clear a field (e.g. removing an approval_deadline or closing_text),
     # and that null has to reach the database instead of being silently
@@ -162,7 +167,26 @@ async def update_estimate(estimate_id: str, body: EstimateUpdate, _: CurrentUser
     full = await db_get("estimates", f"?id=eq.{estimate_id}&select=*,projects(name)")
     if not full:
         raise HTTPException(status_code=404, detail="Estimate not found")
-    return full[0]
+    estimate = full[0]
+
+    # Approving an estimate is the moment the client's actual signed total
+    # becomes known -- sync projects.contract_value to it (plus whatever
+    # change orders are already approved, the same additive formula
+    # financial-summary itself uses) so the two "what's this contract
+    # worth" numbers in this app can't silently drift apart. Mirrors the
+    # exact reasoning change_orders.py already applies on CO approval.
+    # One-directional on purpose: un-approving an estimate doesn't try to
+    # guess what to revert contract_value to.
+    new_status = body.status if body.status is not None else old_status
+    if new_status == "approved" and old_status != "approved":
+        approved_cos = await db_get(
+            "change_orders", f"?project_id=eq.{estimate['project_id']}&status=eq.approved&select=owner_price"
+        )
+        co_total = sum(c.get("owner_price") or 0 for c in approved_cos)
+        new_contract_value = round((estimate.get("grand_total_owner_price") or 0) + co_total, 2)
+        await db_patch("projects", estimate["project_id"], {"contract_value": new_contract_value})
+
+    return estimate
 
 
 @router.post("/{estimate_id}/duplicate", response_model=EstimateOut)

@@ -5,7 +5,7 @@ import { api } from '../api/client';
 import { useToast } from '../components/ui/Toast';
 import { fmt, fmtD } from '../lib/format';
 import { useReferenceData } from '../reference-data/ReferenceDataContext';
-import type { ChangeOrder, Estimate, Invoice, Project, ProjectNote, Task } from '../types';
+import type { ChangeOrder, Estimate, FinancialSummary, Invoice, Project, ProjectNote, Task } from '../types';
 import { NewNoteModal } from '../components/projects/NewNoteModal';
 import { NewChangeOrderModal } from '../components/change-orders/NewChangeOrderModal';
 import { NewInvoiceModal } from '../components/invoices/NewInvoiceModal';
@@ -62,6 +62,7 @@ export default function ProjectDetail() {
   const [estimates, setEstimates] = useState<Estimate[]>([]);
   const [changeOrders, setChangeOrders] = useState<ChangeOrder[]>([]);
   const [invoices, setInvoices] = useState<Invoice[]>([]);
+  const [financialSummary, setFinancialSummary] = useState<FinancialSummary | null>(null);
   const [tasks, setTasks] = useState<Task[]>([]);
   const requestedTab = searchParams.get('tab');
   const [activeTab, setActiveTab] = useState(requestedTab && TABS.includes(requestedTab) ? requestedTab : 'Overview');
@@ -99,6 +100,10 @@ export default function ProjectDetail() {
   async function loadInvoices() {
     if (!id) return;
     setInvoices(await api.get<Invoice[]>(`/invoices?project_id=${id}`).catch(() => []));
+    // Contract-total cross-reference for the Invoices section -- so this
+    // table isn't just a flat list with no way to sanity-check it against
+    // what the project's actually worth.
+    setFinancialSummary(await api.get<FinancialSummary>(`/projects/${id}/financial-summary`).catch(() => null));
   }
 
   async function loadTasks() {
@@ -439,6 +444,24 @@ export default function ProjectDetail() {
               <IconPlus size={14} /> Create invoice
             </button>
           </div>
+          {financialSummary && (
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 20, marginBottom: 14, fontSize: 12.5 }}>
+              <div>
+                <span style={{ color: 'var(--t2)' }}>Contract total: </span>
+                <strong>{fmt(financialSummary.owner_price)}</strong>
+              </div>
+              <div>
+                <span style={{ color: 'var(--t2)' }}>Invoiced to date: </span>
+                <strong>{fmt(financialSummary.invoiced_to_date)}</strong>
+              </div>
+              <div>
+                <span style={{ color: 'var(--t2)' }}>Remaining to invoice: </span>
+                <strong style={{ color: financialSummary.remaining_to_invoice < 0 ? 'var(--red)' : undefined }}>
+                  {fmt(financialSummary.remaining_to_invoice)}
+                </strong>
+              </div>
+            </div>
+          )}
           {invoices.length === 0 ? (
             <div className="empty-s">No invoices yet.</div>
           ) : (

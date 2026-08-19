@@ -7,7 +7,7 @@ import { openDatePicker } from '../lib/datePicker';
 import { fmt } from '../lib/format';
 import { InvoiceLineItemModal } from '../components/invoices/InvoiceLineItemModal';
 import { AddEstimateLineItemsModal } from '../components/invoices/AddEstimateLineItemsModal';
-import type { Invoice, InvoiceLineItem } from '../types';
+import type { FinancialSummary, Invoice, InvoiceLineItem } from '../types';
 
 const STATUS_OPTIONS = ['draft', 'sent', 'paid', 'overdue', 'void'];
 const STATUS_BADGE: Record<string, string> = {
@@ -33,6 +33,7 @@ export default function InvoiceWorksheet() {
   const [showItemModal, setShowItemModal] = useState(false);
   const [editingItem, setEditingItem] = useState<InvoiceLineItem | undefined>(undefined);
   const [showFromEstimate, setShowFromEstimate] = useState(false);
+  const [financialSummary, setFinancialSummary] = useState<FinancialSummary | null>(null);
 
   function load() {
     if (!id) return;
@@ -53,6 +54,20 @@ export default function InvoiceWorksheet() {
     load();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [id]);
+
+  // Contract-total cross-reference -- so someone looking at an existing
+  // invoice can actually sanity-check it against the estimate/contract
+  // instead of just trusting a flat dollar amount. Refetched whenever the
+  // line items change (via `items`) so it picks up "invoiced to date"
+  // moving as items are added/removed from THIS invoice too, not just other
+  // invoices on the project.
+  useEffect(() => {
+    if (!invoice?.project_id) return;
+    api
+      .get<FinancialSummary>(`/projects/${invoice.project_id}/financial-summary`)
+      .then(setFinancialSummary)
+      .catch(() => setFinancialSummary(null));
+  }, [invoice?.project_id, items]);
 
   async function saveField(field: string, value: unknown) {
     if (!id) return;
@@ -100,6 +115,30 @@ export default function InvoiceWorksheet() {
           {invoice.status}
         </span>
       </div>
+
+      {financialSummary && (
+        <div className="card" style={{ padding: '14px 20px', marginBottom: 16, display: 'flex', flexWrap: 'wrap', gap: 24 }}>
+          <div>
+            <div style={{ fontSize: 11, color: 'var(--t2)', textTransform: 'uppercase' }}>Contract total</div>
+            <div style={{ fontSize: 16, fontWeight: 600 }}>{fmt(financialSummary.owner_price)}</div>
+          </div>
+          <div>
+            <div style={{ fontSize: 11, color: 'var(--t2)', textTransform: 'uppercase' }}>Invoiced to date</div>
+            <div style={{ fontSize: 16, fontWeight: 600 }}>{fmt(financialSummary.invoiced_to_date)}</div>
+          </div>
+          <div>
+            <div style={{ fontSize: 11, color: 'var(--t2)', textTransform: 'uppercase' }}>Remaining to invoice</div>
+            <div style={{ fontSize: 16, fontWeight: 600, color: financialSummary.remaining_to_invoice < 0 ? 'var(--red)' : undefined }}>
+              {fmt(financialSummary.remaining_to_invoice)}
+            </div>
+          </div>
+          {invoice.status === 'draft' && (
+            <div style={{ fontSize: 11, color: 'var(--t3)', alignSelf: 'center' }}>
+              This invoice is still a draft, so it isn't counted in "Invoiced to date" yet.
+            </div>
+          )}
+        </div>
+      )}
 
       <div className="card" style={{ padding: 20, marginBottom: 16 }}>
         <div className="ibt" style={{ fontSize: 13, textTransform: 'none', letterSpacing: 0, border: 'none', padding: 0, marginBottom: 14 }}>
