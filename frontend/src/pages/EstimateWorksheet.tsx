@@ -455,7 +455,7 @@ export default function EstimateWorksheet() {
         <div className="st">Worksheet</div>
         <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
           <button className="btn btn-sm" onClick={() => setShowInsertFromTemplate(true)}>
-            <IconTemplate size={14} /> Insert from template
+            <IconTemplate size={14} /> Insert from template or job
           </button>
           <button className="btn btn-sm" onClick={() => setShowNewGroupPrompt(true)}>
             <IconPlus size={14} /> Add group
@@ -632,7 +632,11 @@ export default function EstimateWorksheet() {
 
       {showInsertFromTemplate && id && (
         <InsertFromTemplateModal
-          onClose={() => setShowInsertFromTemplate(false)}
+          currentEstimateId={id}
+          onClose={() => {
+            setShowInsertFromTemplate(false);
+            load();
+          }}
           onInsert={async (items) => {
             await Promise.all(
               items.map((item) =>
@@ -654,7 +658,6 @@ export default function EstimateWorksheet() {
                 })
               )
             );
-            setShowInsertFromTemplate(false);
             toast(`Inserted ${items.length} line item${items.length !== 1 ? 's' : ''}`);
             load();
           }}
