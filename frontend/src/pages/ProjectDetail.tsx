@@ -629,10 +629,15 @@ export default function ProjectDetail() {
         <NewInvoiceModal
           defaultProjectId={id}
           onClose={() => setShowNewInvoice(false)}
-          onCreated={() => {
+          onCreated={(invoice) => {
             setShowNewInvoice(false);
             toast('Invoice created');
-            loadInvoices();
+            // Straight into the worksheet, same as the global Invoices page --
+            // that's where line items, "Add from Estimate", and the
+            // contract-total cross-reference actually live, so there's no
+            // reason to leave someone stranded on a list they have to click
+            // back into.
+            navigate(`/invoices/${invoice.id}`);
           }}
         />
       )}

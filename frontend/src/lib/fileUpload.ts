@@ -45,6 +45,26 @@ export async function uploadProjectFile(
   });
 }
 
+// Always tagged 'signed_estimate' regardless of mime type (a signed
+// proposal might come back as a PDF or a photographed signature page) --
+// same "always this one type" pattern as uploadRentalFile's lease docs,
+// rather than the mime-inferred photo/video/plan/other categorization
+// every other project file gets.
+export async function uploadSignedEstimateFile(projectId: string, file: File): Promise<ProjectFile> {
+  const { upload_url, storage_path } = await api.post<UploadUrlResponse>(
+    `/projects/${projectId}/files/upload-url`,
+    { file_name: file.name, file_type: 'signed_estimate', mime_type: file.type || null }
+  );
+  await putToSignedUrl(upload_url, file);
+  return api.post<ProjectFile>(`/projects/${projectId}/files`, {
+    file_name: file.name,
+    file_type: 'signed_estimate',
+    mime_type: file.type || null,
+    size_bytes: file.size,
+    storage_path,
+  });
+}
+
 export async function uploadSubcontractorFile(subId: string, file: File): Promise<SubcontractorFile> {
   const fileType = inferFileType(file.type);
   const { upload_url, storage_path } = await api.post<UploadUrlResponse>(

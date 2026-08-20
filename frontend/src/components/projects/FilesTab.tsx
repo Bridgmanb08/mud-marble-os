@@ -1,8 +1,17 @@
 import { useEffect, useRef, useState, type DragEvent } from 'react';
-import { IconFile, IconFileTypePdf, IconPaperclip, IconPhoto, IconTrash, IconUpload, IconVideo } from '@tabler/icons-react';
+import {
+  IconFile,
+  IconFileTypePdf,
+  IconPaperclip,
+  IconPhoto,
+  IconSignature,
+  IconTrash,
+  IconUpload,
+  IconVideo,
+} from '@tabler/icons-react';
 import { api } from '../../api/client';
 import { useToast } from '../ui/Toast';
-import { fmtBytes, uploadProjectFile } from '../../lib/fileUpload';
+import { fmtBytes, uploadProjectFile, uploadSignedEstimateFile } from '../../lib/fileUpload';
 import { FilePreviewModal } from './FilePreviewModal';
 import type { ProjectFile, Task } from '../../types';
 
@@ -11,6 +20,7 @@ const FILTERS: { key: string; label: string }[] = [
   { key: 'photo', label: 'Photos' },
   { key: 'video', label: 'Videos' },
   { key: 'plan', label: 'Plans' },
+  { key: 'signed_estimate', label: 'Signed estimates' },
   { key: 'other', label: 'Other' },
 ];
 
@@ -18,6 +28,7 @@ function FileIcon({ type }: { type: string }) {
   if (type === 'photo') return <IconPhoto size={28} />;
   if (type === 'video') return <IconVideo size={28} />;
   if (type === 'plan') return <IconFileTypePdf size={28} />;
+  if (type === 'signed_estimate') return <IconSignature size={28} />;
   return <IconFile size={28} />;
 }
 
@@ -33,7 +44,9 @@ export function FilesTab({ projectId, tasks }: FilesTabProps) {
   const [uploading, setUploading] = useState(false);
   const [dragOver, setDragOver] = useState(false);
   const [preview, setPreview] = useState<ProjectFile | null>(null);
+  const [uploadingSigned, setUploadingSigned] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
+  const signedInputRef = useRef<HTMLInputElement>(null);
 
   const tasksById = new Map(tasks.map((t) => [t.id, t]));
 
@@ -84,6 +97,22 @@ export function FilesTab({ projectId, tasks }: FilesTabProps) {
     handleFiles(e.dataTransfer.files);
   }
 
+  async function handleSignedEstimate(fileList: FileList | null) {
+    const file = fileList?.[0];
+    if (!file) return;
+    setUploadingSigned(true);
+    try {
+      await uploadSignedEstimateFile(projectId, file);
+      toast('Signed estimate uploaded');
+      load();
+    } catch (e) {
+      toast(e instanceof Error ? e.message : 'Upload failed', true);
+    } finally {
+      setUploadingSigned(false);
+      if (signedInputRef.current) signedInputRef.current.value = '';
+    }
+  }
+
   const shown = filter === 'all' ? files : files.filter((f) => f.file_type === filter);
 
   return (
@@ -118,6 +147,23 @@ export function FilesTab({ projectId, tasks }: FilesTabProps) {
           multiple
           style={{ display: 'none' }}
           onChange={(e) => handleFiles(e.target.files)}
+        />
+      </div>
+
+      <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: 16, marginTop: -8 }}>
+        <button
+          type="button"
+          className="btn btn-sm"
+          onClick={() => signedInputRef.current?.click()}
+          disabled={uploadingSigned}
+        >
+          <IconSignature size={14} /> {uploadingSigned ? 'Uploading…' : 'Upload signed estimate'}
+        </button>
+        <input
+          ref={signedInputRef}
+          type="file"
+          style={{ display: 'none' }}
+          onChange={(e) => handleSignedEstimate(e.target.files)}
         />
       </div>
 

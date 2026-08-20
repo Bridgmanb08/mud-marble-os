@@ -18,7 +18,7 @@ export function NewInvoiceModal({ onClose, onCreated, defaultProjectId }: NewInv
   const [invoiceType, setInvoiceType] = useState('progress');
   const [amountDue, setAmountDue] = useState('');
   const [amountTouched, setAmountTouched] = useState(false);
-  const [remainingToInvoice, setRemainingToInvoice] = useState<number | null>(null);
+  const [financialSummary, setFinancialSummary] = useState<FinancialSummary | null>(null);
   const [dueDate, setDueDate] = useState('');
   const [notes, setNotes] = useState('');
   const [error, setError] = useState('');
@@ -30,16 +30,16 @@ export function NewInvoiceModal({ onClose, onCreated, defaultProjectId }: NewInv
 
   useEffect(() => {
     if (!projectId) {
-      setRemainingToInvoice(null);
+      setFinancialSummary(null);
       return;
     }
     api
       .get<FinancialSummary>(`/projects/${projectId}/financial-summary`)
       .then((s) => {
-        setRemainingToInvoice(s.remaining_to_invoice);
+        setFinancialSummary(s);
         if (!amountTouched) setAmountDue(s.remaining_to_invoice > 0 ? String(s.remaining_to_invoice) : '');
       })
-      .catch(() => setRemainingToInvoice(null));
+      .catch(() => setFinancialSummary(null));
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [projectId]);
 
@@ -83,10 +83,42 @@ export function NewInvoiceModal({ onClose, onCreated, defaultProjectId }: NewInv
             ))}
           </select>
         </div>
+
+        {financialSummary && (
+          <div
+            className="card"
+            style={{ padding: '12px 14px', marginBottom: 16, display: 'flex', flexWrap: 'wrap', gap: 20, background: 'var(--bg)' }}
+          >
+            <div>
+              <div style={{ fontSize: 10.5, color: 'var(--t2)', textTransform: 'uppercase' }}>Contract total</div>
+              <div style={{ fontSize: 14, fontWeight: 600 }}>{fmt(financialSummary.owner_price)}</div>
+            </div>
+            <div>
+              <div style={{ fontSize: 10.5, color: 'var(--t2)', textTransform: 'uppercase' }}>Invoiced to date</div>
+              <div style={{ fontSize: 14, fontWeight: 600 }}>{fmt(financialSummary.invoiced_to_date)}</div>
+            </div>
+            <div>
+              <div style={{ fontSize: 10.5, color: 'var(--t2)', textTransform: 'uppercase' }}>Remaining to invoice</div>
+              <div
+                style={{
+                  fontSize: 14,
+                  fontWeight: 600,
+                  color: financialSummary.remaining_to_invoice < 0 ? 'var(--red)' : undefined,
+                }}
+              >
+                {fmt(financialSummary.remaining_to_invoice)}
+              </div>
+            </div>
+          </div>
+        )}
+
+        <div className="ibt" style={{ fontSize: 12, textTransform: 'none', letterSpacing: 0, border: 'none', padding: 0, marginBottom: 12 }}>
+          Invoice details
+        </div>
         <div className="fr">
           <div className="fg">
             <label className="fl">Invoice number</label>
-            <input className="fi" value={invoiceNumber} onChange={(e) => setInvoiceNumber(e.target.value)} />
+            <input className="fi" value={invoiceNumber} onChange={(e) => setInvoiceNumber(e.target.value)} placeholder="Optional" />
           </div>
           <div className="fg">
             <label className="fl">Type</label>
@@ -109,9 +141,10 @@ export function NewInvoiceModal({ onClose, onCreated, defaultProjectId }: NewInv
                 setAmountDue(e.target.value);
               }}
             />
-            {remainingToInvoice !== null && (
-              <div className="m-sub">Remaining to invoice: {fmt(remainingToInvoice)}</div>
-            )}
+            <div className="m-sub">
+              Defaulted to what's remaining on the contract. If you build this invoice from specific estimate
+              line items afterward, this amount is replaced automatically.
+            </div>
           </div>
           <div className="fg">
             <label className="fl">Due date</label>

@@ -10,6 +10,7 @@ from reportlab.lib import colors
 from reportlab.lib.pagesizes import letter
 from reportlab.lib.styles import ParagraphStyle, getSampleStyleSheet
 from reportlab.lib.units import inch
+from reportlab.pdfgen.canvas import Canvas
 from reportlab.platypus import HRFlowable, Image, Paragraph, SimpleDocTemplate, Spacer, Table, TableStyle
 
 from .. import branding
@@ -319,6 +320,34 @@ async def _gather_export_data(estimate_id: str):
     return estimate, groups
 
 
+class _NumberedCanvas(Canvas):
+    """Standard reportlab two-pass trick for "Page N of M" -- the total page
+    count isn't known until the whole document has been laid out, so each
+    page's canvas state is buffered via showPage() and only actually drawn
+    (with the number stamped on) once save() knows the final count."""
+
+    def __init__(self, *args, **kwargs):
+        Canvas.__init__(self, *args, **kwargs)
+        self._saved_page_states = []
+
+    def showPage(self):
+        self._saved_page_states.append(dict(self.__dict__))
+        self._startPage()
+
+    def save(self):
+        num_pages = len(self._saved_page_states)
+        for state in self._saved_page_states:
+            self.__dict__.update(state)
+            self._draw_page_number(num_pages)
+            Canvas.showPage(self)
+        Canvas.save(self)
+
+    def _draw_page_number(self, page_count):
+        self.setFont("Helvetica", 8)
+        self.setFillColor(colors.grey)
+        self.drawRightString(letter[0] - 0.5 * inch, 0.3 * inch, f"Page {self._pageNumber} of {page_count}")
+
+
 @router.get("/{estimate_id}/export/pdf")
 async def export_estimate_pdf(estimate_id: str, _: CurrentUser = Depends(get_current_user)):
     estimate, groups = await _gather_export_data(estimate_id)
@@ -383,10 +412,9 @@ async def export_estimate_pdf(estimate_id: str, _: CurrentUser = Depends(get_cur
         elements.append(Paragraph(group_name, h2))
         table_data = [["Item", "Description", "Qty/Unit", "Unit Price", "Price"]]
         for item in items:
-            cc = item.get("cost_codes")
+            # Cost codes are internal categorization, not something a client
+            # needs to see on their proposal -- title only.
             item_label = item.get("title") or ""
-            if cc:
-                item_label += f"<br/><font size=7 color='grey'>{cc.get('code')} - {cc.get('name')}</font>"
             qty_unit = f"{item.get('quantity') or 0:g}" + (f" {item['unit']}" if item.get("unit") else "")
             # Client-facing figures only -- unit_cost/builder_cost are internal
             # margin data and must never appear on anything a client sees.
@@ -438,7 +466,7 @@ async def export_estimate_pdf(estimate_id: str, _: CurrentUser = Depends(get_cur
     elements.append(Spacer(1, 10))
     elements.append(Paragraph("Print Name: _______________________________________", body))
 
-    doc.build(elements)
+    doc.build(elements, canvasmaker=_NumberedCanvas)
     pdf_bytes = buf.getvalue()
     buf.close()
 
