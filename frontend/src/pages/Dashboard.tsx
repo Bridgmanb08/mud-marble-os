@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { Suspense, useEffect, useState } from 'react';
 import {
   DndContext,
   closestCenter,
@@ -208,10 +208,16 @@ export default function Dashboard() {
                     canMoveDown={i < widgets.length - 1}
                     wide={custom ? true : def!.wide}
                   >
-                    {custom ? <CustomWidgetRenderer spec={custom.spec} data={data} /> : (() => {
-                      const Component = def!.Component;
-                      return <Component data={data} />;
-                    })()}
+                    {custom ? (
+                      <CustomWidgetRenderer spec={custom.spec} data={data} />
+                    ) : (
+                      <Suspense fallback={<Skeleton height={90} />}>
+                        {(() => {
+                          const Component = def!.Component;
+                          return <Component data={data} />;
+                        })()}
+                      </Suspense>
+                    )}
                   </WidgetShell>
                 );
               })}
