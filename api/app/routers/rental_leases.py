@@ -107,20 +107,41 @@ def _next_month(year: int, month: int) -> tuple[int, int]:
     return (year + 1, 1) if month == 12 else (year, month + 1)
 
 
+def _months_through(start_year: int, start_month: int, end_year: int, end_month: int) -> list[tuple[int, int]]:
+    """Every (year, month) pair from start through end, inclusive."""
+    months = []
+    y, m = start_year, start_month
+    while (y, m) <= (end_year, end_month):
+        months.append((y, m))
+        y, m = _next_month(y, m)
+    return months
+
+
 async def _ensure_payments_for_lease(lease: dict) -> None:
-    """Lazily backfills the current + next month's rental_payments row for a
-    lease if missing, rather than requiring a scheduled job -- this repo has
-    no Vercel Cron configured, and every other recurring time-based feature
-    (Phase 13's daily briefings) already follows this compute/backfill-on-read
-    pattern. Only generates due dates that actually fall within the lease's
-    term -- a lease that hasn't started yet or has already ended shouldn't
-    get payment rows outside its own window."""
+    """Lazily backfills missing rental_payments rows for a lease, rather than
+    requiring a scheduled job -- this repo has no Vercel Cron configured, and
+    every other recurring time-based feature (Phase 13's daily briefings)
+    already follows this compute/backfill-on-read pattern.
+
+    Iterates every month from the LEASE'S OWN START through current+next
+    month -- not just "today/today+1" -- and lets the existing-rows check
+    below skip whatever's already there. Two real gaps the old
+    current/next-only version had: (1) a lease whose start date falls after
+    that month's rent_due_day has no valid due date in its first calendar
+    month at all, so the actual first real due date is the FOLLOWING month --
+    with only "today/today+1" ever considered, that first month's payment
+    row could never be created once the calendar moved past it, permanently.
+    (2) any month nobody opened the rent roll for was simply never
+    generated, with no catch-up mechanism -- arrears silently understated
+    what a tenant actually owed. Iterating from lease start makes this
+    self-healing: whatever's missing gets backfilled the next time anyone
+    looks, regardless of how long the gap was."""
     today = date.today()
-    targets = [(today.year, today.month)]
-    targets.append(_next_month(*targets[0]))
+    lease_start = date.fromisoformat(lease["start_date"])
+    end_year, end_month = _next_month(today.year, today.month)
 
     candidate_due_dates = []
-    for year, month in targets:
+    for year, month in _months_through(lease_start.year, lease_start.month, end_year, end_month):
         due_date = _due_date_for_month(year, month, lease["rent_due_day"])
         if lease["start_date"] <= due_date <= lease["end_date"]:
             candidate_due_dates.append(due_date)
@@ -133,10 +154,26 @@ async def _ensure_payments_for_lease(lease: dict) -> None:
     existing_dates = {e["due_date"] for e in existing}
     missing = [d for d in candidate_due_dates if d not in existing_dates]
     for due_date in missing:
-        await db_post(
-            "rental_payments",
-            {"lease_id": lease["id"], "due_date": due_date, "amount_due": lease["monthly_rent"], "status": "due"},
-        )
+        try:
+            await db_post(
+                "rental_payments",
+                {"lease_id": lease["id"], "due_date": due_date, "amount_due": lease["monthly_rent"], "status": "due"},
+            )
+        except HTTPException:
+            # This is a check-then-insert with no locking between the two --
+            # a concurrent request backfilling the SAME lease (two people
+            # opening its rent ledger at once, or this reading it alongside
+            # rent_roll.py's own call) can race past the existing-rows check
+            # above and both try to insert the same (lease_id, due_date).
+            # The unique constraint on that pair (migration 0043) is what
+            # actually keeps the data correct; db_post surfaces that
+            # conflict as a generic 502, which used to bubble up as an
+            # unhandled failure for whichever request lost the race even
+            # though the end state (the row exists) is exactly what was
+            # wanted. The caller re-reads rental_payments right after this
+            # function returns, so swallowing the loser's failure here is
+            # safe -- it'll see the winner's row either way.
+            continue
 
 
 @router.get("/rental-leases/{lease_id}/payments", response_model=list[RentalPaymentOut])
