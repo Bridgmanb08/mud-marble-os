@@ -6,6 +6,8 @@ from ..deps import CurrentUser, get_current_user
 from ..mentions import create_mention_notifications
 from ..schemas.invoices import EstimateItemForInvoiceOut
 from ..schemas.projects import (
+    CostCodeVarianceOut,
+    CostCodeVarianceRow,
     FinancialSummaryOut,
     ProjectCreate,
     ProjectNoteCreate,
@@ -189,6 +191,72 @@ async def get_estimate_items_for_invoice(project_id: str, _: CurrentUser = Depen
             )
         )
     return out
+
+
+@router.get("/{project_id}/cost-code-variance", response_model=CostCodeVarianceOut)
+async def get_cost_code_variance(project_id: str, _: CurrentUser = Depends(get_current_user)):
+    """Budget vs. actual, broken down by cost code -- the whole-project total
+    already exists in financial-summary, but that alone can't answer "why did
+    this job run over": drywall could be way under budget while electrical
+    eats the difference, and a single project total hides that entirely.
+    Budgeted comes from the same authoritative estimate financial-summary
+    uses (see _get_invoicing_estimate); actual comes from real expense
+    transactions tagged to this project, the same abs(amount)-for-expenses
+    convention already used in dashboard.py's cash-position math."""
+    estimate = await _get_invoicing_estimate(project_id, select="id")
+
+    budgeted_by_code: dict[Optional[str], float] = {}
+    code_labels: dict[Optional[str], tuple[str, str]] = {}
+    if estimate:
+        line_items = await db_get(
+            "estimate_line_items",
+            f"?estimate_id=eq.{estimate['id']}&select=cost_code_id,builder_cost,cost_codes(code,name)",
+        )
+        for item in line_items:
+            cc_id = item.get("cost_code_id")
+            budgeted_by_code[cc_id] = budgeted_by_code.get(cc_id, 0) + (item.get("builder_cost") or 0)
+            cc = item.get("cost_codes")
+            code_labels[cc_id] = (cc["code"], cc["name"]) if cc else ("—", "No cost code")
+
+    actual_by_code: dict[Optional[str], float] = {}
+    transactions = await db_get(
+        "transactions",
+        f"?project_id=eq.{project_id}&transaction_type=eq.expense&select=cost_code_id,amount,cost_codes(code,name)",
+    )
+    for t in transactions:
+        cc_id = t.get("cost_code_id")
+        actual_by_code[cc_id] = actual_by_code.get(cc_id, 0) + abs(t.get("amount") or 0)
+        if cc_id not in code_labels:
+            cc = t.get("cost_codes")
+            code_labels[cc_id] = (cc["code"], cc["name"]) if cc else ("—", "No cost code")
+
+    rows: list[CostCodeVarianceRow] = []
+    for cc_id in set(budgeted_by_code) | set(actual_by_code):
+        budgeted = round(budgeted_by_code.get(cc_id, 0), 2)
+        actual = round(actual_by_code.get(cc_id, 0), 2)
+        code, name = code_labels.get(cc_id, ("—", "No cost code"))
+        rows.append(
+            CostCodeVarianceRow(
+                cost_code_id=cc_id,
+                code=code,
+                name=name,
+                budgeted=budgeted,
+                actual=actual,
+                variance=round(actual - budgeted, 2),
+                variance_pct=round(((actual - budgeted) / budgeted) * 100, 1) if budgeted else None,
+            )
+        )
+    # Worst overage first -- the whole point of this report is "what's
+    # blowing the budget," not an alphabetical cost-code listing.
+    rows.sort(key=lambda r: r.variance, reverse=True)
+
+    return CostCodeVarianceOut(
+        estimate_id=estimate["id"] if estimate else None,
+        rows=rows,
+        total_budgeted=round(sum(r.budgeted for r in rows), 2),
+        total_actual=round(sum(r.actual for r in rows), 2),
+        total_variance=round(sum(r.variance for r in rows), 2),
+    )
 
 
 @router.get("/{project_id}/notes", response_model=list[ProjectNoteOut])
