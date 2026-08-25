@@ -49,6 +49,7 @@ const PROJECT_STATUS_OPTIONS = [
 
 const CO_TYPE_BADGE: Record<string, string> = { oversight: 'bg-amber', client_addition: 'bg-blue', unforeseen: 'bg-red' };
 const CO_STATUS_BADGE: Record<string, string> = { pending: 'bg-gray', sent: 'bg-amber', approved: 'bg-green', rejected: 'bg-red' };
+const CO_STATUS_OPTIONS = ['pending', 'sent', 'approved', 'rejected'];
 const INVOICE_STATUS_BADGE: Record<string, string> = { draft: 'bg-gray', sent: 'bg-amber', paid: 'bg-green', overdue: 'bg-red', void: 'bg-gray' };
 const ESTIMATE_STATUS_BADGE: Record<string, string> = { draft: 'bg-gray', sent_to_client: 'bg-blue', approved: 'bg-green', rejected: 'bg-red' };
 
@@ -101,6 +102,27 @@ export default function ProjectDetail() {
   async function loadChangeOrders() {
     if (!id) return;
     setChangeOrders(await api.get<ChangeOrder[]>(`/change-orders?project_id=${id}`).catch(() => []));
+  }
+
+  async function changeCoStatus(co: ChangeOrder, status: string) {
+    if (!id) return;
+    try {
+      await api.patch(`/change-orders/${co.id}`, {
+        status,
+        // Starts the 24hr SOP-breach clock -- compute_sop_breach needs a
+        // real sent_at to measure against, not left for someone to backfill.
+        ...(status === 'sent' ? { sent_at: new Date().toISOString() } : {}),
+      });
+      toast(`CO-${String(co.co_number ?? '?').padStart(3, '0')} marked ${status}`);
+      loadChangeOrders();
+      // Approving/un-approving bumps contract_value server-side -- refresh
+      // both places that show it so this tab doesn't go stale until a
+      // full page reload.
+      api.get<Project>(`/projects/${id}`).then(setProject).catch(() => {});
+      loadInvoices();
+    } catch (e) {
+      toast(e instanceof Error ? e.message : 'Failed to update status', true);
+    }
   }
 
   async function loadInvoices() {
@@ -504,7 +526,18 @@ export default function ProjectDetail() {
                       <td><span className={`badge ${CO_TYPE_BADGE[co.co_type] || 'bg-gray'}`}>{co.co_type.replace('_', ' ')}</span></td>
                       <td style={{ textAlign: 'right' }}>{fmt(co.owner_price)}</td>
                       <td>
-                        <span className={`badge ${CO_STATUS_BADGE[co.status] || 'bg-gray'}`}>{co.status}</span>
+                        <select
+                          className={`badge ${CO_STATUS_BADGE[co.status] || 'bg-gray'}`}
+                          style={{ border: 'none', cursor: 'pointer', fontSize: 11, padding: '2px 6px' }}
+                          value={co.status}
+                          onChange={(e) => changeCoStatus(co, e.target.value)}
+                        >
+                          {CO_STATUS_OPTIONS.map((s) => (
+                            <option key={s} value={s}>
+                              {s}
+                            </option>
+                          ))}
+                        </select>
                         {co.sop_breach && <span className="badge bg-red" style={{ marginLeft: 6 }}>SOP breach</span>}
                       </td>
                     </tr>
