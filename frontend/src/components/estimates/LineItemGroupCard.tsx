@@ -19,13 +19,24 @@ export interface LineItemLike {
 function SortableLineItemRow<T extends LineItemLike>({
   item,
   hasDays,
+  dragDisabled,
   onClick,
 }: {
   item: T;
   hasDays: boolean;
+  dragDisabled: boolean;
   onClick: () => void;
 }) {
-  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: item.id });
+  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
+    id: item.id,
+    // A search filter can show a subset of a group's real items -- dragging
+    // within that filtered view would reorder against an incomplete group
+    // and corrupt sort_order for the rows currently hidden by the filter.
+    // Disabling the drag handle here (grip greyed out, no listeners
+    // attached) rather than just hoping it isn't misused mirrors the same
+    // "filters disable drag" rule already established on the Task Board.
+    disabled: dragDisabled,
+  });
   return (
     <tr
       ref={setNodeRef}
@@ -43,10 +54,15 @@ function SortableLineItemRow<T extends LineItemLike>({
         <button
           type="button"
           className="btn-reset"
-          {...attributes}
-          {...listeners}
-          style={{ display: 'flex', cursor: 'grab', color: 'var(--t3)', touchAction: 'none' }}
-          title="Drag to reorder"
+          {...(dragDisabled ? {} : attributes)}
+          {...(dragDisabled ? {} : listeners)}
+          style={{
+            display: 'flex',
+            cursor: dragDisabled ? 'not-allowed' : 'grab',
+            color: dragDisabled ? 'var(--border-md)' : 'var(--t3)',
+            touchAction: 'none',
+          }}
+          title={dragDisabled ? 'Clear the search to reorder items' : 'Drag to reorder'}
         >
           <IconGripVertical size={14} />
         </button>
@@ -77,6 +93,7 @@ export function LineItemGroupCard<T extends LineItemLike>({
   editing,
   editingValue,
   itemSensors,
+  dragDisabled = false,
   onToggleCollapse,
   onStartRename,
   onRenameChange,
@@ -92,6 +109,9 @@ export function LineItemGroupCard<T extends LineItemLike>({
   editing: boolean;
   editingValue: string;
   itemSensors: ReturnType<typeof useSensors>;
+  // True while a search filter is active -- see SortableLineItemRow's own
+  // comment for why dragging a filtered view is unsafe.
+  dragDisabled?: boolean;
   onToggleCollapse: () => void;
   onStartRename: () => void;
   onRenameChange: (value: string) => void;
@@ -155,7 +175,13 @@ export function LineItemGroupCard<T extends LineItemLike>({
               <SortableContext items={groupItems.map((i) => i.id)} strategy={verticalListSortingStrategy}>
                 <tbody>
                   {groupItems.map((item) => (
-                    <SortableLineItemRow key={item.id} item={item} hasDays={hasDays} onClick={() => onItemClick(item)} />
+                    <SortableLineItemRow
+                      key={item.id}
+                      item={item}
+                      hasDays={hasDays}
+                      dragDisabled={dragDisabled}
+                      onClick={() => onItemClick(item)}
+                    />
                   ))}
                 </tbody>
               </SortableContext>
