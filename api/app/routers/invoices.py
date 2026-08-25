@@ -15,6 +15,11 @@ from ..schemas.invoices import (
 )
 from ..supabase_client import db_delete, db_get, db_patch, db_post, db_post_many
 
+# "Counts toward invoiced_to_date" -- the exact same status set financial-
+# summary already uses (projects.py) so this guard and that number never
+# disagree about what "invoiced" means.
+_COUNTED_STATUSES = ("sent", "paid", "overdue")
+
 router = APIRouter(prefix="/invoices", tags=["invoices"])
 
 ITEM_SELECT = "*,cost_codes(code,name)"
@@ -78,6 +83,41 @@ async def _validate_invoice_amounts(
             )
 
 
+async def _validate_invoice_total(project_id: str, invoice_id: str, amount_due: float) -> None:
+    """Whole-invoice guard, complementary to _validate_invoice_amounts above
+    -- that one caps each ITEM against its own estimate line item, but says
+    nothing about the invoice's total against the overall contract. This is
+    what actually closes the gap: the flat "just type an amount" path (the
+    DEFAULT way to create an invoice -- no line items required) had zero
+    protection at all before this, so nothing stopped creating any number of
+    invoices whose flat amounts summed past the contract value. Only runs
+    when the invoice's resulting status is one that counts toward
+    invoiced_to_date -- a draft can be edited freely; the check fires the
+    moment it's marked sent (or edited further while already sent/paid/
+    overdue)."""
+    from .projects import _get_invoicing_estimate  # local import -- avoids a circular import at module load time
+
+    estimate = await _get_invoicing_estimate(project_id, select="grand_total_owner_price")
+    owner_price = (estimate.get("grand_total_owner_price") or 0) if estimate else 0
+    approved_cos = await db_get("change_orders", f"?project_id=eq.{project_id}&status=eq.approved&select=owner_price")
+    owner_price += sum(c.get("owner_price") or 0 for c in approved_cos)
+
+    other_invoices = await db_get(
+        "invoices",
+        f"?project_id=eq.{project_id}&status=in.({','.join(_COUNTED_STATUSES)})&select=id,amount_due",
+    )
+    already = sum(i.get("amount_due") or 0 for i in other_invoices if i["id"] != invoice_id)
+
+    if round(already + amount_due, 2) > round(owner_price, 2):
+        raise HTTPException(
+            status_code=400,
+            detail=(
+                f"That would invoice more than the contract total (${owner_price:,.2f}) -- "
+                f"${already:,.2f} is already invoiced elsewhere on this project."
+            ),
+        )
+
+
 async def _recalc_invoice_total(invoice_id: str) -> None:
     """Keeps invoices.amount_due in sync with the sum of its line items --
     same pattern as _recalc_estimate_totals for estimates. Only ever called
@@ -119,10 +159,22 @@ async def create_invoice(body: InvoiceCreate, _: CurrentUser = Depends(get_curre
 
 @router.patch("/{invoice_id}", response_model=InvoiceOut)
 async def update_invoice(invoice_id: str, body: InvoiceUpdate, _: CurrentUser = Depends(get_current_user)):
+    current = await db_get("invoices", f"?id=eq.{invoice_id}&select=project_id,status,amount_due")
+    if not current:
+        raise HTTPException(status_code=404, detail="Invoice not found")
+    existing = current[0]
+
     # exclude_unset (not exclude_none) -- a caller may need to explicitly clear
     # a field (e.g. an import correction clearing notes_external), and that
     # null has to reach the database instead of being silently dropped.
-    await db_patch("invoices", invoice_id, body.model_dump(exclude_unset=True))
+    updates = body.model_dump(exclude_unset=True)
+
+    resulting_status = updates.get("status", existing["status"])
+    if resulting_status in _COUNTED_STATUSES:
+        resulting_amount = updates.get("amount_due", existing["amount_due"]) or 0
+        await _validate_invoice_total(existing["project_id"], invoice_id, resulting_amount)
+
+    await db_patch("invoices", invoice_id, updates)
     full = await db_get("invoices", f"?id=eq.{invoice_id}&select=*,projects(name)")
     return full[0]
 
