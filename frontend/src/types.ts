@@ -502,6 +502,24 @@ export interface FinancialSummary {
   pending_invoices_manual: number | null;
 }
 
+export interface CostCodeVarianceRow {
+  cost_code_id: string | null;
+  code: string;
+  name: string;
+  budgeted: number;
+  actual: number;
+  variance: number;
+  variance_pct: number | null;
+}
+
+export interface CostCodeVariance {
+  estimate_id: string | null;
+  rows: CostCodeVarianceRow[];
+  total_budgeted: number;
+  total_actual: number;
+  total_variance: number;
+}
+
 export interface ProjectSubItem {
   id: string;
   project_id: string;

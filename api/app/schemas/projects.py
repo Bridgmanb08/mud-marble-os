@@ -104,6 +104,24 @@ class FinancialSummaryOut(BaseModel):
     pending_invoices_manual: Optional[float] = None
 
 
+class CostCodeVarianceRow(BaseModel):
+    cost_code_id: Optional[str] = None
+    code: str
+    name: str
+    budgeted: float = 0
+    actual: float = 0
+    variance: float = 0  # actual - budgeted; positive = over budget
+    variance_pct: Optional[float] = None  # None when budgeted is 0 -- percent-over is meaningless with no budget
+
+
+class CostCodeVarianceOut(BaseModel):
+    estimate_id: Optional[str] = None
+    rows: list[CostCodeVarianceRow] = []
+    total_budgeted: float = 0
+    total_actual: float = 0
+    total_variance: float = 0
+
+
 class ProjectNoteCreate(BaseModel):
     author: str
     note_type: str = "internal"

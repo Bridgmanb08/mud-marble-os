@@ -5,7 +5,7 @@ import { api } from '../api/client';
 import { useToast } from '../components/ui/Toast';
 import { fmt, fmtD } from '../lib/format';
 import { useReferenceData } from '../reference-data/ReferenceDataContext';
-import type { ChangeOrder, Estimate, FinancialSummary, Invoice, Project, ProjectNote, Task } from '../types';
+import type { ChangeOrder, CostCodeVariance, Estimate, FinancialSummary, Invoice, Project, ProjectNote, Task } from '../types';
 import { NewNoteModal } from '../components/projects/NewNoteModal';
 import { NewChangeOrderModal } from '../components/change-orders/NewChangeOrderModal';
 import { NewInvoiceModal } from '../components/invoices/NewInvoiceModal';
@@ -16,7 +16,7 @@ import { FilesTab } from '../components/projects/FilesTab';
 import { WeekScrollCalendar } from '../components/schedule/WeekScrollCalendar';
 import { FathomImportWidget } from '../components/projects/FathomImportWidget';
 
-const TABS = ['Overview', 'Notes', 'Estimate', 'Change Orders', 'Invoices', 'Tasks', 'Schedule', 'Files'];
+const TABS = ['Overview', 'Notes', 'Estimate', 'Budget', 'Change Orders', 'Invoices', 'Tasks', 'Schedule', 'Files'];
 
 // Sticky tab bar sits below the fixed 52px topbar; sections need matching
 // scroll-margin so scrollIntoView doesn't tuck the section header under it.
@@ -63,6 +63,7 @@ export default function ProjectDetail() {
   const [changeOrders, setChangeOrders] = useState<ChangeOrder[]>([]);
   const [invoices, setInvoices] = useState<Invoice[]>([]);
   const [financialSummary, setFinancialSummary] = useState<FinancialSummary | null>(null);
+  const [variance, setVariance] = useState<CostCodeVariance | null>(null);
   const [tasks, setTasks] = useState<Task[]>([]);
   const requestedTab = searchParams.get('tab');
   const [activeTab, setActiveTab] = useState(requestedTab && TABS.includes(requestedTab) ? requestedTab : 'Overview');
@@ -92,6 +93,11 @@ export default function ProjectDetail() {
     setEstimates(await api.get<Estimate[]>(`/estimates?project_id=${id}`).catch(() => []));
   }
 
+  async function loadVariance() {
+    if (!id) return;
+    setVariance(await api.get<CostCodeVariance>(`/projects/${id}/cost-code-variance`).catch(() => null));
+  }
+
   async function loadChangeOrders() {
     if (!id) return;
     setChangeOrders(await api.get<ChangeOrder[]>(`/change-orders?project_id=${id}`).catch(() => []));
@@ -119,6 +125,7 @@ export default function ProjectDetail() {
       .catch(() => toast('Failed to load project', true));
     loadNotes();
     loadEstimates();
+    loadVariance();
     loadChangeOrders();
     loadInvoices();
     loadTasks();
@@ -388,6 +395,80 @@ export default function ProjectDetail() {
                 </tbody>
               </table>
             </div>
+          )}
+        </div>
+
+        <div id={sectionId('Budget')} style={{ scrollMarginTop: SECTION_SCROLL_MARGIN, paddingBottom: 24, marginBottom: 24, borderBottom: '1px solid var(--border)' }}>
+          <div className="ibt" style={{ fontSize: 13, textTransform: 'none', letterSpacing: 0, border: 'none', padding: 0, marginBottom: 4 }}>
+            Budget vs. actual by cost code
+          </div>
+          <div style={{ fontSize: 12, color: 'var(--t2)', marginBottom: 14 }}>
+            Budgeted comes from the estimate; actual comes from real expense transactions tagged to this job.
+            Approved change orders aren't broken out by cost code here — see the Change Orders tab for those.
+          </div>
+          {!variance || variance.rows.length === 0 ? (
+            <div className="empty-s">
+              {variance?.estimate_id
+                ? 'No budgeted or actual costs by cost code yet.'
+                : 'Start an estimate to see budget vs. actual by cost code.'}
+            </div>
+          ) : (
+            <>
+              <div className="tbl-scroll">
+                <table className="tbl tbl-zebra">
+                  <thead>
+                    <tr>
+                      <th className="sticky-col">Cost code</th>
+                      <th style={{ textAlign: 'right' }}>Budgeted</th>
+                      <th style={{ textAlign: 'right' }}>Actual</th>
+                      <th style={{ textAlign: 'right' }}>Variance</th>
+                      <th style={{ textAlign: 'right' }}>% of budget</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {variance.rows.map((r) => (
+                      <tr key={r.cost_code_id || 'uncategorized'}>
+                        <td className="sticky-col" style={{ fontWeight: 500 }}>
+                          {r.code !== '—' ? `${r.code} — ${r.name}` : r.name}
+                        </td>
+                        <td style={{ textAlign: 'right' }}>{fmt(r.budgeted)}</td>
+                        <td style={{ textAlign: 'right' }}>{fmt(r.actual)}</td>
+                        <td
+                          style={{
+                            textAlign: 'right',
+                            fontWeight: 600,
+                            color: r.variance > 0 ? 'var(--red)' : r.variance < 0 ? 'var(--green)' : undefined,
+                          }}
+                        >
+                          {r.variance > 0 ? '+' : ''}
+                          {fmt(r.variance)}
+                        </td>
+                        <td style={{ textAlign: 'right', color: 'var(--t2)' }}>
+                          {r.variance_pct === null ? '—' : `${r.variance_pct > 0 ? '+' : ''}${r.variance_pct}%`}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                  <tfoot>
+                    <tr style={{ fontWeight: 600 }}>
+                      <td className="sticky-col">Total</td>
+                      <td style={{ textAlign: 'right' }}>{fmt(variance.total_budgeted)}</td>
+                      <td style={{ textAlign: 'right' }}>{fmt(variance.total_actual)}</td>
+                      <td
+                        style={{
+                          textAlign: 'right',
+                          color: variance.total_variance > 0 ? 'var(--red)' : variance.total_variance < 0 ? 'var(--green)' : undefined,
+                        }}
+                      >
+                        {variance.total_variance > 0 ? '+' : ''}
+                        {fmt(variance.total_variance)}
+                      </td>
+                      <td></td>
+                    </tr>
+                  </tfoot>
+                </table>
+              </div>
+            </>
           )}
         </div>
 
