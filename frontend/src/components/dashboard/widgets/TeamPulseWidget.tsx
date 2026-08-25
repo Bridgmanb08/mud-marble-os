@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { IconSend, IconFlag3Filled } from '@tabler/icons-react';
 import { api, ApiError } from '../../../api/client';
 import { fmtD } from '../../../lib/format';
+import { Skeleton } from '../../ui/Skeleton';
 import type { PulseTeamSummary } from '../../../types';
 
 function workloadColor(rating: number): string {
@@ -59,7 +60,7 @@ export function TeamPulseWidget() {
     return <div style={{ fontSize: 13, color: 'var(--t2)' }}>Admin access required to view team pulse.</div>;
   }
   if (error) return <div className="merr">{error}</div>;
-  if (!summary) return <div style={{ fontSize: 13, color: 'var(--t2)' }}>Loading…</div>;
+  if (!summary) return <Skeleton height={90} />;
 
   return (
     <div>

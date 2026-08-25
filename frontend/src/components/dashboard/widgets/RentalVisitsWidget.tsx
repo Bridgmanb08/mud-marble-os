@@ -1,8 +1,8 @@
-import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { IconMapPin } from '@tabler/icons-react';
-import { api } from '../../../api/client';
 import { AnimatedBar, useCountUp } from '../../rentals/RentalVisuals';
+import { useRentRoll } from '../../../rentals/useRentRoll';
+import { Skeleton } from '../../ui/Skeleton';
 import type { RentRollRow } from '../../../types';
 
 const SCALE_DAYS = 60; // a bar fully filled represents 60+ days since the last visit
@@ -15,20 +15,13 @@ function stalenessColor(days: number | null): string {
 
 // Properties that haven't been visited in a while (or ever), most-stale
 // first, with an animated bar per property (how full = how overdue) so
-// staleness reads visually. Self-fetches off the shared rent-roll endpoint;
-// dedupes by property since rent-roll is one row per unit but visits are
-// logged per property.
+// staleness reads visually. Shares the rent-roll fetch (via useRentRoll)
+// with the other four rental dashboard widgets instead of each
+// independently re-fetching it; dedupes by property since rent-roll is one
+// row per unit but visits are logged per property.
 export function RentalVisitsWidget() {
   const navigate = useNavigate();
-  const [rows, setRows] = useState<RentRollRow[] | null>(null);
-  const [error, setError] = useState(false);
-
-  useEffect(() => {
-    api
-      .get<RentRollRow[]>('/rentals/rent-roll')
-      .then(setRows)
-      .catch(() => setError(true));
-  }, []);
+  const { rows, error } = useRentRoll();
 
   const byProperty = new Map<string, RentRollRow>();
   for (const r of rows ?? []) {
@@ -44,7 +37,7 @@ export function RentalVisitsWidget() {
   const animatedStale = useCountUp(stale.length, 600);
 
   if (error) return <div style={{ fontSize: 13, color: 'var(--t2)' }}>Visit data unavailable.</div>;
-  if (!rows) return <div style={{ fontSize: 13, color: 'var(--t2)' }}>Loading…</div>;
+  if (!rows) return <Skeleton height={90} />;
   if (properties.length === 0) return <div style={{ fontSize: 13, color: 'var(--t2)' }}>No properties yet.</div>;
 
   return (

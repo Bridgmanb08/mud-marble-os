@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { IconSun, IconCloud, IconCloudFog, IconCloudRain, IconSnowflake, IconCloudStorm } from '@tabler/icons-react';
 import { api } from '../../../api/client';
+import { Skeleton } from '../../ui/Skeleton';
 import type { WeatherOut } from '../../../types';
 
 const CONDITION_ICON: Record<string, typeof IconSun> = {
@@ -28,7 +29,7 @@ export function WeatherWidget() {
   }, []);
 
   if (error) return <div style={{ fontSize: 13, color: 'var(--t2)' }}>Weather unavailable.</div>;
-  if (!weather) return <div style={{ fontSize: 13, color: 'var(--t2)' }}>Loading…</div>;
+  if (!weather) return <Skeleton height={70} />;
 
   const Icon = CONDITION_ICON[weather.condition] || IconCloud;
   const today = weather.daily[0];

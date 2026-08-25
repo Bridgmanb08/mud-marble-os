@@ -1,27 +1,19 @@
-import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { IconReceipt2 } from '@tabler/icons-react';
-import { api } from '../../../api/client';
 import { fmt } from '../../../lib/format';
 import { RadialProgress, StatusDot, useCountUp } from '../../rentals/RentalVisuals';
+import { useRentRoll } from '../../../rentals/useRentRoll';
+import { Skeleton } from '../../ui/Skeleton';
 import type { RentRollRow } from '../../../types';
 
 // "Rent Collected This Month" -- an animated radial ring for the headline
 // %, plus a row of per-unit "ticker" chips (paid/partial/none) so the whole
 // portfolio's collection status reads as one glanceable image, not just a
-// number. Self-fetches off the shared rent-roll endpoint, same precedent as
-// RentalSnapshotWidget/WeatherWidget.
+// number. Shares the rent-roll fetch (via useRentRoll) with the other four
+// rental dashboard widgets instead of each independently re-fetching it.
 export function RentalCollectionWidget() {
   const navigate = useNavigate();
-  const [rows, setRows] = useState<RentRollRow[] | null>(null);
-  const [error, setError] = useState(false);
-
-  useEffect(() => {
-    api
-      .get<RentRollRow[]>('/rentals/rent-roll')
-      .then(setRows)
-      .catch(() => setError(true));
-  }, []);
+  const { rows, error } = useRentRoll();
 
   const leased = (rows ?? []).filter((r) => r.lease_id);
   const due = leased.reduce((sum, r) => sum + r.current_month_due, 0);
@@ -31,7 +23,7 @@ export function RentalCollectionWidget() {
   const ringColor = pct >= 100 ? 'var(--green)' : pct >= 70 ? 'var(--amber)' : 'var(--red)';
 
   if (error) return <div style={{ fontSize: 13, color: 'var(--t2)' }}>Rent collection data unavailable.</div>;
-  if (!rows) return <div style={{ fontSize: 13, color: 'var(--t2)' }}>Loading…</div>;
+  if (!rows) return <Skeleton height={90} />;
   if (leased.length === 0) return <div style={{ fontSize: 13, color: 'var(--t2)' }}>No active leases yet.</div>;
 
   const paidCount = leased.filter((r) => r.current_month_paid >= r.current_month_due && r.current_month_due > 0).length;
