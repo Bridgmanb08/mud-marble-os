@@ -7,6 +7,23 @@ from ..supabase_client import db_get, db_patch, db_post
 router = APIRouter(prefix="/leads", tags=["leads"])
 
 
+async def _validate_lead_status(status: str) -> None:
+    """leads.status is deliberately free-text (migration 0050 dropped the
+    fixed-set check constraint so an admin can add a new stage from the UI
+    without a follow-up migration) -- but nothing was actually enforcing it
+    against the real, current lead_stages.key set at the application layer,
+    which the migration's own comment says is where this validation
+    belongs. A lead whose status matched nothing would get stuck invisibly:
+    the Sales-stage dropdown on Leads.tsx has no matching <option> to show
+    it as, and the dashboard's/list page's "open pipeline" counts either
+    silently include or exclude it depending on which one's doing the
+    guessing."""
+    stages = await db_get("lead_stages", "?select=key")
+    valid_keys = {s["key"] for s in stages}
+    if status not in valid_keys:
+        raise HTTPException(status_code=400, detail=f"'{status}' is not a valid lead stage")
+
+
 async def _attach_referrers(rows: list[dict]) -> list[dict]:
     referrer_ids = {r["referred_by_client_id"] for r in rows if r.get("referred_by_client_id")}
     if not referrer_ids:
@@ -29,12 +46,15 @@ async def list_leads(_: CurrentUser = Depends(get_current_user)):
 
 @router.post("", response_model=LeadOut)
 async def create_lead(body: LeadCreate, _: CurrentUser = Depends(get_current_user)):
+    await _validate_lead_status(body.status)
     rows = await db_post("leads", body.model_dump(exclude_none=True))
     return (await _attach_referrers(rows))[0]
 
 
 @router.patch("/{lead_id}", response_model=LeadOut)
 async def update_lead(lead_id: str, body: LeadUpdate, _: CurrentUser = Depends(get_current_user)):
+    if body.status is not None:
+        await _validate_lead_status(body.status)
     # exclude_unset (not exclude_none) -- a caller may need to explicitly
     # clear a field (e.g. unlinking a referral, clearing last_contacted_at),
     # and that null has to reach the database instead of being silently
@@ -52,14 +72,24 @@ async def convert_lead(lead_id: str, body: LeadConvertRequest, _: CurrentUser = 
     if lead.get("converted_client_id"):
         raise HTTPException(status_code=400, detail="This lead has already been converted")
 
-    first_name = body.first_name or lead.get("first_name")
+    first_name = body.first_name or lead.get("first_name") or ""
     last_name = body.last_name or lead.get("last_name")
     if not first_name and not last_name:
         raise HTTPException(status_code=400, detail="A first or last name is required to convert this lead")
 
     client_payload = {
-        "first_name": first_name or last_name,
-        "last_name": last_name if first_name else None,
+        # first_name is required at the DB level, but a genuine "" is fine
+        # here -- every "{first} {last}" display in this app already
+        # .strip()s the joined string (e.g. estimates.py's PDF export
+        # client_name line), so a lead with only a last name on file (no
+        # first name -- common for informal intake, "Mrs. Thompson called
+        # about a kitchen remodel") renders correctly as just "Thompson"
+        # instead of the last name silently landing in the first_name slot
+        # and last_name being dropped entirely, which is what this used to
+        # do (`first_name or last_name` swapped them the moment first_name
+        # was empty).
+        "first_name": first_name,
+        "last_name": last_name,
         "phone": body.phone or lead.get("phone"),
         "email": body.email or lead.get("email"),
         "address": body.address or lead.get("project_address"),
