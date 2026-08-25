@@ -241,7 +241,7 @@ async def reorder_priority(body: PriorityReorderRequest, _: CurrentUser = Depend
 
 
 @router.patch("/bulk")
-async def bulk_update_tasks(body: BulkUpdateRequest, _: CurrentUser = Depends(get_current_user)):
+async def bulk_update_tasks(body: BulkUpdateRequest, current_user: CurrentUser = Depends(get_current_user)):
     updates: dict = {}
     if body.status is not None:
         updates["status"] = body.status
@@ -254,23 +254,69 @@ async def bulk_update_tasks(body: BulkUpdateRequest, _: CurrentUser = Depends(ge
 
     id_filter = ",".join(body.ids)
     if body.status is None:
+        # Old assignees captured before the patch -- the same diff
+        # _notify_new_assignees needs elsewhere, just gathered here for a
+        # whole batch instead of one task. Single-task assign already
+        # notifies; bulk previously didn't at all, which is the one path a
+        # newly-assigned person could silently never hear about.
+        old_rows = (
+            await db_get("schedule_items", f"?id=in.({id_filter})&select=id,assigned_to,assignees")
+            if "assignees" in updates
+            else []
+        )
         await db_patch_query("schedule_items", f"?id=in.({id_filter})", updates)
+        if "assignees" in updates and old_rows:
+            full = await db_get(
+                "schedule_items", f"?id=in.({id_filter})&select=*,projects(name),subcontractors(company_name,trade)"
+            )
+            enriched_by_id = {t.id: t for t in await _enrich(full)}
+            for row in old_rows:
+                task = enriched_by_id.get(row["id"])
+                if not task:
+                    continue
+                old_names = row.get("assignees") or ([row["assigned_to"]] if row.get("assigned_to") else [])
+                await _notify_new_assignees(old_names, updates["assignees"], task, current_user)
         return {"ok": True, "updated": len(body.ids)}
 
     # completed_at should only change for tasks actually transitioning into/out
     # of "complete" -- a bulk selection can mix already-complete tasks with
     # incomplete ones, and re-stamping the already-complete ones would silently
     # reset when they "completed" for reporting purposes.
-    current = await db_get("schedule_items", f"?id=in.({id_filter})&select=id,status")
+    current = await db_get("schedule_items", f"?id=in.({id_filter})&select=id,status,title")
     current_status = {r["id"]: r["status"] for r in current}
+    current_title = {r["id"]: r["title"] for r in current}
     now_iso = datetime.now(timezone.utc).isoformat()
     if body.status == "complete":
-        to_stamp = [tid for tid in body.ids if current_status.get(tid) != "complete"]
-        untouched = [tid for tid in body.ids if tid not in to_stamp]
+        candidates = [tid for tid in body.ids if current_status.get(tid) != "complete"]
+
+        # Same incomplete-dependency block update_task enforces on a single
+        # task -- bulk had no such check at all, silently completing a task
+        # the single-task endpoint would reject outright with a 400.
+        blocked: dict[str, str] = {}
+        if candidates:
+            deps = await db_get(
+                "task_dependencies", f"?task_id=in.({','.join(candidates)})&select=task_id,depends_on_id"
+            )
+            if deps:
+                blocker_ids = ",".join({d["depends_on_id"] for d in deps})
+                blockers = await db_get("schedule_items", f"?id=in.({blocker_ids})&select=id,status")
+                incomplete_blockers = {b["id"] for b in blockers if b["status"] != "complete"}
+                for d in deps:
+                    if d["depends_on_id"] in incomplete_blockers:
+                        blocked[d["task_id"]] = current_title.get(d["task_id"], "")
+
+        to_stamp = [tid for tid in candidates if tid not in blocked]
+        already_complete = [tid for tid in body.ids if tid not in candidates and tid not in blocked]
         if to_stamp:
             await db_patch_query("schedule_items", f"?id=in.({','.join(to_stamp)})", {**updates, "completed_at": now_iso})
-        if untouched:
-            await db_patch_query("schedule_items", f"?id=in.({','.join(untouched)})", updates)
+        if already_complete:
+            await db_patch_query("schedule_items", f"?id=in.({','.join(already_complete)})", updates)
+        return {
+            "ok": True,
+            "updated": len(to_stamp) + len(already_complete),
+            "skipped_blocked": len(blocked),
+            "skipped_titles": list(blocked.values())[:5],
+        }
     else:
         to_clear = [tid for tid in body.ids if current_status.get(tid) == "complete"]
         untouched = [tid for tid in body.ids if tid not in to_clear]

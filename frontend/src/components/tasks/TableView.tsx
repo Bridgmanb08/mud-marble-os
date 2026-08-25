@@ -232,8 +232,19 @@ export function TableView({
     if (!bulkStatus || selected.size === 0) return;
     setBulkBusy(true);
     try {
-      await api.patch('/tasks/bulk', { ids: Array.from(selected), status: bulkStatus });
-      toast(`Updated ${selected.size} task${selected.size === 1 ? '' : 's'}`);
+      const res = await api.patch<{ updated: number; skipped_blocked?: number; skipped_titles?: string[] }>(
+        '/tasks/bulk',
+        { ids: Array.from(selected), status: bulkStatus }
+      );
+      if (res.skipped_blocked) {
+        const names = res.skipped_titles?.join(', ') || '';
+        toast(
+          `Updated ${res.updated} — skipped ${res.skipped_blocked} still blocked by an incomplete dependency${names ? ` (${names})` : ''}`,
+          true
+        );
+      } else {
+        toast(`Updated ${selected.size} task${selected.size === 1 ? '' : 's'}`);
+      }
       setSelected(new Set());
       setBulkStatus('');
       onChanged();
