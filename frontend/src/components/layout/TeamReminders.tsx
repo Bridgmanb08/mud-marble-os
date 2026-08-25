@@ -20,7 +20,8 @@ import { DashboardTaskDrawer } from '../dashboard/DashboardTaskDrawer';
 import { PulseCheckinModal } from '../dashboard/PulseCheckinModal';
 import { RYAN_HOLIDAY_QUOTES } from '../../data/ryanHolidayQuotes';
 import { addReminderHistoryEntry } from '../../lib/reminderHistory';
-import type { Task, PulseCheckinOut, DashboardSummary, RentalProperty, AppNotification } from '../../types';
+import { refreshNotifications, getSnapshot } from '../../notifications/notificationsStore';
+import type { Task, PulseCheckinOut, DashboardSummary, RentalProperty } from '../../types';
 
 /**
  * Proactive, personality-driven reminders for the current user's own tasks
@@ -329,12 +330,18 @@ export function TeamReminders() {
   // moment someone is newly added to a task's assignees -- same data the
   // NotificationBell already lists, this just also pops it as an on-screen
   // toast so an assignment feels like it actually just happened instead of
-  // sitting quietly until someone thinks to check the bell.
+  // sitting quietly until someone thinks to check the bell. Reads off the
+  // shared notificationsStore instead of independently re-fetching
+  // /notifications -- refreshNotifications() explicitly forces a fetch
+  // (deduped against a concurrent NotificationBell-triggered one via the
+  // store's own in-flight promise) rather than trusting NotificationBell's
+  // poll to happen to keep the list fresh, so this stays correct even if
+  // NotificationBell is ever not mounted.
   async function pollTaskAssigned() {
     if (!user) return;
     const today = todayStr();
-    const notifs = await api.get<AppNotification[]>('/notifications').catch(() => []);
-    const assigned = notifs.filter((n) => n.type === 'task_assigned');
+    await refreshNotifications();
+    const assigned = getSnapshot().filter((n) => n.type === 'task_assigned');
     for (const n of assigned) {
       const key = `${today}:task_assigned:${n.id}`;
       if (shownRef.current.has(key)) continue;
