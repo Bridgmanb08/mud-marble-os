@@ -62,6 +62,7 @@ class InvoiceLineItemBulkCreate(BaseModel):
 
 class InvoiceLineItemUpdate(BaseModel):
     title: Optional[str] = None
+    cost_code_id: Optional[str] = None
     description: Optional[str] = None
     pct_of_line_item: Optional[float] = None
     amount: Optional[float] = None
