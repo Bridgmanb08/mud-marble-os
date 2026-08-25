@@ -99,101 +99,110 @@ export function NewTaskModal({ onClose, onSaved, defaultStatus, defaultProjectId
     <Modal title="New task" onClose={onClose} wide>
       <form onSubmit={handleSubmit}>
         {error && <div className="merr">{error}</div>}
-        <div className="fg">
-          <label className="fl">Title</label>
-          <input className="fi" value={title} onChange={(e) => setTitle(e.target.value)} placeholder="Schedule framing inspection" />
-        </div>
-        <div className="fr">
+
+        <div className="card" style={{ padding: 16, marginBottom: 16 }}>
+          <div className="card-section-header">Task details</div>
           <div className="fg">
-            <label className="fl">Project</label>
-            <select className="fi" value={projectId} onChange={(e) => setProjectId(e.target.value)}>
-              <option value="">— No project —</option>
-              {projects.map((p) => (
-                <option key={p.id} value={p.id}>
-                  {p.name.replace(/\|.*/, '').trim()}
-                </option>
-              ))}
-            </select>
+            <label className="fl">Title</label>
+            <input className="fi" value={title} onChange={(e) => setTitle(e.target.value)} placeholder="Schedule framing inspection" />
           </div>
-          <div className="fg">
-            <label className="fl">Assigned to</label>
-            <MultiAssigneeInput value={assignees} onChange={setAssignees} directory={directory} listId="assignee-options-new" />
-          </div>
-        </div>
-        <div className="fg">
-          <label className="fl">Subcontractor</label>
-          <div style={{ display: 'flex', gap: 6 }}>
-            <select className="fi" style={{ flex: 1 }} value={subcontractorId} onChange={(e) => setSubcontractorId(e.target.value)}>
-              <option value="">— None —</option>
-              {subcontractors.map((s) => (
-                <option key={s.id} value={s.id}>
-                  {s.company_name}
-                  {s.trade ? ` (${s.trade})` : ''}
-                </option>
-              ))}
-            </select>
-            <button type="button" className="btn btn-ghost btn-sm" onClick={() => setShowNewSub(true)} title="Add new subcontractor">
-              <IconPlus size={14} />
-            </button>
-          </div>
-          {subcontractorRisk && (
-            <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 11.5, color: 'var(--atx)', marginTop: 6 }}>
-              <IconAlertTriangle size={13} /> {subcontractorRisk}
+          <div className="fr">
+            <div className="fg">
+              <label className="fl">Project</label>
+              <select className="fi" value={projectId} onChange={(e) => setProjectId(e.target.value)}>
+                <option value="">— No project —</option>
+                {projects.map((p) => (
+                  <option key={p.id} value={p.id}>
+                    {p.name.replace(/\|.*/, '').trim()}
+                  </option>
+                ))}
+              </select>
             </div>
-          )}
-        </div>
-        <div className="fr3">
-          <div className="fg">
-            <label className="fl">Status</label>
-            <select className="fi" value={status} onChange={(e) => setStatus(e.target.value)}>
-              <option value="upcoming">To Do</option>
-              <option value="in_progress">In Progress</option>
-              <option value="delayed">Delayed / Blocked</option>
-              <option value="urgent_today">Extremely Important / Urgent — Must Be Done Today</option>
-              <option value="complete">Done</option>
-            </select>
+            <div className="fg">
+              <label className="fl">Assigned to</label>
+              <MultiAssigneeInput value={assignees} onChange={setAssignees} directory={directory} listId="assignee-options-new" />
+            </div>
           </div>
-          <div className="fg">
-            <label className="fl">Priority</label>
-            <select className="fi" value={priority} onChange={(e) => setPriority(e.target.value)}>
-              <option value="low">Low</option>
-              <option value="normal">Normal</option>
-              <option value="high">High</option>
-              <option value="urgent">Urgent</option>
-            </select>
-          </div>
-          <div className="fg">
-            <label className="fl">Phase</label>
-            <select className="fi" value={phase} onChange={(e) => setPhase(e.target.value)}>
-              <option value="">— No phase —</option>
-              {costCodes.map((c) => (
-                <option key={c.id} value={`${c.code} - ${c.name}`}>
-                  {c.code} - {c.name}
-                </option>
-              ))}
-            </select>
-          </div>
-        </div>
-        <div className="fr">
-          <div className="fg">
-            <label className="fl">Start</label>
-            <input className="fi" type="date" value={scheduledStart} onClick={openDatePicker} onChange={(e) => setScheduledStart(e.target.value)} />
-          </div>
-          <div className="fg">
-            <label className="fl">Due</label>
-            <input className="fi" type="date" value={scheduledEnd} onClick={openDatePicker} onChange={(e) => setScheduledEnd(e.target.value)} />
+          <div className="fr3">
+            <div className="fg">
+              <label className="fl">Status</label>
+              <select className="fi" value={status} onChange={(e) => setStatus(e.target.value)}>
+                <option value="upcoming">To Do</option>
+                <option value="in_progress">In Progress</option>
+                <option value="delayed">Delayed / Blocked</option>
+                <option value="urgent_today">Extremely Important / Urgent — Must Be Done Today</option>
+                <option value="complete">Done</option>
+              </select>
+            </div>
+            <div className="fg">
+              <label className="fl">Priority</label>
+              <select className="fi" value={priority} onChange={(e) => setPriority(e.target.value)}>
+                <option value="low">Low</option>
+                <option value="normal">Normal</option>
+                <option value="high">High</option>
+                <option value="urgent">Urgent</option>
+              </select>
+            </div>
+            <div className="fg">
+              <label className="fl">Phase</label>
+              <select className="fi" value={phase} onChange={(e) => setPhase(e.target.value)}>
+                <option value="">— No phase —</option>
+                {costCodes.map((c) => (
+                  <option key={c.id} value={`${c.code} - ${c.name}`}>
+                    {c.code} - {c.name}
+                  </option>
+                ))}
+              </select>
+            </div>
           </div>
         </div>
-        <div className="fg">
-          <label className="fl">Notes</label>
-          <textarea className="fi" value={notes} onChange={(e) => setNotes(e.target.value)} />
+
+        <div className="card" style={{ padding: 16, marginBottom: 16 }}>
+          <div className="card-section-header">Schedule & subcontractor</div>
+          <div className="fg">
+            <label className="fl">Subcontractor</label>
+            <div style={{ display: 'flex', gap: 6 }}>
+              <select className="fi" style={{ flex: 1 }} value={subcontractorId} onChange={(e) => setSubcontractorId(e.target.value)}>
+                <option value="">— None —</option>
+                {subcontractors.map((s) => (
+                  <option key={s.id} value={s.id}>
+                    {s.company_name}
+                    {s.trade ? ` (${s.trade})` : ''}
+                  </option>
+                ))}
+              </select>
+              <button type="button" className="btn btn-ghost btn-sm" onClick={() => setShowNewSub(true)} title="Add new subcontractor">
+                <IconPlus size={14} />
+              </button>
+            </div>
+            {subcontractorRisk && (
+              <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 11.5, color: 'var(--atx)', marginTop: 6 }}>
+                <IconAlertTriangle size={13} /> {subcontractorRisk}
+              </div>
+            )}
+          </div>
+          <div className="fr">
+            <div className="fg">
+              <label className="fl">Start</label>
+              <input className="fi" type="date" value={scheduledStart} onClick={openDatePicker} onChange={(e) => setScheduledStart(e.target.value)} />
+            </div>
+            <div className="fg">
+              <label className="fl">Due</label>
+              <input className="fi" type="date" value={scheduledEnd} onClick={openDatePicker} onChange={(e) => setScheduledEnd(e.target.value)} />
+            </div>
+          </div>
+          <div className="fg">
+            <label className="fl">Notes</label>
+            <textarea className="fi" value={notes} onChange={(e) => setNotes(e.target.value)} />
+          </div>
+          <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 13, cursor: 'pointer', marginBottom: 8 }}>
+            <input type="checkbox" checked={isMilestone} onChange={(e) => setIsMilestone(e.target.checked)} /> Milestone
+          </label>
+          <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 13, cursor: 'pointer' }}>
+            <input type="checkbox" checked={isPunchList} onChange={(e) => setIsPunchList(e.target.checked)} /> Punch list item
+          </label>
         </div>
-        <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 13, cursor: 'pointer', marginBottom: 8 }}>
-          <input type="checkbox" checked={isMilestone} onChange={(e) => setIsMilestone(e.target.checked)} /> Milestone
-        </label>
-        <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 13, cursor: 'pointer', marginBottom: 14 }}>
-          <input type="checkbox" checked={isPunchList} onChange={(e) => setIsPunchList(e.target.checked)} /> Punch list item
-        </label>
+
         <div className="ma">
           <button type="button" className="btn" onClick={onClose}>
             Cancel

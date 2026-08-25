@@ -55,55 +55,64 @@ export function NewChangeOrderModal({ onClose, onCreated, defaultProjectId }: Ne
     <Modal title="New change order" onClose={onClose} wide>
       <form onSubmit={handleSubmit}>
         {error && <div className="merr">{error}</div>}
-        <div className="fr">
+
+        <div className="card" style={{ padding: 16, marginBottom: 16 }}>
+          <div className="card-section-header">Change order details</div>
+          <div className="fr">
+            <div className="fg">
+              <label className="fl">Project</label>
+              <select className="fi" value={projectId} onChange={(e) => setProjectId(e.target.value)}>
+                <option value="">— Select project —</option>
+                {projects.map((p) => (
+                  <option key={p.id} value={p.id}>
+                    {p.name.replace(/\|.*/, '').trim()}
+                  </option>
+                ))}
+              </select>
+            </div>
+            <div className="fg">
+              <label className="fl">Type</label>
+              <select className="fi" value={coType} onChange={(e) => setCoType(e.target.value)}>
+                <option value="client_addition">Client addition</option>
+                <option value="oversight">Oversight</option>
+                <option value="unforeseen">Unforeseen</option>
+              </select>
+            </div>
+          </div>
           <div className="fg">
-            <label className="fl">Project</label>
-            <select className="fi" value={projectId} onChange={(e) => setProjectId(e.target.value)}>
-              <option value="">— Select project —</option>
-              {projects.map((p) => (
-                <option key={p.id} value={p.id}>
-                  {p.name.replace(/\|.*/, '').trim()}
-                </option>
-              ))}
+            <label className="fl">Title</label>
+            <input className="fi" value={title} onChange={(e) => setTitle(e.target.value)} placeholder="Add deck railing" />
+          </div>
+          <div className="fg">
+            <label className="fl">Discovered by</label>
+            <select className="fi" value={discoveredBy} onChange={(e) => setDiscoveredBy(e.target.value)}>
+              <option value="">—</option>
+              <option value="brent">Brent</option>
+              <option value="shannon">Shannon</option>
+              <option value="client">Client</option>
+              <option value="subcontractor">Subcontractor</option>
             </select>
           </div>
-          <div className="fg">
-            <label className="fl">Type</label>
-            <select className="fi" value={coType} onChange={(e) => setCoType(e.target.value)}>
-              <option value="client_addition">Client addition</option>
-              <option value="oversight">Oversight</option>
-              <option value="unforeseen">Unforeseen</option>
-            </select>
-          </div>
         </div>
-        <div className="fg">
-          <label className="fl">Title</label>
-          <input className="fi" value={title} onChange={(e) => setTitle(e.target.value)} placeholder="Add deck railing" />
-        </div>
-        <div className="fr">
-          <div className="fg">
-            <label className="fl">Owner price ($)</label>
-            <input className="fi" type="number" value={ownerPrice} onChange={(e) => setOwnerPrice(e.target.value)} />
+
+        <div className="card" style={{ padding: 16, marginBottom: 16 }}>
+          <div className="card-section-header">Financials</div>
+          <div className="fr">
+            <div className="fg">
+              <label className="fl">Owner price ($)</label>
+              <input className="fi" type="number" value={ownerPrice} onChange={(e) => setOwnerPrice(e.target.value)} />
+            </div>
+            <div className="fg">
+              <label className="fl">Builder cost ($)</label>
+              <input className="fi" type="number" value={builderCost} onChange={(e) => setBuilderCost(e.target.value)} />
+            </div>
           </div>
           <div className="fg">
-            <label className="fl">Builder cost ($)</label>
-            <input className="fi" type="number" value={builderCost} onChange={(e) => setBuilderCost(e.target.value)} />
+            <label className="fl">Description</label>
+            <textarea className="fi" value={description} onChange={(e) => setDescription(e.target.value)} />
           </div>
         </div>
-        <div className="fg">
-          <label className="fl">Discovered by</label>
-          <select className="fi" value={discoveredBy} onChange={(e) => setDiscoveredBy(e.target.value)}>
-            <option value="">—</option>
-            <option value="brent">Brent</option>
-            <option value="shannon">Shannon</option>
-            <option value="client">Client</option>
-            <option value="subcontractor">Subcontractor</option>
-          </select>
-        </div>
-        <div className="fg">
-          <label className="fl">Description</label>
-          <textarea className="fi" value={description} onChange={(e) => setDescription(e.target.value)} />
-        </div>
+
         <div className="ma">
           <button type="button" className="btn" onClick={onClose}>
             Cancel

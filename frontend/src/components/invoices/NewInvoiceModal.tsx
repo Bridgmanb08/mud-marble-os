@@ -112,49 +112,50 @@ export function NewInvoiceModal({ onClose, onCreated, defaultProjectId }: NewInv
           </div>
         )}
 
-        <div className="ibt" style={{ fontSize: 12, textTransform: 'none', letterSpacing: 0, border: 'none', padding: 0, marginBottom: 12 }}>
-          Invoice details
-        </div>
-        <div className="fr">
-          <div className="fg">
-            <label className="fl">Invoice number</label>
-            <input className="fi" value={invoiceNumber} onChange={(e) => setInvoiceNumber(e.target.value)} placeholder="Optional" />
+        <div className="card" style={{ padding: 14, marginBottom: 16 }}>
+          <div className="card-section-header">Invoice details</div>
+          <div className="fr">
+            <div className="fg">
+              <label className="fl">Invoice number</label>
+              <input className="fi" value={invoiceNumber} onChange={(e) => setInvoiceNumber(e.target.value)} placeholder="Optional" />
+            </div>
+            <div className="fg">
+              <label className="fl">Type</label>
+              <select className="fi" value={invoiceType} onChange={(e) => setInvoiceType(e.target.value)}>
+                <option value="deposit">Deposit</option>
+                <option value="progress">Progress</option>
+                <option value="final">Final</option>
+              </select>
+            </div>
           </div>
-          <div className="fg">
-            <label className="fl">Type</label>
-            <select className="fi" value={invoiceType} onChange={(e) => setInvoiceType(e.target.value)}>
-              <option value="deposit">Deposit</option>
-              <option value="progress">Progress</option>
-              <option value="final">Final</option>
-            </select>
-          </div>
-        </div>
-        <div className="fr">
-          <div className="fg">
-            <label className="fl">Amount due ($)</label>
-            <input
-              className="fi"
-              type="number"
-              value={amountDue}
-              onChange={(e) => {
-                setAmountTouched(true);
-                setAmountDue(e.target.value);
-              }}
-            />
-            <div className="m-sub">
-              Defaulted to what's remaining on the contract. If you build this invoice from specific estimate
-              line items afterward, this amount is replaced automatically.
+          <div className="fr">
+            <div className="fg">
+              <label className="fl">Amount due ($)</label>
+              <input
+                className="fi"
+                type="number"
+                value={amountDue}
+                onChange={(e) => {
+                  setAmountTouched(true);
+                  setAmountDue(e.target.value);
+                }}
+              />
+              <div className="m-sub">
+                Defaulted to what's remaining on the contract. If you build this invoice from specific estimate
+                line items afterward, this amount is replaced automatically.
+              </div>
+            </div>
+            <div className="fg">
+              <label className="fl">Due date</label>
+              <input className="fi" type="date" value={dueDate} onClick={openDatePicker} onChange={(e) => setDueDate(e.target.value)} />
             </div>
           </div>
           <div className="fg">
-            <label className="fl">Due date</label>
-            <input className="fi" type="date" value={dueDate} onClick={openDatePicker} onChange={(e) => setDueDate(e.target.value)} />
+            <label className="fl">Notes</label>
+            <textarea className="fi" value={notes} onChange={(e) => setNotes(e.target.value)} />
           </div>
         </div>
-        <div className="fg">
-          <label className="fl">Notes</label>
-          <textarea className="fi" value={notes} onChange={(e) => setNotes(e.target.value)} />
-        </div>
+
         <div className="ma">
           <button type="button" className="btn" onClick={onClose}>
             Cancel

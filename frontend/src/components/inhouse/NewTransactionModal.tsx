@@ -82,92 +82,101 @@ export function NewTransactionModal({ onClose, onCreated, transaction, defaultPr
     <Modal title={transaction ? 'Edit transaction' : 'Add transaction'} onClose={onClose} wide>
       <form onSubmit={handleSubmit}>
         {error && <div className="merr">{error}</div>}
-        <div className="fr">
-          <div className="fg">
-            <label className="fl">Date</label>
-            <input className="fi" type="date" value={date} onClick={openDatePicker} onChange={(e) => setDate(e.target.value)} />
+
+        <div className="card" style={{ padding: 16, marginBottom: 16 }}>
+          <div className="card-section-header">Transaction details</div>
+          <div className="fr">
+            <div className="fg">
+              <label className="fl">Date</label>
+              <input className="fi" type="date" value={date} onClick={openDatePicker} onChange={(e) => setDate(e.target.value)} />
+            </div>
+            <div className="fg">
+              <label className="fl">Project</label>
+              <select className="fi" value={projectId} onChange={(e) => setProjectId(e.target.value)} disabled={lockProject}>
+                <option value="">— Select project —</option>
+                {projects.map((p) => (
+                  <option key={p.id} value={p.id}>
+                    {p.name.replace(/\|.*/, '').trim()}
+                  </option>
+                ))}
+              </select>
+            </div>
           </div>
-          <div className="fg">
-            <label className="fl">Project</label>
-            <select className="fi" value={projectId} onChange={(e) => setProjectId(e.target.value)} disabled={lockProject}>
-              <option value="">— Select project —</option>
-              {projects.map((p) => (
-                <option key={p.id} value={p.id}>
-                  {p.name.replace(/\|.*/, '').trim()}
-                </option>
-              ))}
-            </select>
+          <div className="fr">
+            <div className="fg">
+              <label className="fl">Vendor / payer</label>
+              <input className="fi" value={vendor} onChange={(e) => setVendor(e.target.value)} />
+            </div>
+            <div className="fg">
+              <label className="fl">Transaction type</label>
+              <select className="fi" value={transactionType} onChange={(e) => setTransactionType(e.target.value)}>
+                <option value="expense">Expense</option>
+                <option value="income">Income</option>
+                <option value="credit">Credit / refund</option>
+              </select>
+            </div>
           </div>
-        </div>
-        <div className="fr">
-          <div className="fg">
-            <label className="fl">Vendor / payer</label>
-            <input className="fi" value={vendor} onChange={(e) => setVendor(e.target.value)} />
-          </div>
-          <div className="fg">
-            <label className="fl">Transaction type</label>
-            <select className="fi" value={transactionType} onChange={(e) => setTransactionType(e.target.value)}>
-              <option value="expense">Expense</option>
-              <option value="income">Income</option>
-              <option value="credit">Credit / refund</option>
-            </select>
-          </div>
-        </div>
-        <div className="fr">
-          <div className="fg">
-            <label className="fl">Amount ($)</label>
-            <input className="fi" type="number" value={amount} onChange={(e) => setAmount(e.target.value)} />
-          </div>
-          <div className="fg">
-            <label className="fl">Payment source</label>
-            <select className="fi" value={paymentSource} onChange={(e) => setPaymentSource(e.target.value)}>
-              <option value="checking">Checking account</option>
-              <option value="credit_card">Credit card</option>
-              <option value="cash">Cash</option>
-              <option value="other">Other</option>
-            </select>
-          </div>
-        </div>
-        <div className="fr">
-          <div className="fg">
-            <label className="fl">Cost code</label>
-            <select className="fi" value={costCodeId} onChange={(e) => setCostCodeId(e.target.value)}>
-              <option value="">— Select —</option>
-              {costCodes.map((c) => (
-                <option key={c.id} value={c.id}>
-                  {c.code} — {c.name}
-                </option>
-              ))}
-            </select>
-          </div>
-          <div className="fg">
-            <label className="fl">Subcontractor</label>
-            <select className="fi" value={subcontractorId} onChange={(e) => setSubcontractorId(e.target.value)}>
-              <option value="">— None —</option>
-              {subcontractors.map((s) => (
-                <option key={s.id} value={s.id}>
-                  {s.company_name}
-                  {s.trade ? ` (${s.trade})` : ''}
-                </option>
-              ))}
-            </select>
+          <div className="fr">
+            <div className="fg">
+              <label className="fl">Amount ($)</label>
+              <input className="fi" type="number" value={amount} onChange={(e) => setAmount(e.target.value)} />
+            </div>
+            <div className="fg">
+              <label className="fl">Payment source</label>
+              <select className="fi" value={paymentSource} onChange={(e) => setPaymentSource(e.target.value)}>
+                <option value="checking">Checking account</option>
+                <option value="credit_card">Credit card</option>
+                <option value="cash">Cash</option>
+                <option value="other">Other</option>
+              </select>
+            </div>
           </div>
         </div>
-        <div className="fg">
-          <label className="fl">Description</label>
-          <input className="fi" value={description} onChange={(e) => setDescription(e.target.value)} />
+
+        <div className="card" style={{ padding: 16, marginBottom: 16 }}>
+          <div className="card-section-header">Cost tracking</div>
+          <div className="fr">
+            <div className="fg">
+              <label className="fl">Cost code</label>
+              <select className="fi" value={costCodeId} onChange={(e) => setCostCodeId(e.target.value)}>
+                <option value="">— Select —</option>
+                {costCodes.map((c) => (
+                  <option key={c.id} value={c.id}>
+                    {c.code} — {c.name}
+                  </option>
+                ))}
+              </select>
+            </div>
+            <div className="fg">
+              <label className="fl">Subcontractor</label>
+              <select className="fi" value={subcontractorId} onChange={(e) => setSubcontractorId(e.target.value)}>
+                <option value="">— None —</option>
+                {subcontractors.map((s) => (
+                  <option key={s.id} value={s.id}>
+                    {s.company_name}
+                    {s.trade ? ` (${s.trade})` : ''}
+                  </option>
+                ))}
+              </select>
+            </div>
+          </div>
+          <div className="fg">
+            <label className="fl">Description</label>
+            <input className="fi" value={description} onChange={(e) => setDescription(e.target.value)} />
+          </div>
+          <div style={{ display: 'flex', gap: 20 }}>
+            <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 13, cursor: 'pointer' }}>
+              <input type="checkbox" checked={isAllowance} onChange={(e) => setIsAllowance(e.target.checked)} /> Allowance (no markup)
+            </label>
+            <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 13, cursor: 'pointer' }}>
+              <input type="checkbox" checked={isChangeOrder} onChange={(e) => setIsChangeOrder(e.target.checked)} /> Change order related
+            </label>
+            <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 13, cursor: 'pointer' }}>
+              <input type="checkbox" checked={quickbooksSynced} onChange={(e) => setQuickbooksSynced(e.target.checked)} /> Synced to QuickBooks
+            </label>
+          </div>
         </div>
-        <div style={{ display: 'flex', gap: 20, marginBottom: 14 }}>
-          <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 13, cursor: 'pointer' }}>
-            <input type="checkbox" checked={isAllowance} onChange={(e) => setIsAllowance(e.target.checked)} /> Allowance (no markup)
-          </label>
-          <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 13, cursor: 'pointer' }}>
-            <input type="checkbox" checked={isChangeOrder} onChange={(e) => setIsChangeOrder(e.target.checked)} /> Change order related
-          </label>
-          <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 13, cursor: 'pointer' }}>
-            <input type="checkbox" checked={quickbooksSynced} onChange={(e) => setQuickbooksSynced(e.target.checked)} /> Synced to QuickBooks
-          </label>
-        </div>
+
         <div className="ma">
           <button type="button" className="btn" onClick={onClose}>
             Cancel

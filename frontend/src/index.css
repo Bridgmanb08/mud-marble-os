@@ -66,6 +66,11 @@ body{font-family:var(--font);background:var(--bg);color:var(--text);font-size:14
 
 /* Cards & metrics */
 .card{background:var(--surface);border:1px solid var(--border);border-radius:var(--rl);}
+/* Labeled section header inside a form modal's .card wrapper -- the
+   BuilderTrend-style "group related fields under a bordered heading"
+   pattern introduced in LineItemModal.tsx, reused across every multi-field
+   create/edit modal instead of each one repeating its own inline style. */
+.card-section-header{font-size:13px;font-weight:600;margin-bottom:14px;padding-bottom:10px;border-bottom:1px solid var(--border);}
 .metrics{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px;margin-bottom:20px;}
 .metric{background:var(--surface);border:1px solid var(--border);border-radius:var(--rl);padding:16px 18px;}
 .m-label{font-size:11px;color:var(--t2);margin-bottom:6px;font-weight:500;}
