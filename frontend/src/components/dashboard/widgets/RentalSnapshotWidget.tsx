@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { IconHome2 } from '@tabler/icons-react';
 import { api } from '../../../api/client';
+import { Skeleton } from '../../ui/Skeleton';
 import type { RentalDashboardSummary } from '../../../types';
 
 // Self-fetches rather than reading off the shared dashboard `data` prop, same
@@ -20,7 +21,7 @@ export function RentalSnapshotWidget() {
   }, []);
 
   if (error) return <div style={{ fontSize: 13, color: 'var(--t2)' }}>Rental snapshot unavailable.</div>;
-  if (!summary) return <div style={{ fontSize: 13, color: 'var(--t2)' }}>Loading…</div>;
+  if (!summary) return <Skeleton height={70} />;
 
   const onTime = summary.on_time_rate_30;
 

@@ -1,26 +1,18 @@
-import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { IconHome2 } from '@tabler/icons-react';
-import { api } from '../../../api/client';
 import { RadialProgress, StatusDot, useCountUp } from '../../rentals/RentalVisuals';
-import type { RentRollRow } from '../../../types';
+import { useRentRoll } from '../../../rentals/useRentRoll';
+import { Skeleton } from '../../ui/Skeleton';
 
 // Occupied vs vacant units, portfolio-wide -- an animated ring for the rate
 // plus a per-unit ticker strip (green = occupied, gray = vacant) so the
 // whole portfolio reads as one image, with a text list of vacant units
-// underneath so a vacancy never sits unnoticed. Self-fetches off the shared
-// rent-roll endpoint.
+// underneath so a vacancy never sits unnoticed. Shares the rent-roll fetch
+// (via useRentRoll) with the other four rental dashboard widgets instead of
+// each independently re-fetching it.
 export function RentalOccupancyWidget() {
   const navigate = useNavigate();
-  const [rows, setRows] = useState<RentRollRow[] | null>(null);
-  const [error, setError] = useState(false);
-
-  useEffect(() => {
-    api
-      .get<RentRollRow[]>('/rentals/rent-roll')
-      .then(setRows)
-      .catch(() => setError(true));
-  }, []);
+  const { rows, error } = useRentRoll();
 
   const all = rows ?? [];
   const occupied = all.filter((r) => r.lease_id).length;
@@ -29,7 +21,7 @@ export function RentalOccupancyWidget() {
   const ringColor = rate >= 90 ? 'var(--green)' : rate >= 70 ? 'var(--amber)' : 'var(--red)';
 
   if (error) return <div style={{ fontSize: 13, color: 'var(--t2)' }}>Occupancy data unavailable.</div>;
-  if (!rows) return <div style={{ fontSize: 13, color: 'var(--t2)' }}>Loading…</div>;
+  if (!rows) return <Skeleton height={90} />;
   if (all.length === 0) return <div style={{ fontSize: 13, color: 'var(--t2)' }}>No units yet.</div>;
 
   const vacant = all.filter((r) => !r.lease_id);

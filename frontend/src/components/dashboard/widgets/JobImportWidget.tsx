@@ -3,6 +3,7 @@ import { Link, useNavigate } from 'react-router-dom';
 import { IconPlus } from '@tabler/icons-react';
 import { api } from '../../../api/client';
 import { NewProjectModal } from '../../projects/NewProjectModal';
+import { Skeleton } from '../../ui/Skeleton';
 import type { JobImportStatus } from '../../../types';
 
 function StatusDot({ done }: { done: boolean }) {
@@ -37,7 +38,7 @@ export function JobImportWidget() {
       </div>
 
       {!statuses ? (
-        <div style={{ fontSize: 13, color: 'var(--t2)' }}>Loading…</div>
+        <Skeleton height={120} />
       ) : statuses.length === 0 ? (
         <div style={{ fontSize: 13, color: 'var(--t2)' }}>No jobs yet — click "New job" to add the first one.</div>
       ) : (

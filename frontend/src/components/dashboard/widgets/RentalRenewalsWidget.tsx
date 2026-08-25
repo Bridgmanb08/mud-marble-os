@@ -1,10 +1,9 @@
-import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { IconCalendarDue } from '@tabler/icons-react';
-import { api } from '../../../api/client';
 import { fmtD } from '../../../lib/format';
 import { AnimatedBar, useCountUp } from '../../rentals/RentalVisuals';
-import type { RentRollRow } from '../../../types';
+import { useRentRoll } from '../../../rentals/useRentRoll';
+import { Skeleton } from '../../ui/Skeleton';
 
 const STATUS_LABEL: Record<string, string> = {
   undecided: 'Undecided',
@@ -26,19 +25,12 @@ function urgencyColor(daysLeft: number): string {
 
 // Leases ending within ~90 days, badged by renewal_status, with an animated
 // "runway" bar per lease (how much of the 90-day window is left) so urgency
-// reads visually instead of requiring date math. Self-fetches off the
-// shared rent-roll endpoint.
+// reads visually instead of requiring date math. Shares the rent-roll fetch
+// (via useRentRoll) with the other four rental dashboard widgets instead of
+// each independently re-fetching it.
 export function RentalRenewalsWidget() {
   const navigate = useNavigate();
-  const [rows, setRows] = useState<RentRollRow[] | null>(null);
-  const [error, setError] = useState(false);
-
-  useEffect(() => {
-    api
-      .get<RentRollRow[]>('/rentals/rent-roll')
-      .then(setRows)
-      .catch(() => setError(true));
-  }, []);
+  const { rows, error } = useRentRoll();
 
   const now = Date.now();
   const soon = (rows ?? [])
@@ -47,7 +39,7 @@ export function RentalRenewalsWidget() {
   const animatedCount = useCountUp(soon.length, 600);
 
   if (error) return <div style={{ fontSize: 13, color: 'var(--t2)' }}>Renewal data unavailable.</div>;
-  if (!rows) return <div style={{ fontSize: 13, color: 'var(--t2)' }}>Loading…</div>;
+  if (!rows) return <Skeleton height={90} />;
 
   if (soon.length === 0) {
     return (

@@ -1,3 +1,4 @@
+import { useMemo } from 'react';
 import { fmt } from '../../../lib/format';
 import type { CustomWidgetFilter, CustomWidgetSpec, DashboardSummary } from '../../../types';
 
@@ -26,7 +27,11 @@ function matches(row: Record<string, unknown>, filter: CustomWidgetFilter): bool
 
 export function CustomWidgetRenderer({ spec, data }: { spec: CustomWidgetSpec; data: DashboardSummary }) {
   const rows = (data[spec.source] as Record<string, unknown>[] | undefined) ?? [];
-  const filtered = rows.filter((r) => spec.filters.every((f) => matches(r, f)));
+  // Filtering (and, below, aggregation) re-ran unmemoized on every render --
+  // harmless today since a static dashboard load doesn't re-render often,
+  // but re-derives from scratch on any unrelated parent re-render. Memoized
+  // on the two things that actually determine the result.
+  const filtered = useMemo(() => rows.filter((r) => spec.filters.every((f) => matches(r, f))), [rows, spec.filters]);
 
   if (spec.aggregation === 'count') {
     return <div className="m-val">{filtered.length}</div>;

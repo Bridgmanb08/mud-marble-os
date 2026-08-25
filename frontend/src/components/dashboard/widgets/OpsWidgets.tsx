@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import { fmtD } from '../../../lib/format';
 import { DashboardTaskDrawer } from '../DashboardTaskDrawer';
 import { api, ApiError } from '../../../api/client';
@@ -20,19 +20,27 @@ export function TaskManagementWidget({ data }: { data: DashboardSummary }) {
     }
   }
 
-  if (!items.length) return <div style={{ fontSize: 13, color: 'var(--t2)' }}>No milestones scheduled.</div>;
+  // Grouping/sorting was previously recomputed inline on every render,
+  // including the frequent case of a single checkbox toggle (which only
+  // changes local `dismissed` state) -- memoized so it only reruns when the
+  // underlying milestone list or dismissed set actually changes.
+  const { groups, groupNames } = useMemo(() => {
+    const g = new Map<string, typeof items>();
+    for (const t of items) {
+      const key = t.project_name || 'No project';
+      if (!g.has(key)) g.set(key, []);
+      g.get(key)!.push(t);
+    }
+    const names = Array.from(g.keys()).sort((a, b) => {
+      if (a === 'No project') return 1;
+      if (b === 'No project') return -1;
+      return a.localeCompare(b);
+    });
+    return { groups: g, groupNames: names };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [data.contractor_milestones, dismissed]);
 
-  const groups = new Map<string, typeof items>();
-  for (const t of items) {
-    const key = t.project_name || 'No project';
-    if (!groups.has(key)) groups.set(key, []);
-    groups.get(key)!.push(t);
-  }
-  const groupNames = Array.from(groups.keys()).sort((a, b) => {
-    if (a === 'No project') return 1;
-    if (b === 'No project') return -1;
-    return a.localeCompare(b);
-  });
+  if (!items.length) return <div style={{ fontSize: 13, color: 'var(--t2)' }}>No milestones scheduled.</div>;
 
   return (
     <>
