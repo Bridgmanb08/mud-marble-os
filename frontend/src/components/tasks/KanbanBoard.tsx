@@ -714,7 +714,15 @@ export function KanbanBoard({
 
     // Send each task's last-known version so the backend can reject the
     // whole batch (409) if something else changed the board first, rather
-    // than silently overwriting a concurrent edit.
+    // than silently overwriting a concurrent edit. Scoped to just the
+    // DESTINATION column's tasks, not the whole board -- this used to flatten
+    // every column into one payload, so a completely unrelated edit in a
+    // column nobody touched (or even a previous, already-applied drag) could
+    // 409 a drag that had nothing to do with it, and every drag bumped the
+    // version of every task on the board. The origin column's remaining
+    // tasks are deliberately left untouched (not renumbered) -- position is
+    // a loose sort key, not a required-contiguous sequence, so a gap where
+    // the dragged task used to be doesn't break `order=position.asc`.
     const items = filtersActive
       ? // Cross-column moves are safe even while filtered -- they only touch
         // the dragged task, not any hidden sibling's position. `position` is
@@ -728,9 +736,12 @@ export function KanbanBoard({
             expected_version: tasksById.get(active.id as string)?.version,
           },
         ]
-      : Object.entries(finalColumns).flatMap(([status, ids]) =>
-          ids.map((id, index) => ({ id, status, position: index, expected_version: tasksById.get(id)?.version }))
-        );
+      : (finalColumns[overCol] || []).map((id, index) => ({
+          id,
+          status: overCol,
+          position: index,
+          expected_version: tasksById.get(id)?.version,
+        }));
 
     try {
       await api.patch('/tasks/reorder', { items });
