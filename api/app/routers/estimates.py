@@ -41,6 +41,27 @@ def _compute_costs(quantity: float, unit_cost: float, markup_type: str, markup_v
     return builder_cost, owner_price
 
 
+async def _check_not_below_invoiced(item_id: str, new_owner_price: float) -> None:
+    """Reducing a line item's price below what's already been invoiced
+    against it (a real workflow -- price corrections happen after partial
+    invoicing) had no guard at all: the invoice picker's remaining_amount
+    (owner_price - invoiced_amount, see projects.py's
+    get_estimate_items_for_invoice) would silently go negative, and its
+    invoiced_pct could read over 100%, with nothing anywhere stopping it or
+    explaining why. Mirrors invoices.py's own _validate_invoice_amounts,
+    just checked from the estimate side of the same relationship."""
+    invoiced_rows = await db_get("invoice_line_items", f"?source_line_item_id=eq.{item_id}&select=amount")
+    already_invoiced = sum(r.get("amount") or 0 for r in invoiced_rows)
+    if already_invoiced and round(new_owner_price, 2) < round(already_invoiced, 2):
+        raise HTTPException(
+            status_code=400,
+            detail=(
+                f"Can't lower this line item's price below ${already_invoiced:,.2f} -- "
+                f"that much of it has already been invoiced."
+            ),
+        )
+
+
 async def _recalc_estimate_totals(estimate_id: str) -> None:
     items = await db_get("estimate_line_items", f"?estimate_id=eq.{estimate_id}")
     pm_fee_total = sum(i.get("owner_price") or 0 for i in items if i.get("bucket") == "pm_fee")
@@ -287,6 +308,7 @@ async def update_line_item(
     builder_cost, owner_price = _compute_costs(
         merged.get("quantity") or 0, merged.get("unit_cost") or 0, merged.get("markup_type") or "percent", merged.get("markup_value") or 0
     )
+    await _check_not_below_invoiced(item_id, owner_price)
     updates["builder_cost"] = builder_cost
     updates["owner_price"] = owner_price
     await db_patch("estimate_line_items", item_id, updates)
