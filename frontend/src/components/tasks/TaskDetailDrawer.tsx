@@ -340,6 +340,11 @@ export function TaskDetailDrawer({ task, allTasks, onClose, onSaved, onDeleted, 
       await api.post(`/tasks/${task.id}/subtasks`, { title: newSubtask.trim() });
       setNewSubtask('');
       loadSubtasks();
+      // Kanban/Table cards show a subtask_complete/subtask_total badge from
+      // the task list response, not from this drawer's own state -- without
+      // this the card behind the drawer stays stale until something
+      // unrelated forces a reload.
+      onChanged?.();
     } catch (err) {
       toast(errMsg(err), true);
     }
@@ -349,6 +354,7 @@ export function TaskDetailDrawer({ task, allTasks, onClose, onSaved, onDeleted, 
     try {
       await api.patch(`/tasks/${task.id}/subtasks/${s.id}`, { is_complete: !s.is_complete });
       loadSubtasks();
+      onChanged?.();
     } catch (err) {
       toast(errMsg(err), true);
     }
@@ -358,6 +364,7 @@ export function TaskDetailDrawer({ task, allTasks, onClose, onSaved, onDeleted, 
     try {
       await api.delete(`/tasks/${task.id}/subtasks/${s.id}`);
       loadSubtasks();
+      onChanged?.();
     } catch (err) {
       toast(errMsg(err), true);
     }
@@ -369,6 +376,7 @@ export function TaskDetailDrawer({ task, allTasks, onClose, onSaved, onDeleted, 
       await api.post(`/tasks/${task.id}/dependencies`, { depends_on_id: newDependencyId });
       setNewDependencyId('');
       loadDependencies();
+      onChanged?.();
     } catch (err) {
       toast(errMsg(err), true);
     }
@@ -378,6 +386,7 @@ export function TaskDetailDrawer({ task, allTasks, onClose, onSaved, onDeleted, 
     try {
       await api.delete(`/tasks/${task.id}/dependencies/${d.id}`);
       loadDependencies();
+      onChanged?.();
     } catch (err) {
       toast(errMsg(err), true);
     }
@@ -397,6 +406,10 @@ export function TaskDetailDrawer({ task, allTasks, onClose, onSaved, onDeleted, 
       setNewComment('');
       setComments((prev) => [created, ...prev]);
       markCommentsSeen(task.id, created.created_at);
+      // The card behind the drawer shows comment_count and an unseen-comment
+      // glow from the task list response -- refresh it so a new comment is
+      // reflected there immediately instead of after an unrelated reload.
+      onChanged?.();
     } catch (err) {
       toast(errMsg(err), true);
     }
@@ -406,6 +419,7 @@ export function TaskDetailDrawer({ task, allTasks, onClose, onSaved, onDeleted, 
     try {
       const updated = await api.post<TaskComment>(`/tasks/${task.id}/comments/${commentId}/react`, { emoji });
       setComments((prev) => prev.map((c) => (c.id === commentId ? updated : c)));
+      onChanged?.();
     } catch (err) {
       toast(errMsg(err), true);
     }
