@@ -200,6 +200,7 @@ async def get_dashboard(_: CurrentUser = Depends(get_current_user)):
         subcontractors,
         clients,
         users,
+        lead_stage_rows,
     ) = await asyncio.gather(
         db_get("projects", "?is_archived=eq.false&select=*,clients(first_name,last_name)"),
         db_get(
@@ -237,6 +238,7 @@ async def get_dashboard(_: CurrentUser = Depends(get_current_user)):
         db_get("subcontractors", "?select=id,company_name,trade,is_active,insurance_expiry,w9_on_file"),
         db_get("clients", "?select=id,first_name,last_name,is_advocate,is_repeat_client"),
         db_get("app_users", "?select=id,name&order=name.asc"),
+        db_get("lead_stages", "?select=key,is_open"),
     )
 
     active = [p for p in projects if p.get("status") == "active"]
@@ -246,7 +248,13 @@ async def get_dashboard(_: CurrentUser = Depends(get_current_user)):
     total_outstanding = max(0.0, total_invoiced - total_collected)
     pct_collected = round(total_collected / total_invoiced * 100) if total_invoiced > 0 else 0
     open_cos = len([c for c in change_orders if c.get("status") in ("pending", "sent")])
-    overdue_invoices = len([i for i in invoices if i.get("status") == "overdue"])
+    # overdue_invoices used to be its own independent count, purely from
+    # invoices.status == "overdue" -- a plain field nothing in this app ever
+    # auto-transitions, while AR Aging (below) is computed live from
+    # due_date vs. now. The two could disagree on the same page for the
+    # same underlying invoices. Now derived from ar_aging's own buckets
+    # once they're built (see below), so both numbers are guaranteed to
+    # agree -- they're the same computation.
 
     incomplete_tasks = [t for t in schedule_items if t.get("status") != "complete"]
     # Manually-prioritized tasks (dragged to the top in the widget itself) win first,
@@ -359,6 +367,9 @@ async def get_dashboard(_: CurrentUser = Depends(get_current_user)):
         )
     ar_aging = [ARAgingBucket(bucket=b, total=v[0], count=v[1]) for b, v in bucket_totals.items()]
     ar_aging_detail.sort(key=lambda d: d.days_overdue, reverse=True)
+    # Every bucket except "current" (not actually overdue yet) -- see the
+    # comment where overdue_invoices is declared above.
+    overdue_invoices = sum(v[1] for b, v in bucket_totals.items() if b != "current")
 
     # -- project profitability (latest estimate per project vs actual spend) --
     latest_estimate_by_project: dict[str, float] = {}
@@ -497,10 +508,14 @@ async def get_dashboard(_: CurrentUser = Depends(get_current_user)):
     )
 
     # -- lead pipeline: open leads by stage + revenue potential --
-    # Matches Leads.tsx's real sales-stage vocabulary (Brent's own pipeline
-    # stages, not a generic new/contacted/qualified guess) -- open means
-    # anything short of a terminal state (converted or missed-opportunity).
-    OPEN_LEAD_STATUSES = ("new", "stage_1", "stage_2", "stage_3", "stage_4", "stage_5")
+    # "Open" is read live from lead_stages.is_open, not a hardcoded set of
+    # the 6 originally-seeded stage keys -- this app was specifically built
+    # so an admin can add a new pipeline stage from the Leads.tsx "Edit
+    # stages" UI (lead_stages.py's create_lead_stage), and a hardcoded set
+    # here would silently exclude any lead sitting in a stage added after
+    # this code was written, understating this exact KPI the moment that
+    # feature is actually used for anything beyond the original 6.
+    open_lead_statuses = {s["key"] for s in lead_stage_rows if s.get("is_open")}
     lead_stage_totals: dict[str, list] = defaultdict(lambda: [0, 0.0, 0.0])
     for lead in leads:
         status = lead.get("status") or "new"
@@ -514,9 +529,9 @@ async def get_dashboard(_: CurrentUser = Depends(get_current_user)):
     lead_stages.sort(key=lambda s: s.count, reverse=True)
     lead_pipeline = LeadPipeline(
         stages=lead_stages,
-        total_open_count=sum(v[0] for s, v in lead_stage_totals.items() if s in OPEN_LEAD_STATUSES),
-        total_potential_revenue_min=sum(v[1] for s, v in lead_stage_totals.items() if s in OPEN_LEAD_STATUSES),
-        total_potential_revenue_max=sum(v[2] for s, v in lead_stage_totals.items() if s in OPEN_LEAD_STATUSES),
+        total_open_count=sum(v[0] for s, v in lead_stage_totals.items() if s in open_lead_statuses),
+        total_potential_revenue_min=sum(v[1] for s, v in lead_stage_totals.items() if s in open_lead_statuses),
+        total_potential_revenue_max=sum(v[2] for s, v in lead_stage_totals.items() if s in open_lead_statuses),
     )
 
     # -- subcontractor risk: compliance gaps across the active roster --
