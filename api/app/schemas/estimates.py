@@ -1,6 +1,8 @@
 from typing import Optional
 
-from pydantic import BaseModel
+from pydantic import BaseModel, Field, model_validator
+
+from ..schema_validators import forbid_null
 
 
 class ProjectBrief(BaseModel):
@@ -28,6 +30,11 @@ class EstimateUpdate(BaseModel):
     introductory_text: Optional[str] = None
     closing_text: Optional[str] = None
     sent_at: Optional[str] = None
+
+    @model_validator(mode="after")
+    def _validate_no_null_required(self):
+        forbid_null(self, {"status"})
+        return self
 
 
 class EstimateOut(BaseModel):
@@ -61,9 +68,15 @@ class LineItemCreate(BaseModel):
     bucket: str = "construction"
     title: str
     description: Optional[str] = None
-    quantity: float = 1
+    # ge=0 -- a negative quantity/unit_cost has no physical meaning (you
+    # can't have -5 sq ft of tile or a -$20 unit cost) and previously flowed
+    # straight through _compute_costs into builder_cost/owner_price with
+    # zero guardrail, silently shrinking the estimate total. markup_value is
+    # deliberately left unbounded -- a negative flat/percent markup is a
+    # legitimate real discount, not a data error.
+    quantity: float = Field(default=1, ge=0)
     unit: Optional[str] = None
-    unit_cost: float = 0
+    unit_cost: float = Field(default=0, ge=0)
     cost_type: str = "none"
     markup_type: str = "percent"
     markup_value: float = 0
@@ -79,9 +92,9 @@ class LineItemUpdate(BaseModel):
     bucket: Optional[str] = None
     title: Optional[str] = None
     description: Optional[str] = None
-    quantity: Optional[float] = None
+    quantity: Optional[float] = Field(default=None, ge=0)
     unit: Optional[str] = None
-    unit_cost: Optional[float] = None
+    unit_cost: Optional[float] = Field(default=None, ge=0)
     cost_type: Optional[str] = None
     markup_type: Optional[str] = None
     markup_value: Optional[float] = None
@@ -89,6 +102,13 @@ class LineItemUpdate(BaseModel):
     notes_internal: Optional[str] = None
     notes_external: Optional[str] = None
     sort_order: Optional[int] = None
+
+    @model_validator(mode="after")
+    def _validate_no_null_required(self):
+        forbid_null(
+            self, {"bucket", "title", "quantity", "unit_cost", "cost_type", "markup_type", "markup_value", "sort_order"}
+        )
+        return self
 
 
 class LineItemOut(BaseModel):

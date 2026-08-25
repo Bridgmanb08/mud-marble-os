@@ -285,6 +285,13 @@ export default function EstimateWorksheet() {
   }
 
   async function handleReorder(groupName: string, groupItems: EstimateLineItem[], event: DragEndEvent, groups: Record<string, EstimateLineItem[]>) {
+    // Defense in depth alongside LineItemGroupCard's own dragDisabled prop --
+    // groupItems here can be a search-filtered SUBSET of the real group; a
+    // reorder computed against it would silently drop the hidden items and
+    // corrupt sort_order for the whole estimate. The drag handle is already
+    // disabled while searching, so this should be unreachable in practice,
+    // but bail out explicitly rather than trust that alone.
+    if (searchQuery.trim()) return;
     const { active, over } = event;
     if (!over || active.id === over.id) return;
     const oldIndex = groupItems.findIndex((i) => i.id === active.id);
@@ -536,6 +543,7 @@ export default function EstimateWorksheet() {
             editing={editingGroupKey === groupName}
             editingValue={editingGroupValue}
             itemSensors={sensors}
+            dragDisabled={!!query}
             onToggleCollapse={() => toggleGroupCollapse(groupName)}
             onStartRename={() => startRenameGroup(groupName)}
             onRenameChange={setEditingGroupValue}
