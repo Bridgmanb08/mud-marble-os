@@ -1,39 +1,5 @@
-import type { ComponentType } from 'react';
+import { lazy, type ComponentType } from 'react';
 import type { DashboardSummary, WidgetId } from '../../types';
-import {
-  KeyMetricsWidget,
-  ActiveProjectHealthWidget,
-  UpcomingTasksWidget,
-  RecentActivityWidget,
-} from './widgets/OverviewWidgets';
-import { TaskManagementWidget, ClientCommunicationsWidget, ChangeOrdersActionWidget } from './widgets/OpsWidgets';
-import {
-  ARAgingWidget,
-  ProjectProfitabilityWidget,
-  QBOSyncWidget,
-  CashPositionWidget,
-  AlexCostWidget,
-} from './widgets/FinanceWidgets';
-import { DesignProjectsWidget } from './widgets/DesignWidgets';
-import {
-  TeamWorkloadWidget,
-  JobsOverdueToCloseWidget,
-  LeadPipelineWidget,
-  SubcontractorRiskWidget,
-  ChangeOrderStatsWidget,
-  EstimateWinRateWidget,
-} from './widgets/CEOWidgets';
-import { FathomImportCard } from './FathomImportCard';
-import { TeamPulseWidget } from './widgets/TeamPulseWidget';
-import { WeatherWidget } from './widgets/WeatherWidget';
-import { RentalSnapshotWidget } from './widgets/RentalSnapshotWidget';
-import { RentalCollectionWidget } from './widgets/RentalCollectionWidget';
-import { RentalLateWidget } from './widgets/RentalLateWidget';
-import { RentalOccupancyWidget } from './widgets/RentalOccupancyWidget';
-import { RentalRenewalsWidget } from './widgets/RentalRenewalsWidget';
-import { RentalVisitsWidget } from './widgets/RentalVisitsWidget';
-import { ProjectTimelineWidget } from './widgets/ProjectTimelineWidget';
-import { JobImportWidget } from './widgets/JobImportWidget';
 
 interface WidgetDef {
   title: string;
@@ -41,9 +7,54 @@ interface WidgetDef {
   Component: ComponentType<{ data: DashboardSummary }>;
 }
 
-function FathomImportWidget() {
-  return <FathomImportCard />;
-}
+// Every widget below is React.lazy-loaded instead of eagerly imported --
+// this file used to statically import all ~16 widget source files, meaning
+// opening the dashboard for the first time forced a download/parse of
+// every widget's code (CEO widgets, all 5 rental widgets, the project
+// timeline, etc.) regardless of what a given user's saved layout actually
+// shows. Dashboard.tsx wraps each widget's render in <Suspense>, so only
+// the handful of widgets actually present in someone's layout get fetched.
+const OverviewWidgets = () => import('./widgets/OverviewWidgets');
+const OpsWidgets = () => import('./widgets/OpsWidgets');
+const FinanceWidgets = () => import('./widgets/FinanceWidgets');
+const CEOWidgets = () => import('./widgets/CEOWidgets');
+
+const KeyMetricsWidget = lazy(() => OverviewWidgets().then((m) => ({ default: m.KeyMetricsWidget })));
+const ActiveProjectHealthWidget = lazy(() => OverviewWidgets().then((m) => ({ default: m.ActiveProjectHealthWidget })));
+const UpcomingTasksWidget = lazy(() => OverviewWidgets().then((m) => ({ default: m.UpcomingTasksWidget })));
+const RecentActivityWidget = lazy(() => OverviewWidgets().then((m) => ({ default: m.RecentActivityWidget })));
+
+const TaskManagementWidget = lazy(() => OpsWidgets().then((m) => ({ default: m.TaskManagementWidget })));
+const ClientCommunicationsWidget = lazy(() => OpsWidgets().then((m) => ({ default: m.ClientCommunicationsWidget })));
+const ChangeOrdersActionWidget = lazy(() => OpsWidgets().then((m) => ({ default: m.ChangeOrdersActionWidget })));
+
+const ARAgingWidget = lazy(() => FinanceWidgets().then((m) => ({ default: m.ARAgingWidget })));
+const ProjectProfitabilityWidget = lazy(() => FinanceWidgets().then((m) => ({ default: m.ProjectProfitabilityWidget })));
+const QBOSyncWidget = lazy(() => FinanceWidgets().then((m) => ({ default: m.QBOSyncWidget })));
+const CashPositionWidget = lazy(() => FinanceWidgets().then((m) => ({ default: m.CashPositionWidget })));
+const AlexCostWidget = lazy(() => FinanceWidgets().then((m) => ({ default: m.AlexCostWidget })));
+
+const DesignProjectsWidget = lazy(() => import('./widgets/DesignWidgets').then((m) => ({ default: m.DesignProjectsWidget })));
+
+const TeamWorkloadWidget = lazy(() => CEOWidgets().then((m) => ({ default: m.TeamWorkloadWidget })));
+const JobsOverdueToCloseWidget = lazy(() => CEOWidgets().then((m) => ({ default: m.JobsOverdueToCloseWidget })));
+const LeadPipelineWidget = lazy(() => CEOWidgets().then((m) => ({ default: m.LeadPipelineWidget })));
+const SubcontractorRiskWidget = lazy(() => CEOWidgets().then((m) => ({ default: m.SubcontractorRiskWidget })));
+const ChangeOrderStatsWidget = lazy(() => CEOWidgets().then((m) => ({ default: m.ChangeOrderStatsWidget })));
+const EstimateWinRateWidget = lazy(() => CEOWidgets().then((m) => ({ default: m.EstimateWinRateWidget })));
+
+const FathomImportWidget = lazy(() => import('./FathomImportCard').then((m) => ({ default: m.FathomImportCard })));
+const TeamPulseWidget = lazy(() => import('./widgets/TeamPulseWidget').then((m) => ({ default: m.TeamPulseWidget })));
+const WeatherWidget = lazy(() => import('./widgets/WeatherWidget').then((m) => ({ default: m.WeatherWidget })));
+const ProjectTimelineWidget = lazy(() => import('./widgets/ProjectTimelineWidget').then((m) => ({ default: m.ProjectTimelineWidget })));
+const JobImportWidget = lazy(() => import('./widgets/JobImportWidget').then((m) => ({ default: m.JobImportWidget })));
+
+const RentalSnapshotWidget = lazy(() => import('./widgets/RentalSnapshotWidget').then((m) => ({ default: m.RentalSnapshotWidget })));
+const RentalCollectionWidget = lazy(() => import('./widgets/RentalCollectionWidget').then((m) => ({ default: m.RentalCollectionWidget })));
+const RentalLateWidget = lazy(() => import('./widgets/RentalLateWidget').then((m) => ({ default: m.RentalLateWidget })));
+const RentalOccupancyWidget = lazy(() => import('./widgets/RentalOccupancyWidget').then((m) => ({ default: m.RentalOccupancyWidget })));
+const RentalRenewalsWidget = lazy(() => import('./widgets/RentalRenewalsWidget').then((m) => ({ default: m.RentalRenewalsWidget })));
+const RentalVisitsWidget = lazy(() => import('./widgets/RentalVisitsWidget').then((m) => ({ default: m.RentalVisitsWidget })));
 
 export const WIDGET_REGISTRY: Record<WidgetId, WidgetDef> = {
   key_metrics: { title: 'Key metrics', Component: KeyMetricsWidget },
