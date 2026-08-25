@@ -65,6 +65,7 @@ export function LineItemModal({
   const [groupName, setGroupName] = useState(item?.group_name || defaultGroupName || '');
   const [title, setTitle] = useState(item?.title || defaultTitle || '');
   const [quantity, setQuantity] = useState(String(item?.quantity ?? 1));
+  const [unit, setUnit] = useState(item?.unit || '');
   const [unitCost, setUnitCost] = useState(String(item?.unit_cost ?? defaultUnitCost ?? 0));
   const [costType, setCostType] = useState(item?.cost_type || 'none');
   const [markupType, setMarkupType] = useState(item?.markup_type || 'percent');
@@ -130,6 +131,7 @@ export function LineItemModal({
   function useReference(ref: LineItemReference) {
     setTitle(ref.title);
     setQuantity(String(ref.quantity));
+    setUnit(ref.unit || '');
     setUnitCost(String(ref.unit_cost));
     setCostType(ref.cost_type);
     setMarkupType(ref.markup_type);
@@ -173,6 +175,7 @@ export function LineItemModal({
       group_name: groupName.trim() || null,
       title: title.trim(),
       quantity: qty,
+      unit: unit.trim() || null,
       unit_cost: cost,
       cost_type: costType,
       markup_type: markupType,
@@ -294,138 +297,168 @@ export function LineItemModal({
           )}
         </div>
 
-        <div className="fr3">
-          <div className="fg">
-            <label className="fl">Item name</label>
-            <input className="fi" value={title} onChange={(e) => setTitle(e.target.value)} placeholder="Vanity" />
+        {/* Section header + bordered group, matching BuilderTrend's "Estimated
+            cost details" / "Cost information" split -- gives the eye two
+            clear stops instead of one long undifferentiated field stack. */}
+        <div className="card" style={{ padding: 16, marginBottom: 16 }}>
+          <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 14, paddingBottom: 10, borderBottom: '1px solid var(--border)' }}>
+            Item details
           </div>
-          <div className="fg">
-            <label className="fl">Group</label>
-            <input
-              className="fi"
-              list="line-item-group-options"
-              value={groupName}
-              onChange={(e) => setGroupName(e.target.value)}
-              placeholder="e.g. Mechanicals"
-            />
-            <datalist id="line-item-group-options">
-              {(existingGroups || []).map((g) => (
-                <option key={g} value={g} />
-              ))}
-            </datalist>
+          <div className="fr3">
+            <div className="fg">
+              <label className="fl">Item name</label>
+              <input className="fi" value={title} onChange={(e) => setTitle(e.target.value)} placeholder="Vanity" />
+            </div>
+            <div className="fg">
+              <label className="fl">Group</label>
+              <input
+                className="fi"
+                list="line-item-group-options"
+                value={groupName}
+                onChange={(e) => setGroupName(e.target.value)}
+                placeholder="e.g. Mechanicals"
+              />
+              <datalist id="line-item-group-options">
+                {(existingGroups || []).map((g) => (
+                  <option key={g} value={g} />
+                ))}
+              </datalist>
+            </div>
+            <div className="fg">
+              <label className="fl">Bucket</label>
+              <select className="fi" value={bucket} onChange={(e) => setBucket(e.target.value)}>
+                {BUCKETS.map((b) => (
+                  <option key={b.value} value={b.value}>
+                    {b.label}
+                  </option>
+                ))}
+              </select>
+            </div>
           </div>
-          <div className="fg">
-            <label className="fl">Bucket</label>
-            <select className="fi" value={bucket} onChange={(e) => setBucket(e.target.value)}>
-              {BUCKETS.map((b) => (
-                <option key={b.value} value={b.value}>
-                  {b.label}
-                </option>
-              ))}
-            </select>
+          <div className="fr3">
+            <div className="fg">
+              <label className="fl">Cost code</label>
+              <input
+                className="fi"
+                list="line-item-cost-code-options"
+                value={costCodeQuery}
+                onChange={(e) => handleCostCodeInput(e.target.value)}
+                placeholder="Start typing, e.g. electrical…"
+              />
+              <datalist id="line-item-cost-code-options">
+                {costCodes.map((c) => (
+                  <option key={c.id} value={`${c.code} - ${c.name}`} />
+                ))}
+              </datalist>
+            </div>
+            <div className="fg">
+              <label className="fl">Cost type</label>
+              <select className="fi" value={costType} onChange={(e) => setCostType(e.target.value)}>
+                {COST_TYPES.map((t) => (
+                  <option key={t.value} value={t.value}>
+                    {t.label}
+                  </option>
+                ))}
+              </select>
+            </div>
+            <div className="fg">
+              <label className="fl">Est. workdays</label>
+              <input
+                className="fi"
+                type="number"
+                value={estimatedDays}
+                onChange={(e) => setEstimatedDays(e.target.value)}
+                placeholder="Optional"
+              />
+            </div>
           </div>
-        </div>
-        <div className="fr3">
-          <div className="fg">
-            <label className="fl">Cost code</label>
-            <input
-              className="fi"
-              list="line-item-cost-code-options"
-              value={costCodeQuery}
-              onChange={(e) => handleCostCodeInput(e.target.value)}
-              placeholder="Start typing, e.g. electrical…"
-            />
-            <datalist id="line-item-cost-code-options">
-              {costCodes.map((c) => (
-                <option key={c.id} value={`${c.code} - ${c.name}`} />
-              ))}
-            </datalist>
-          </div>
-          <div className="fg">
-            <label className="fl">Cost type</label>
-            <select className="fi" value={costType} onChange={(e) => setCostType(e.target.value)}>
-              {COST_TYPES.map((t) => (
-                <option key={t.value} value={t.value}>
-                  {t.label}
-                </option>
-              ))}
-            </select>
-          </div>
-          <div className="fg">
-            <label className="fl">Quantity</label>
-            <input className="fi" type="number" value={quantity} onChange={(e) => setQuantity(e.target.value)} />
-          </div>
-        </div>
-        <div className="fr3">
-          <div className="fg">
-            <label className="fl">Unit cost ($)</label>
-            <input className="fi" type="number" value={unitCost} onChange={(e) => setUnitCost(e.target.value)} />
-            {defaultUnitCostHint && (
-              <div style={{ fontSize: 11, color: 'var(--t3)', marginTop: 4 }}>{defaultUnitCostHint}</div>
-            )}
-          </div>
-          <div className="fg">
-            <label className="fl">Markup type</label>
-            <select className="fi" value={markupType} onChange={(e) => handleMarkupTypeChange(e.target.value)}>
-              <option value="percent">Percent (%)</option>
-              <option value="flat">Flat ($)</option>
-            </select>
-          </div>
-          <div className="fg">
-            <label className="fl">Markup value</label>
-            <input className="fi" type="number" value={markupValue} onChange={(e) => setMarkupValue(e.target.value)} />
-          </div>
-        </div>
-        <div className="fg">
-          <label className="fl">Est. workdays</label>
-          <input
-            className="fi"
-            type="number"
-            value={estimatedDays}
-            onChange={(e) => setEstimatedDays(e.target.value)}
-            placeholder="Optional"
-            style={{ maxWidth: 180 }}
-          />
-        </div>
-        <div className="fr">
-          <div className="fg">
-            <label className="fl" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-              Description (client-facing)
-              {costCodes.find((c) => c.id === costCodeId)?.default_description && (
-                <button
-                  type="button"
-                  className="btn-reset"
-                  style={{ fontSize: 11, color: 'var(--t2)', textTransform: 'none', fontWeight: 400, cursor: 'pointer' }}
-                  onClick={() => setNotesExternal(costCodes.find((c) => c.id === costCodeId)?.default_description || '')}
-                >
-                  Use standard description
-                </button>
-              )}
-            </label>
-            <textarea className="fi" value={notesExternal} onChange={(e) => setNotesExternal(e.target.value)} />
-          </div>
-          <div className="fg">
-            <label className="fl">Internal notes</label>
-            <textarea className="fi" value={notesInternal} onChange={(e) => setNotesInternal(e.target.value)} />
+          <div className="fr">
+            <div className="fg">
+              <label className="fl" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                Description (client-facing)
+                {costCodes.find((c) => c.id === costCodeId)?.default_description && (
+                  <button
+                    type="button"
+                    className="btn-reset"
+                    style={{ fontSize: 11, color: 'var(--t2)', textTransform: 'none', fontWeight: 400, cursor: 'pointer' }}
+                    onClick={() => setNotesExternal(costCodes.find((c) => c.id === costCodeId)?.default_description || '')}
+                  >
+                    Use standard description
+                  </button>
+                )}
+              </label>
+              <textarea className="fi" value={notesExternal} onChange={(e) => setNotesExternal(e.target.value)} />
+            </div>
+            <div className="fg">
+              <label className="fl">Internal notes</label>
+              <textarea className="fi" value={notesInternal} onChange={(e) => setNotesInternal(e.target.value)} />
+            </div>
           </div>
         </div>
 
-        <div className="card" style={{ padding: 14, marginBottom: 16, display: 'flex', gap: 20, background: 'var(--bg)' }}>
-          <div>
-            <div style={{ fontSize: 11, color: 'var(--t2)', textTransform: 'uppercase' }}>Builder cost</div>
-            <div style={{ fontSize: 15, fontWeight: 600 }}>{fmt(builderCost)}</div>
+        <div className="card" style={{ padding: 16, marginBottom: 16 }}>
+          <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 14, paddingBottom: 10, borderBottom: '1px solid var(--border)' }}>
+            Cost information
           </div>
-          <div>
-            <div style={{ fontSize: 11, color: 'var(--t2)', textTransform: 'uppercase' }}>Client price</div>
-            <div style={{ fontSize: 15, fontWeight: 600 }}>{fmt(ownerPrice)}</div>
+          <div className="fr3">
+            <div className="fg">
+              <label className="fl">Quantity</label>
+              <input className="fi" type="number" value={quantity} onChange={(e) => setQuantity(e.target.value)} />
+            </div>
+            <div className="fg">
+              <label className="fl">Unit</label>
+              <input className="fi" value={unit} onChange={(e) => setUnit(e.target.value)} placeholder="e.g. sq ft, each" />
+            </div>
+            <div className="fg">
+              <label className="fl">Unit cost ($)</label>
+              <input className="fi" type="number" value={unitCost} onChange={(e) => setUnitCost(e.target.value)} />
+              {defaultUnitCostHint && (
+                <div style={{ fontSize: 11, color: 'var(--t3)', marginTop: 4 }}>{defaultUnitCostHint}</div>
+              )}
+            </div>
           </div>
-          <div>
-            <div style={{ fontSize: 11, color: 'var(--t2)', textTransform: 'uppercase' }}>Profit</div>
-            <div style={{ fontSize: 15, fontWeight: 600, color: 'var(--green)' }}>{fmt(profit)}</div>
+          <div className="fr3">
+            <div className="fg">
+              <label className="fl">Markup type</label>
+              <select className="fi" value={markupType} onChange={(e) => handleMarkupTypeChange(e.target.value)}>
+                <option value="percent">Percent (%)</option>
+                <option value="flat">Flat ($)</option>
+              </select>
+            </div>
+            <div className="fg">
+              <label className="fl">Markup value</label>
+              <input className="fi" type="number" value={markupValue} onChange={(e) => setMarkupValue(e.target.value)} />
+            </div>
+            <div className="fg" />
           </div>
-          <div>
-            <div style={{ fontSize: 11, color: 'var(--t2)', textTransform: 'uppercase' }}>Margin</div>
-            <div style={{ fontSize: 15, fontWeight: 600 }}>{margin.toFixed(0)}%</div>
+
+          <div
+            style={{
+              display: 'flex',
+              gap: 20,
+              marginTop: 4,
+              padding: '12px 14px',
+              background: 'var(--bg)',
+              borderRadius: 8,
+              border: '1px solid var(--border)',
+            }}
+          >
+            <div>
+              <div style={{ fontSize: 11, color: 'var(--t2)', textTransform: 'uppercase' }}>Builder cost</div>
+              <div style={{ fontSize: 15, fontWeight: 600 }}>{fmt(builderCost)}</div>
+            </div>
+            <div>
+              <div style={{ fontSize: 11, color: 'var(--t2)', textTransform: 'uppercase' }}>Client price</div>
+              <div style={{ fontSize: 15, fontWeight: 600 }}>{fmt(ownerPrice)}</div>
+            </div>
+            <div>
+              <div style={{ fontSize: 11, color: 'var(--t2)', textTransform: 'uppercase' }}>Profit</div>
+              <div style={{ fontSize: 15, fontWeight: 600, color: 'var(--green)' }}>{fmt(profit)}</div>
+            </div>
+            <div>
+              <div style={{ fontSize: 11, color: 'var(--t2)', textTransform: 'uppercase' }}>Margin</div>
+              <div style={{ fontSize: 15, fontWeight: 600 }}>{margin.toFixed(0)}%</div>
+            </div>
           </div>
         </div>
 
