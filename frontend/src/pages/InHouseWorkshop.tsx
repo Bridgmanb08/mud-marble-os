@@ -109,12 +109,28 @@ export default function InHouseWorkshop() {
 
   async function loadTransactions() {
     if (!id) return;
-    setTransactions(await api.get<Transaction[]>(`/transactions?project_id=${id}`).catch(() => []));
+    // Was silently swallowing a fetch failure into an empty array -- that
+    // renders identically to "this job genuinely has no transactions",
+    // risking someone misreading a job's real financial state during a
+    // transient fetch failure. Now matches loadProject/loadSummary's
+    // toast-on-failure convention; the empty-array fallback stays (so the
+    // page doesn't crash), it just no longer happens silently.
+    try {
+      setTransactions(await api.get<Transaction[]>(`/transactions?project_id=${id}`));
+    } catch (e) {
+      setTransactions([]);
+      toast(e instanceof Error ? e.message : 'Failed to load transactions', true);
+    }
   }
 
   async function loadSubItems() {
     if (!id) return;
-    setSubItems(await api.get<ProjectSubItem[]>(`/projects/${id}/subcontractor-items`).catch(() => []));
+    try {
+      setSubItems(await api.get<ProjectSubItem[]>(`/projects/${id}/subcontractor-items`));
+    } catch (e) {
+      setSubItems([]);
+      toast(e instanceof Error ? e.message : 'Failed to load subcontractor items', true);
+    }
   }
 
   async function loadLineItems() {
@@ -122,12 +138,16 @@ export default function InHouseWorkshop() {
     try {
       const estimates = await api.get<{ id: string }[]>(`/estimates?project_id=${id}`);
       if (!estimates.length) {
+        // A genuinely empty result, not a failure -- no estimate exists yet
+        // for this job. Distinct from the catch below, which is a real
+        // fetch error and does need to be surfaced.
         setLineItems([]);
         return;
       }
       setLineItems(await api.get<EstimateLineItem[]>(`/estimates/${estimates[0].id}/items`));
-    } catch {
+    } catch (e) {
       setLineItems([]);
+      toast(e instanceof Error ? e.message : 'Failed to load estimate line items', true);
     }
   }
 
