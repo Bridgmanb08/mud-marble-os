@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { IconPlus, IconGitBranch, IconAlertTriangle } from '@tabler/icons-react';
-import { api } from '../api/client';
+import { api, ApiError } from '../api/client';
 import { useToast } from '../components/ui/Toast';
 import { fmt } from '../lib/format';
 import type { ChangeOrder } from '../types';
@@ -8,6 +8,7 @@ import { NewChangeOrderModal } from '../components/change-orders/NewChangeOrderM
 
 const TYPE_BADGE: Record<string, string> = { oversight: 'bg-amber', client_addition: 'bg-blue', unforeseen: 'bg-red' };
 const STATUS_BADGE: Record<string, string> = { pending: 'bg-gray', sent: 'bg-amber', approved: 'bg-green', rejected: 'bg-red' };
+const STATUS_OPTIONS = ['pending', 'sent', 'approved', 'rejected'];
 
 const FILTERS = ['all', 'pending', 'sent', 'approved', 'oversight', 'client_addition', 'unforeseen'];
 
@@ -31,6 +32,22 @@ export default function ChangeOrders() {
     load();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  async function changeStatus(co: ChangeOrder, status: string) {
+    try {
+      await api.patch(`/change-orders/${co.id}`, {
+        status,
+        // Stamping sent_at here (not left for someone to backfill later) is
+        // what actually starts the 24hr SOP-breach clock -- compute_sop_breach
+        // needs a real sent_at to measure against.
+        ...(status === 'sent' ? { sent_at: new Date().toISOString() } : {}),
+      });
+      toast(`CO-${String(co.co_number ?? '?').padStart(3, '0')} marked ${status}`);
+      load();
+    } catch (e) {
+      toast(e instanceof ApiError ? e.message : 'Failed to update status', true);
+    }
+  }
 
   const filtered = useMemo(() => {
     if (!cos) return [];
@@ -116,7 +133,19 @@ export default function ChangeOrders() {
                 <span>{co.title}</span>
                 <span style={{ fontSize: 11, color: 'var(--t3)' }}>{co.projects?.name || ''}</span>
                 <span className={`badge ${TYPE_BADGE[co.co_type] || 'bg-gray'}`}>{co.co_type.replace('_', ' ')}</span>
-                <span className={`badge ${STATUS_BADGE[co.status] || 'bg-gray'}`}>{co.status}</span>
+                <select
+                  className={`badge ${STATUS_BADGE[co.status] || 'bg-gray'}`}
+                  style={{ border: 'none', cursor: 'pointer', fontSize: 11, padding: '2px 6px' }}
+                  value={co.status}
+                  onClick={(e) => e.stopPropagation()}
+                  onChange={(e) => changeStatus(co, e.target.value)}
+                >
+                  {STATUS_OPTIONS.map((s) => (
+                    <option key={s} value={s}>
+                      {s}
+                    </option>
+                  ))}
+                </select>
                 {co.sop_breach && (
                   <span className="badge bg-red">
                     <IconAlertTriangle size={11} style={{ marginRight: 3 }} /> SOP
