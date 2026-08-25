@@ -1,10 +1,11 @@
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { IconBell, IconX } from '@tabler/icons-react';
-import { api } from '../../api/client';
 import { fmtD } from '../../lib/format';
 import { loadReminderHistory, removeReminderHistoryEntry, type ReminderHistoryEntry } from '../../lib/reminderHistory';
 import { CATEGORY_META, type Category } from './TeamReminders';
+import { useNotifications } from '../../notifications/useNotifications';
+import { markNotificationRead, markAllNotificationsRead } from '../../notifications/notificationsStore';
 import type { AppNotification } from '../../types';
 
 function fmtTime(iso: string): string {
@@ -12,21 +13,13 @@ function fmtTime(iso: string): string {
 }
 
 export function NotificationBell() {
-  const [notifications, setNotifications] = useState<AppNotification[]>([]);
+  // Reads off the shared notificationsStore (one poll loop for the whole
+  // app) instead of fetching and polling independently -- see
+  // notificationsStore.ts for why.
+  const notifications = useNotifications();
   const [reminders, setReminders] = useState<ReminderHistoryEntry[]>([]);
   const [open, setOpen] = useState(false);
   const navigate = useNavigate();
-
-  async function load() {
-    setNotifications(await api.get<AppNotification[]>('/notifications').catch(() => []));
-    setReminders(loadReminderHistory());
-  }
-
-  useEffect(() => {
-    load();
-    const interval = setInterval(load, 60000);
-    return () => clearInterval(interval);
-  }, []);
 
   function clearReminder(key: string) {
     // Only removes it from this list -- doesn't touch the underlying task,
@@ -40,8 +33,7 @@ export function NotificationBell() {
 
   async function handleOpen(n: AppNotification) {
     if (!n.is_read) {
-      await api.post(`/notifications/${n.id}/read`).catch(() => {});
-      setNotifications((prev) => prev.map((x) => (x.id === n.id ? { ...x, is_read: true } : x)));
+      await markNotificationRead(n.id);
     }
     setOpen(false);
     if (n.type === 'unclaimed_media') navigate('/review');
@@ -50,8 +42,7 @@ export function NotificationBell() {
   }
 
   async function markAllRead() {
-    await api.post('/notifications/mark-all-read').catch(() => {});
-    setNotifications((prev) => prev.map((n) => ({ ...n, is_read: true })));
+    await markAllNotificationsRead();
   }
 
   return (
