@@ -3,6 +3,7 @@ from typing import Literal, Optional
 from pydantic import BaseModel, model_validator
 
 from ..date_validation import check_date_order
+from ..schema_validators import forbid_null
 
 
 class RentalPropertyCreate(BaseModel):
@@ -309,6 +310,35 @@ class RentalPropertyVisitOut(BaseModel):
     property_id: str
     visited_at: str
     visited_by: Optional[str] = None
+    notes: Optional[str] = None
+    created_at: str
+
+
+class RentalPropertyDetailCreate(BaseModel):
+    category: str
+    detail: str
+    detail_date: Optional[str] = None
+    notes: Optional[str] = None
+
+
+class RentalPropertyDetailUpdate(BaseModel):
+    category: Optional[str] = None
+    detail: Optional[str] = None
+    detail_date: Optional[str] = None
+    notes: Optional[str] = None
+
+    @model_validator(mode="after")
+    def _forbid_null_required_fields(self):
+        forbid_null(self, {"category", "detail"})
+        return self
+
+
+class RentalPropertyDetailOut(BaseModel):
+    id: str
+    property_id: str
+    category: str
+    detail: str
+    detail_date: Optional[str] = None
     notes: Optional[str] = None
     created_at: str
 
