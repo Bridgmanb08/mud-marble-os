@@ -249,6 +249,17 @@ export function TeamReminders() {
   const [openTaskId, setOpenTaskId] = useState<string | null>(null);
   const [showPulseCheckin, setShowPulseCheckin] = useState(false);
   const shownRef = useRef<Set<string>>(loadShown());
+  // In-flight guard for the AI-backed polls (pollRisks/pollMorningBriefing/
+  // pollJobContext/pollCloseoutBriefing) -- these used to mark a key as
+  // "shown" in shownRef *before* their network call resolved, then silently
+  // swallow a failed fetch. That permanently and invisibly lost that day's
+  // (or week's) nudge on a single transient network blip, since shownRef is
+  // what gets persisted to localStorage. Now those four only add to
+  // shownRef on a *successful* response; this ref exists purely to block a
+  // second near-simultaneous call (StrictMode's double-effect-invoke, or a
+  // fast reconnect) from racing the first one while it's still in flight --
+  // never persisted, cleared on failure so the next 5-minute poll retries.
+  const pendingRef = useRef<Set<string>>(new Set());
   const nextIdRef = useRef(1);
   const smartLearningEnabledRef = useRef(false);
   const visitReminderDaysRef = useRef(30);
@@ -357,14 +368,22 @@ export function TeamReminders() {
     if (!user?.is_admin) return;
     const week = isoWeekStr();
     const key = `wk:${week}:risk_nudge`;
-    if (shownRef.current.has(key)) return;
-    // Marked synchronously up front for the same reason as pollPulse above --
-    // also means a quiet week (nothing to flag) won't keep re-fetching
-    // /dashboard on every poll trying to find something to report.
+    if (shownRef.current.has(key) || pendingRef.current.has(key)) return;
+    // Marked pending synchronously up front -- same StrictMode-double-invoke
+    // reason as every other poll function in this file -- but NOT persisted
+    // to shownRef yet: a fetch failure must be retried on the next poll, not
+    // silently and permanently lose this week's nudge. Only a quiet week
+    // (fetch succeeded, nothing to flag) gets the permanent "don't ask again
+    // this week" treatment, via the explicit shownRef.add below.
+    pendingRef.current.add(key);
+    const summary = await api.get<DashboardSummary>('/dashboard').catch(() => null);
+    if (!summary) {
+      pendingRef.current.delete(key);
+      return;
+    }
     shownRef.current.add(key);
     saveShown(shownRef.current);
-    const summary = await api.get<DashboardSummary>('/dashboard').catch(() => null);
-    if (!summary) return;
+    pendingRef.current.delete(key);
     const message = buildRiskMessage(summary);
     if (!message) return;
     queueToast('risk_nudge', message, key);
@@ -415,15 +434,22 @@ export function TeamReminders() {
   async function pollMorningBriefing() {
     if (!user || !smartLearningEnabledRef.current) return;
     const key = `${todayStr()}:morning_briefing`;
-    if (shownRef.current.has(key)) return;
-    // Marked synchronously up front for the same StrictMode-double-invoke reason
-    // as every other poll function in this file -- see pollPulse above.
-    shownRef.current.add(key);
-    saveShown(shownRef.current);
+    if (shownRef.current.has(key) || pendingRef.current.has(key)) return;
+    // Pending-guard, not an immediate shownRef write -- see pollRisks above
+    // for why: a transient network failure here must not permanently lose
+    // the day's morning briefing with no retry.
+    pendingRef.current.add(key);
     const res = await api
       .post<{ message: string | null }>('/smart-nudges/generate', { kind: 'morning_briefing' })
       .catch(() => null);
-    if (!res?.message) return;
+    if (res === null) {
+      pendingRef.current.delete(key);
+      return;
+    }
+    shownRef.current.add(key);
+    saveShown(shownRef.current);
+    pendingRef.current.delete(key);
+    if (!res.message) return;
     queueToast('morning_briefing', res.message, key);
   }
 
@@ -446,15 +472,22 @@ export function TeamReminders() {
     );
     for (const projectId of projectIds) {
       const key = `${today}:job_context:${projectId}`;
-      if (shownRef.current.has(key)) continue;
-      // Marked synchronously up front for the same StrictMode-double-invoke
-      // reason as every other poll function in this file -- see pollPulse above.
-      shownRef.current.add(key);
-      saveShown(shownRef.current);
+      if (shownRef.current.has(key) || pendingRef.current.has(key)) continue;
+      // Pending-guard, not an immediate shownRef write -- see pollRisks
+      // above for why: a transient network failure here must not
+      // permanently lose that job's nudge for the day with no retry.
+      pendingRef.current.add(key);
       const res = await api
         .post<{ message: string | null }>('/smart-nudges/generate', { kind: 'job_context', project_id: projectId })
         .catch(() => null);
-      if (res?.message) queueToast('job_context', res.message, key, undefined, projectId);
+      if (res === null) {
+        pendingRef.current.delete(key);
+        continue;
+      }
+      shownRef.current.add(key);
+      saveShown(shownRef.current);
+      pendingRef.current.delete(key);
+      if (res.message) queueToast('job_context', res.message, key, undefined, projectId);
     }
   }
 
@@ -462,15 +495,22 @@ export function TeamReminders() {
     if (!user || !smartLearningEnabledRef.current) return;
     if (new Date().getHours() < 15) return; // client-side wall-clock gate -- see Phase 13 design notes
     const key = `${todayStr()}:closeout_briefing`;
-    if (shownRef.current.has(key)) return;
-    // Marked synchronously up front for the same StrictMode-double-invoke reason
-    // as every other poll function in this file -- see pollPulse above.
-    shownRef.current.add(key);
-    saveShown(shownRef.current);
+    if (shownRef.current.has(key) || pendingRef.current.has(key)) return;
+    // Pending-guard, not an immediate shownRef write -- see pollRisks above
+    // for why: a transient network failure here must not permanently lose
+    // the day's closeout briefing with no retry.
+    pendingRef.current.add(key);
     const res = await api
       .post<{ message: string | null }>('/smart-nudges/generate', { kind: 'closeout_briefing' })
       .catch(() => null);
-    if (!res?.message) return;
+    if (res === null) {
+      pendingRef.current.delete(key);
+      return;
+    }
+    shownRef.current.add(key);
+    saveShown(shownRef.current);
+    pendingRef.current.delete(key);
+    if (!res.message) return;
     queueToast('closeout_briefing', res.message, key);
   }
 
