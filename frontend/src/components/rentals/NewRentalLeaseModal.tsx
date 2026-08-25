@@ -83,75 +83,84 @@ export function NewRentalLeaseModal({
     <Modal title="New lease" onClose={onClose}>
       <form onSubmit={handleSubmit}>
         {error && <div className="merr">{error}</div>}
-        <div className="fg">
-          <label className="fl">Unit</label>
-          <select className="fi" value={unitId} onChange={(e) => setUnitId(e.target.value)}>
-            {units.map((u) => (
-              <option key={u.id} value={u.id}>
-                {u.unit_label}
-              </option>
-            ))}
-          </select>
-        </div>
-        <div className="fg">
-          <label className="fl" style={{ display: 'flex', justifyContent: 'space-between' }}>
-            Tenant
-            <button
-              type="button"
-              className="btn-reset"
-              style={{ color: 'var(--blue)', fontSize: 12, cursor: 'pointer' }}
-              onClick={() => setCreatingTenant((v) => !v)}
-            >
-              {creatingTenant ? 'Choose existing' : '+ New tenant'}
-            </button>
-          </label>
-          {creatingTenant ? (
-            <div className="fr">
-              <div className="fg">
-                <input className="fi" placeholder="Name" value={newTenantName} onChange={(e) => setNewTenantName(e.target.value)} />
-              </div>
-              <div className="fg">
-                <input className="fi" placeholder="Email" value={newTenantEmail} onChange={(e) => setNewTenantEmail(e.target.value)} />
-              </div>
-              <div className="fg">
-                <input className="fi" placeholder="Phone" value={newTenantPhone} onChange={(e) => setNewTenantPhone(e.target.value)} />
-              </div>
-            </div>
-          ) : (
-            <select className="fi" value={tenantId} onChange={(e) => setTenantId(e.target.value)}>
-              <option value="">— Choose a tenant —</option>
-              {tenants.map((t) => (
-                <option key={t.id} value={t.id}>
-                  {t.name}
+
+        <div className="card" style={{ padding: 14, marginBottom: 14 }}>
+          <div className="card-section-header">Unit & tenant</div>
+          <div className="fg">
+            <label className="fl">Unit</label>
+            <select className="fi" value={unitId} onChange={(e) => setUnitId(e.target.value)}>
+              {units.map((u) => (
+                <option key={u.id} value={u.id}>
+                  {u.unit_label}
                 </option>
               ))}
             </select>
-          )}
+          </div>
+          <div className="fg">
+            <label className="fl" style={{ display: 'flex', justifyContent: 'space-between' }}>
+              Tenant
+              <button
+                type="button"
+                className="btn-reset"
+                style={{ color: 'var(--blue)', fontSize: 12, cursor: 'pointer' }}
+                onClick={() => setCreatingTenant((v) => !v)}
+              >
+                {creatingTenant ? 'Choose existing' : '+ New tenant'}
+              </button>
+            </label>
+            {creatingTenant ? (
+              <div className="fr">
+                <div className="fg">
+                  <input className="fi" placeholder="Name" value={newTenantName} onChange={(e) => setNewTenantName(e.target.value)} />
+                </div>
+                <div className="fg">
+                  <input className="fi" placeholder="Email" value={newTenantEmail} onChange={(e) => setNewTenantEmail(e.target.value)} />
+                </div>
+                <div className="fg">
+                  <input className="fi" placeholder="Phone" value={newTenantPhone} onChange={(e) => setNewTenantPhone(e.target.value)} />
+                </div>
+              </div>
+            ) : (
+              <select className="fi" value={tenantId} onChange={(e) => setTenantId(e.target.value)}>
+                <option value="">— Choose a tenant —</option>
+                {tenants.map((t) => (
+                  <option key={t.id} value={t.id}>
+                    {t.name}
+                  </option>
+                ))}
+              </select>
+            )}
+          </div>
         </div>
-        <div className="fr">
-          <div className="fg">
-            <label className="fl">Start date</label>
-            <input className="fi" type="date" value={startDate} onClick={openDatePicker} onChange={(e) => setStartDate(e.target.value)} />
+
+        <div className="card" style={{ padding: 14, marginBottom: 14 }}>
+          <div className="card-section-header">Lease terms</div>
+          <div className="fr">
+            <div className="fg">
+              <label className="fl">Start date</label>
+              <input className="fi" type="date" value={startDate} onClick={openDatePicker} onChange={(e) => setStartDate(e.target.value)} />
+            </div>
+            <div className="fg">
+              <label className="fl">End date</label>
+              <input className="fi" type="date" value={endDate} onClick={openDatePicker} onChange={(e) => setEndDate(e.target.value)} />
+            </div>
           </div>
-          <div className="fg">
-            <label className="fl">End date</label>
-            <input className="fi" type="date" value={endDate} onClick={openDatePicker} onChange={(e) => setEndDate(e.target.value)} />
+          <div className="fr">
+            <div className="fg">
+              <label className="fl">Monthly rent ($)</label>
+              <input className="fi" type="number" value={monthlyRent} onChange={(e) => setMonthlyRent(e.target.value)} />
+            </div>
+            <div className="fg">
+              <label className="fl">Security deposit ($)</label>
+              <input className="fi" type="number" value={securityDeposit} onChange={(e) => setSecurityDeposit(e.target.value)} />
+            </div>
+            <div className="fg">
+              <label className="fl">Rent due day</label>
+              <input className="fi" type="number" min={1} max={31} value={rentDueDay} onChange={(e) => setRentDueDay(e.target.value)} />
+            </div>
           </div>
         </div>
-        <div className="fr">
-          <div className="fg">
-            <label className="fl">Monthly rent ($)</label>
-            <input className="fi" type="number" value={monthlyRent} onChange={(e) => setMonthlyRent(e.target.value)} />
-          </div>
-          <div className="fg">
-            <label className="fl">Security deposit ($)</label>
-            <input className="fi" type="number" value={securityDeposit} onChange={(e) => setSecurityDeposit(e.target.value)} />
-          </div>
-          <div className="fg">
-            <label className="fl">Rent due day</label>
-            <input className="fi" type="number" min={1} max={31} value={rentDueDay} onChange={(e) => setRentDueDay(e.target.value)} />
-          </div>
-        </div>
+
         <div className="ma">
           <button type="button" className="btn" onClick={onClose}>
             Cancel

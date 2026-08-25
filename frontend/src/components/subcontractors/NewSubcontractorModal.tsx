@@ -72,55 +72,63 @@ export function NewSubcontractorModal({ onClose, onSaved, sub }: NewSubcontracto
     <Modal title={sub ? 'Edit subcontractor' : 'Add subcontractor'} onClose={onClose}>
       <form onSubmit={handleSubmit}>
         {error && <div className="merr">{error}</div>}
-        <div className="fg">
-          <label className="fl">Company name</label>
-          <input className="fi" value={companyName} onChange={(e) => setCompanyName(e.target.value)} />
-        </div>
-        <div className="fr">
+
+        <div className="card" style={{ padding: 14, marginBottom: 14 }}>
+          <div className="card-section-header">Company details</div>
           <div className="fg">
-            <label className="fl">Trade</label>
-            <input className="fi" value={trade} onChange={(e) => setTrade(e.target.value)} placeholder="Electrical" />
+            <label className="fl">Company name</label>
+            <input className="fi" value={companyName} onChange={(e) => setCompanyName(e.target.value)} />
           </div>
-          <div className="fg">
-            <label className="fl">Contact name</label>
-            <input className="fi" value={contactName} onChange={(e) => setContactName(e.target.value)} />
+          <div className="fr">
+            <div className="fg">
+              <label className="fl">Trade</label>
+              <input className="fi" value={trade} onChange={(e) => setTrade(e.target.value)} placeholder="Electrical" />
+            </div>
+            <div className="fg">
+              <label className="fl">Contact name</label>
+              <input className="fi" value={contactName} onChange={(e) => setContactName(e.target.value)} />
+            </div>
           </div>
-        </div>
-        <div className="fr">
-          <div className="fg">
-            <label className="fl">Phone</label>
-            <input className="fi" value={phone} onChange={(e) => setPhone(e.target.value)} />
-          </div>
-          <div className="fg">
-            <label className="fl">Email</label>
-            <input className="fi" value={email} onChange={(e) => setEmail(e.target.value)} />
-          </div>
-        </div>
-        <div className="fr3">
-          <div className="fg">
-            <label className="fl">Insurance expiry</label>
-            <input className="fi" type="date" value={insuranceExpiry} onClick={openDatePicker} onChange={(e) => setInsuranceExpiry(e.target.value)} />
-          </div>
-          <div className="fg">
-            <label className="fl">License #</label>
-            <input className="fi" value={licenseNumber} onChange={(e) => setLicenseNumber(e.target.value)} />
-          </div>
-          <div className="fg">
-            <label className="fl">Rating (1-5)</label>
-            <input className="fi" type="number" min={1} max={5} value={rating} onChange={(e) => setRating(e.target.value)} />
+          <div className="fr">
+            <div className="fg">
+              <label className="fl">Phone</label>
+              <input className="fi" value={phone} onChange={(e) => setPhone(e.target.value)} />
+            </div>
+            <div className="fg">
+              <label className="fl">Email</label>
+              <input className="fi" value={email} onChange={(e) => setEmail(e.target.value)} />
+            </div>
           </div>
         </div>
-        <div className="fg">
-          <label className="fl">Notes</label>
-          <textarea className="fi" value={notes} onChange={(e) => setNotes(e.target.value)} />
-        </div>
-        <div style={{ display: 'flex', gap: 20, marginBottom: 14 }}>
-          <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 13, cursor: 'pointer' }}>
-            <input type="checkbox" checked={preferred} onChange={(e) => setPreferred(e.target.checked)} /> Preferred
-          </label>
-          <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 13, cursor: 'pointer' }}>
-            <input type="checkbox" checked={w9OnFile} onChange={(e) => setW9OnFile(e.target.checked)} /> W9 on file
-          </label>
+
+        <div className="card" style={{ padding: 14, marginBottom: 14 }}>
+          <div className="card-section-header">Compliance & notes</div>
+          <div className="fr3">
+            <div className="fg">
+              <label className="fl">Insurance expiry</label>
+              <input className="fi" type="date" value={insuranceExpiry} onClick={openDatePicker} onChange={(e) => setInsuranceExpiry(e.target.value)} />
+            </div>
+            <div className="fg">
+              <label className="fl">License #</label>
+              <input className="fi" value={licenseNumber} onChange={(e) => setLicenseNumber(e.target.value)} />
+            </div>
+            <div className="fg">
+              <label className="fl">Rating (1-5)</label>
+              <input className="fi" type="number" min={1} max={5} value={rating} onChange={(e) => setRating(e.target.value)} />
+            </div>
+          </div>
+          <div className="fg">
+            <label className="fl">Notes</label>
+            <textarea className="fi" value={notes} onChange={(e) => setNotes(e.target.value)} />
+          </div>
+          <div style={{ display: 'flex', gap: 20 }}>
+            <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 13, cursor: 'pointer' }}>
+              <input type="checkbox" checked={preferred} onChange={(e) => setPreferred(e.target.checked)} /> Preferred
+            </label>
+            <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 13, cursor: 'pointer' }}>
+              <input type="checkbox" checked={w9OnFile} onChange={(e) => setW9OnFile(e.target.checked)} /> W9 on file
+            </label>
+          </div>
         </div>
 
         {sub && (

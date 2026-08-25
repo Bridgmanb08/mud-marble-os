@@ -301,7 +301,7 @@ export function LineItemModal({
             cost details" / "Cost information" split -- gives the eye two
             clear stops instead of one long undifferentiated field stack. */}
         <div className="card" style={{ padding: 16, marginBottom: 16 }}>
-          <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 14, paddingBottom: 10, borderBottom: '1px solid var(--border)' }}>
+          <div className="card-section-header">
             Item details
           </div>
           <div className="fr3">
@@ -397,7 +397,7 @@ export function LineItemModal({
         </div>
 
         <div className="card" style={{ padding: 16, marginBottom: 16 }}>
-          <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 14, paddingBottom: 10, borderBottom: '1px solid var(--border)' }}>
+          <div className="card-section-header">
             Cost information
           </div>
           <div className="fr3">
