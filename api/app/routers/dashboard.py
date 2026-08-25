@@ -99,28 +99,44 @@ def _parse_dt(value):
 _PRIORITY_RANK = {"urgent": 0, "high": 1, "normal": 2, "low": 3}
 
 
-def _match_user(raw_name: Optional[str], users: list[dict]) -> Optional[dict]:
+def _index_users_by_first_name(users: list[dict]) -> dict:
+    """Precomputed first-name -> user lookup, built once per _build_team_workload
+    call instead of _match_user re-scanning the full `users` list from scratch
+    for every single assignee on every single schedule item -- on a busy team
+    that's dozens of linear scans over the same small list per request. First
+    occurrence in `users` wins on a duplicate first name, matching the
+    original scan-order semantics exactly."""
+    index: dict = {}
+    for u in users:
+        u_name = (u.get("name") or "").strip()
+        if not u_name:
+            continue
+        key = u_name.split()[0].lower()
+        if key not in index:
+            index[key] = u
+    return index
+
+
+def _match_user(raw_name: Optional[str], users_by_first_name: dict) -> Optional[dict]:
     """Match a task's free-text assignee to a real app_users row by first name
-    (case-insensitive). Tasks created via the UI use short first names
-    ("shannon") while AI-imported tasks sometimes carry a full name as it
-    appeared in a transcript ("Shannon Ingram") -- without this, the same
+    (case-insensitive), against a precomputed index (see
+    _index_users_by_first_name). Tasks created via the UI use short first
+    names ("shannon") while AI-imported tasks sometimes carry a full name as
+    it appeared in a transcript ("Shannon Ingram") -- without this, the same
     real person shows up as two separate people in team-workload views."""
     if not raw_name or not raw_name.strip():
         return None
     first = raw_name.strip().split()[0].lower()
-    for u in users:
-        u_name = u.get("name") or ""
-        if u_name.strip() and u_name.strip().split()[0].lower() == first:
-            return u
-    return None
+    return users_by_first_name.get(first)
 
 
 def _build_team_workload(schedule_items: list[dict], users: list[dict], now: datetime) -> list[TeamWorkloadEntry]:
     week_start = now - timedelta(days=7)
+    users_by_first_name = _index_users_by_first_name(users)
     buckets: dict[str, dict] = {}
 
     def bucket_for(raw_name: str) -> dict:
-        matched = _match_user(raw_name, users)
+        matched = _match_user(raw_name, users_by_first_name)
         key = matched["id"] if matched else raw_name
         if key not in buckets:
             buckets[key] = {
