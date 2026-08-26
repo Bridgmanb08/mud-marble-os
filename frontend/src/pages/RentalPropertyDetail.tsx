@@ -10,9 +10,10 @@ import { LeaseRentLedgerModal } from '../components/rentals/LeaseRentLedgerModal
 import { NewRentalWorkOrderModal } from '../components/rentals/NewRentalWorkOrderModal';
 import { MoneyField } from '../components/rentals/MoneyField';
 import { VisitLogModal } from '../components/rentals/VisitLogModal';
-import type { RentalLease, RentalProperty, RentalPropertyVisit, RentalWorkOrder } from '../types';
+import { PropertyDetailModal } from '../components/rentals/PropertyDetailModal';
+import type { RentalLease, RentalProperty, RentalPropertyDetail, RentalPropertyVisit, RentalWorkOrder } from '../types';
 
-const TABS = ['Overview', 'Financials', 'Units & Tenants', 'Leases', 'Maintenance', 'Visit Log'];
+const TABS = ['Overview', 'Financials', 'Units & Tenants', 'Leases', 'Maintenance', 'Home Details', 'Visit Log'];
 
 // Every editable financial field, kept in one string-valued form object
 // rather than 19 separate useState calls -- each maps directly to a
@@ -57,6 +58,7 @@ export default function RentalPropertyDetail() {
   const [leases, setLeases] = useState<RentalLease[]>([]);
   const [workOrders, setWorkOrders] = useState<RentalWorkOrder[]>([]);
   const [visits, setVisits] = useState<RentalPropertyVisit[]>([]);
+  const [propertyDetails, setPropertyDetails] = useState<RentalPropertyDetail[]>([]);
   const [activeTab, setActiveTab] = useState('Overview');
   const [showNewUnit, setShowNewUnit] = useState(false);
   const [showNewLease, setShowNewLease] = useState(false);
@@ -64,6 +66,8 @@ export default function RentalPropertyDetail() {
   const [ledgerLease, setLedgerLease] = useState<RentalLease | null>(null);
   const [editingVisit, setEditingVisit] = useState<RentalPropertyVisit | null>(null);
   const [loggingVisit, setLoggingVisit] = useState(false);
+  const [editingDetail, setEditingDetail] = useState<RentalPropertyDetail | null>(null);
+  const [addingDetail, setAddingDetail] = useState(false);
   const [financials, setFinancials] = useState<Record<FinancialField, string>>(
     () => Object.fromEntries(FINANCIAL_FIELDS.map((f) => [f, ''])) as Record<FinancialField, string>
   );
@@ -124,11 +128,20 @@ export default function RentalPropertyDetail() {
       .catch(() => toast('Failed to load visit log', true));
   }
 
+  function loadPropertyDetails() {
+    if (!id) return;
+    api
+      .get<RentalPropertyDetail[]>(`/rental-properties/${id}/details`)
+      .then(setPropertyDetails)
+      .catch(() => toast('Failed to load property details', true));
+  }
+
   useEffect(() => {
     loadProperty();
     loadLeases();
     loadWorkOrders();
     loadVisits();
+    loadPropertyDetails();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [id]);
 
@@ -483,6 +496,56 @@ export default function RentalPropertyDetail() {
         </div>
 
         <div
+          id={sectionId('Home Details')}
+          style={{ scrollMarginTop: SECTION_SCROLL_MARGIN, marginTop: 24, paddingTop: 24, borderTop: '1px solid var(--border)' }}
+        >
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4 }}>
+            <div className="ibt" style={{ fontSize: 13, textTransform: 'none', letterSpacing: 0, border: 'none', padding: 0 }}>
+              Home Details
+            </div>
+            <button className="btn btn-sm" onClick={() => setAddingDetail(true)}>
+              <IconPlus size={14} /> Add detail
+            </button>
+          </div>
+          <p style={{ fontSize: 12, color: 'var(--t2)', marginBottom: 14 }}>
+            Paint colors, roof, appliances, landscaping, and anything else worth knowing about this house — each dated so you can tell what's current.
+          </p>
+          {propertyDetails.length === 0 ? (
+            <div style={{ fontSize: 13, color: 'var(--t2)' }}>No details logged yet.</div>
+          ) : (
+            Object.entries(
+              propertyDetails.reduce<Record<string, RentalPropertyDetail[]>>((acc, d) => {
+                (acc[d.category] ||= []).push(d);
+                return acc;
+              }, {})
+            ).map(([category, items]) => (
+              <div key={category} style={{ marginBottom: 4 }}>
+                <div style={{ fontSize: 11, fontWeight: 600, color: 'var(--t2)', textTransform: 'uppercase', letterSpacing: 0.3, margin: '10px 0 2px' }}>
+                  {category}
+                </div>
+                {items.map((d) => (
+                  <button
+                    key={d.id}
+                    type="button"
+                    className="cc btn-reset"
+                    style={{ width: '100%', textAlign: 'left', alignItems: 'flex-start', cursor: 'pointer' }}
+                    onClick={() => setEditingDetail(d)}
+                  >
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <div style={{ fontSize: 13, fontWeight: 500 }}>{d.detail}</div>
+                      <div style={{ fontSize: 12, color: 'var(--t2)', marginTop: 2 }}>
+                        {d.detail_date ? fmtD(d.detail_date) : 'No date'}
+                        {d.notes ? ` · ${d.notes}` : ''}
+                      </div>
+                    </div>
+                  </button>
+                ))}
+              </div>
+            ))
+          )}
+        </div>
+
+        <div
           id={sectionId('Visit Log')}
           style={{ scrollMarginTop: SECTION_SCROLL_MARGIN, marginTop: 24, paddingTop: 24, borderTop: '1px solid var(--border)' }}
         >
@@ -576,6 +639,25 @@ export default function RentalPropertyDetail() {
           onSaved={() => {
             setEditingVisit(null);
             loadVisits();
+          }}
+        />
+      )}
+      {(addingDetail || editingDetail) && property && (
+        <PropertyDetailModal
+          propertyId={property.id}
+          detail={editingDetail || undefined}
+          onClose={() => {
+            setAddingDetail(false);
+            setEditingDetail(null);
+          }}
+          onSaved={() => {
+            setAddingDetail(false);
+            setEditingDetail(null);
+            loadPropertyDetails();
+          }}
+          onDeleted={() => {
+            setEditingDetail(null);
+            loadPropertyDetails();
           }}
         />
       )}

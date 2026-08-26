@@ -1277,6 +1277,16 @@ export interface RentalPropertyVisit {
   created_at: string;
 }
 
+export interface RentalPropertyDetail {
+  id: string;
+  property_id: string;
+  category: string;
+  detail: string;
+  detail_date: string | null;
+  notes: string | null;
+  created_at: string;
+}
+
 export interface RentalTenant {
   id: string;
   name: string;
