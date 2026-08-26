@@ -13,6 +13,7 @@ import {
   IconSparkles,
   IconHome2,
   IconUserPlus,
+  IconMessageCircle,
 } from '@tabler/icons-react';
 import { api } from '../../api/client';
 import { useAuth } from '../../auth/AuthContext';
@@ -21,6 +22,7 @@ import { PulseCheckinModal } from '../dashboard/PulseCheckinModal';
 import { RYAN_HOLIDAY_QUOTES } from '../../data/ryanHolidayQuotes';
 import { addReminderHistoryEntry } from '../../lib/reminderHistory';
 import { refreshNotifications, getSnapshot } from '../../notifications/notificationsStore';
+import { hasUnseenComment } from '../../lib/commentSeen';
 import type { Task, PulseCheckinOut, DashboardSummary, RentalProperty } from '../../types';
 
 /**
@@ -43,7 +45,8 @@ export type Category =
   | 'closeout_briefing'
   | 'greeting'
   | 'visit_overdue'
-  | 'task_assigned';
+  | 'task_assigned'
+  | 'new_comments';
 
 interface ReminderToast {
   id: string;
@@ -89,6 +92,32 @@ function saveGreetingLastShown(ts: number) {
   }
 }
 
+// Batched "N tasks have new comments for you" nudge -- fires at most once
+// per ~30 minutes (a rolling elapsed-time window, same shape as the
+// greeting's own interval above, not the shownRef Set's once-per-calendar-
+// day dedupe, which would be the wrong fit for a recurring nudge like this).
+// Actual cadence is "the next 5-minute poll tick after 30 minutes have
+// elapsed", so ~30-35 minutes in practice -- same jitter the greeting
+// already accepts.
+const NEW_COMMENTS_INTERVAL_MS = 30 * 60 * 1000;
+const NEW_COMMENTS_STORAGE_KEY = 'mm_new_comments_last_shown_v1';
+
+function loadNewCommentsLastShown(): number {
+  try {
+    return Number(localStorage.getItem(NEW_COMMENTS_STORAGE_KEY)) || 0;
+  } catch {
+    return 0;
+  }
+}
+
+function saveNewCommentsLastShown(ts: number) {
+  try {
+    localStorage.setItem(NEW_COMMENTS_STORAGE_KEY, String(ts));
+  } catch {
+    // localStorage unavailable (private mode etc.) -- nudge just re-fires more often, not worth failing over
+  }
+}
+
 const OVERDUE_MESSAGES = [
   (t: string) => `"${t}" snuck past its deadline. Let's go rescue it!`,
   (t: string) => `"${t}" is overdue -- no drama, just knock it out.`,
@@ -125,6 +154,7 @@ export const CATEGORY_META: Record<Category, { Icon: typeof IconFlame; color: st
   greeting: { Icon: IconSparkles, color: 'var(--accent)' },
   visit_overdue: { Icon: IconHome2, color: 'var(--amber)' },
   task_assigned: { Icon: IconUserPlus, color: 'var(--blue)' },
+  new_comments: { Icon: IconMessageCircle, color: 'var(--blue)' },
 };
 
 function pick<T>(arr: T[]): T {
@@ -324,6 +354,36 @@ export function TeamReminders() {
     await pollCloseoutBriefing();
     await pollVisitOverdue();
     await pollTaskAssigned();
+    pollNewComments(tasks);
+  }
+
+  // Batched "N tasks have new comments for you" -- rather than one toast per
+  // comment (which would spam anyone getting commented at a lot, per
+  // Brent's own explicit ask), this counts how many of the current user's
+  // own tasks have a comment they haven't seen yet (same hasUnseenComment
+  // localStorage check that already powers the Kanban card's unseen-
+  // comment glow) and fires ONE toast with that count, at most once per
+  // ~30 minutes. Purely client-side -- comment_count/last_comment_author/
+  // last_comment_at already come back on every GET /tasks, no new endpoint
+  // needed.
+  function pollNewComments(tasks: Task[]) {
+    if (!user) return;
+    if (Date.now() - loadNewCommentsLastShown() < NEW_COMMENTS_INTERVAL_MS) return;
+    const withUnseenComments = tasks.filter(
+      (t) =>
+        t.status !== 'complete' &&
+        (sameName(t.assigned_to, user.name) || t.assignees?.some((a) => sameName(a, user.name))) &&
+        t.last_comment_author &&
+        !sameName(t.last_comment_author, user.name) &&
+        hasUnseenComment(t.id, t.last_comment_at)
+    );
+    if (withUnseenComments.length === 0) return;
+    // Marked immediately for the same StrictMode-double-invoke reason as
+    // every other poll function in this file -- see pollPulse above.
+    saveNewCommentsLastShown(Date.now());
+    const count = withUnseenComments.length;
+    const message = `${count} task${count === 1 ? ' has' : 's have'} new comments for you`;
+    queueToast('new_comments', message, `new_comments:${Date.now()}`);
   }
 
   // Surfaces the notifications.task_assigned rows tasks.py now creates the
@@ -586,6 +646,7 @@ export function TeamReminders() {
                 else if (t.category === 'job_context') navigate(`/projects/${t.projectId}`);
                 else if (t.category === 'visit_overdue') navigate(`/rentals/${t.propertyId}`);
                 else if (t.category === 'greeting') dismiss(t.id);
+                else if (t.category === 'new_comments') navigate('/tasks');
                 else setOpenTaskId(t.taskId!);
               }}
             >
