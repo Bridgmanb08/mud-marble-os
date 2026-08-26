@@ -8,6 +8,7 @@ from ..schemas.users import (
     UserPreferences,
     UserPreferencesUpdate,
     UserSummary,
+    UserUpdate,
 )
 from ..security import hash_password
 from ..supabase_client import db_get, db_patch, db_post
@@ -18,7 +19,18 @@ router = APIRouter(prefix="/users", tags=["users"])
 
 @router.get("", response_model=list[UserSummary])
 async def list_users(_: CurrentUser = Depends(require_admin)):
-    return await db_get("app_users", "?select=id,name,email,role,is_admin&order=name.asc")
+    return await db_get("app_users", "?select=id,name,email,role,is_admin,hide_rental_financials&order=name.asc")
+
+
+@router.patch("/{user_id}", response_model=UserSummary)
+async def update_user(user_id: str, body: UserUpdate, _: CurrentUser = Depends(require_admin)):
+    updates = body.model_dump(exclude_unset=True)
+    if updates:
+        await db_patch("app_users", user_id, updates)
+    rows = await db_get("app_users", f"?id=eq.{user_id}&select=id,name,email,role,is_admin,hide_rental_financials")
+    if not rows:
+        raise HTTPException(status_code=404, detail="User not found")
+    return rows[0]
 
 
 @router.post("", response_model=UserSummary)

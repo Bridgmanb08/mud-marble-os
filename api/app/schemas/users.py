@@ -9,6 +9,11 @@ class UserSummary(BaseModel):
     email: str
     role: str
     is_admin: bool = False
+    hide_rental_financials: bool = False
+
+
+class UserUpdate(BaseModel):
+    hide_rental_financials: Optional[bool] = None
 
 
 class UserCreate(BaseModel):

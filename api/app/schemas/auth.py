@@ -12,3 +12,4 @@ class UserOut(BaseModel):
     name: str
     role: str
     is_admin: bool
+    hide_rental_financials: bool = False

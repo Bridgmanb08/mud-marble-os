@@ -4,12 +4,13 @@ from .security import decode_access_token
 
 
 class CurrentUser:
-    def __init__(self, id: str, email: str, name: str, role: str, is_admin: bool):
+    def __init__(self, id: str, email: str, name: str, role: str, is_admin: bool, hide_rental_financials: bool = False):
         self.id = id
         self.email = email
         self.name = name
         self.role = role
         self.is_admin = is_admin
+        self.hide_rental_financials = hide_rental_financials
 
 
 def get_current_user(request: Request) -> CurrentUser:
@@ -25,6 +26,10 @@ def get_current_user(request: Request) -> CurrentUser:
         name=payload.get("name", ""),
         role=payload.get("role", "member"),
         is_admin=payload.get("is_admin", False),
+        # .get(..., False) -- a session token issued before this field
+        # existed simply won't have it; default to "not hidden" rather than
+        # erroring, self-heals on next login.
+        hide_rental_financials=payload.get("hide_rental_financials", False),
     )
 
 
