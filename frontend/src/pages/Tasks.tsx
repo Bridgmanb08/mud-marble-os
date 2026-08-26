@@ -196,7 +196,7 @@ export default function Tasks() {
   return (
     <>
       <div className="tasks-layout">
-        <JobFilterSidebar value={projectFilter} onChange={setProjectFilter} />
+        <JobFilterSidebar value={projectFilter} onChange={setProjectFilter} tasks={tasks || []} />
 
         <div className="tasks-main">
           <div className="ph">

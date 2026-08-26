@@ -24,6 +24,14 @@
 .job-sidebar-item.active{background:var(--bbg);color:var(--btx);font-weight:500;}
 .job-sidebar-list{display:flex;flex-direction:column;gap:1px;margin-top:4px;}
 .job-sidebar-empty{font-size:11.5px;color:var(--t3);padding:8px 4px;}
+.job-sidebar-item-name{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;}
+/* Open/unresolved task count per job -- a small gray pill, not a status
+   color, since this is a plain count rather than an urgency signal. */
+.job-sidebar-count{
+  flex-shrink:0;min-width:16px;height:16px;padding:0 5px;border-radius:999px;
+  background:var(--gray-bg);color:var(--gray-tx);font-size:10.5px;font-weight:600;
+  display:flex;align-items:center;justify-content:center;
+}
 
 /* --- Task tabs (My tasks / All tasks / Punch list) --- */
 .task-tabs{padding:0;border-bottom:1px solid var(--border);margin-bottom:14px;background:none;}
