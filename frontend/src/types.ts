@@ -1266,6 +1266,28 @@ export interface RentalProperty {
   estimated_monthly_cash_flow: number | null;
   last_visited_at: string | null;
   days_since_visit: number | null;
+  // Fixed "house facts" fields, each a plain-text value plus its own date --
+  // "boxes like the financials", not an open-ended log.
+  roof: string | null;
+  roof_date: string | null;
+  paint_color: string | null;
+  paint_color_date: string | null;
+  flooring: string | null;
+  flooring_date: string | null;
+  furnace_filter_size: string | null;
+  furnace_filter_size_date: string | null;
+  water_heater: string | null;
+  water_heater_date: string | null;
+  furnace: string | null;
+  furnace_date: string | null;
+  ac: string | null;
+  ac_date: string | null;
+  gutter_guards: string | null;
+  gutter_guards_date: string | null;
+  downspouts: string | null;
+  downspouts_date: string | null;
+  tree_issues: string | null;
+  tree_issues_date: string | null;
   units: RentalUnit[];
 }
 
@@ -1274,16 +1296,6 @@ export interface RentalPropertyVisit {
   property_id: string;
   visited_at: string;
   visited_by: string | null;
-  notes: string | null;
-  created_at: string;
-}
-
-export interface RentalPropertyDetail {
-  id: string;
-  property_id: string;
-  category: string;
-  detail: string;
-  detail_date: string | null;
   notes: string | null;
   created_at: string;
 }

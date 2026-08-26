@@ -3,7 +3,6 @@ from typing import Literal, Optional
 from pydantic import BaseModel, model_validator
 
 from ..date_validation import check_date_order
-from ..schema_validators import forbid_null
 
 
 class RentalPropertyCreate(BaseModel):
@@ -31,6 +30,26 @@ class RentalPropertyCreate(BaseModel):
     utilities_monthly: Optional[float] = None
     year_acquired: Optional[int] = None
     parcel_number: Optional[str] = None
+    roof: Optional[str] = None
+    roof_date: Optional[str] = None
+    paint_color: Optional[str] = None
+    paint_color_date: Optional[str] = None
+    flooring: Optional[str] = None
+    flooring_date: Optional[str] = None
+    furnace_filter_size: Optional[str] = None
+    furnace_filter_size_date: Optional[str] = None
+    water_heater: Optional[str] = None
+    water_heater_date: Optional[str] = None
+    furnace: Optional[str] = None
+    furnace_date: Optional[str] = None
+    ac: Optional[str] = None
+    ac_date: Optional[str] = None
+    gutter_guards: Optional[str] = None
+    gutter_guards_date: Optional[str] = None
+    downspouts: Optional[str] = None
+    downspouts_date: Optional[str] = None
+    tree_issues: Optional[str] = None
+    tree_issues_date: Optional[str] = None
 
 
 class RentalPropertyUpdate(BaseModel):
@@ -59,6 +78,26 @@ class RentalPropertyUpdate(BaseModel):
     utilities_monthly: Optional[float] = None
     year_acquired: Optional[int] = None
     parcel_number: Optional[str] = None
+    roof: Optional[str] = None
+    roof_date: Optional[str] = None
+    paint_color: Optional[str] = None
+    paint_color_date: Optional[str] = None
+    flooring: Optional[str] = None
+    flooring_date: Optional[str] = None
+    furnace_filter_size: Optional[str] = None
+    furnace_filter_size_date: Optional[str] = None
+    water_heater: Optional[str] = None
+    water_heater_date: Optional[str] = None
+    furnace: Optional[str] = None
+    furnace_date: Optional[str] = None
+    ac: Optional[str] = None
+    ac_date: Optional[str] = None
+    gutter_guards: Optional[str] = None
+    gutter_guards_date: Optional[str] = None
+    downspouts: Optional[str] = None
+    downspouts_date: Optional[str] = None
+    tree_issues: Optional[str] = None
+    tree_issues_date: Optional[str] = None
 
 
 class RentalPropertyOut(BaseModel):
@@ -89,6 +128,31 @@ class RentalPropertyOut(BaseModel):
     utilities_monthly: Optional[float] = None
     year_acquired: Optional[int] = None
     parcel_number: Optional[str] = None
+    # Fixed "house facts" fields -- each a plain-text value plus its own
+    # date, "boxes like the financials" rather than an open-ended log of
+    # arbitrary categories (a prior version of this feature used a generic
+    # rental_property_details log table; replaced with real column pairs
+    # per Brent's explicit correction).
+    roof: Optional[str] = None
+    roof_date: Optional[str] = None
+    paint_color: Optional[str] = None
+    paint_color_date: Optional[str] = None
+    flooring: Optional[str] = None
+    flooring_date: Optional[str] = None
+    furnace_filter_size: Optional[str] = None
+    furnace_filter_size_date: Optional[str] = None
+    water_heater: Optional[str] = None
+    water_heater_date: Optional[str] = None
+    furnace: Optional[str] = None
+    furnace_date: Optional[str] = None
+    ac: Optional[str] = None
+    ac_date: Optional[str] = None
+    gutter_guards: Optional[str] = None
+    gutter_guards_date: Optional[str] = None
+    downspouts: Optional[str] = None
+    downspouts_date: Optional[str] = None
+    tree_issues: Optional[str] = None
+    tree_issues_date: Optional[str] = None
     # Computed, not stored -- purchase_value minus debt, and a rough monthly
     # cash-flow estimate (target rent minus every known carrying cost, nulls
     # treated as 0). Matches this app's convention of deriving state from
@@ -310,35 +374,6 @@ class RentalPropertyVisitOut(BaseModel):
     property_id: str
     visited_at: str
     visited_by: Optional[str] = None
-    notes: Optional[str] = None
-    created_at: str
-
-
-class RentalPropertyDetailCreate(BaseModel):
-    category: str
-    detail: str
-    detail_date: Optional[str] = None
-    notes: Optional[str] = None
-
-
-class RentalPropertyDetailUpdate(BaseModel):
-    category: Optional[str] = None
-    detail: Optional[str] = None
-    detail_date: Optional[str] = None
-    notes: Optional[str] = None
-
-    @model_validator(mode="after")
-    def _forbid_null_required_fields(self):
-        forbid_null(self, {"category", "detail"})
-        return self
-
-
-class RentalPropertyDetailOut(BaseModel):
-    id: str
-    property_id: str
-    category: str
-    detail: str
-    detail_date: Optional[str] = None
     notes: Optional[str] = None
     created_at: str
 
