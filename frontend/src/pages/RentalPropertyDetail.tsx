@@ -4,15 +4,15 @@ import { IconArrowLeft, IconCamera, IconPlus, IconUsers } from '@tabler/icons-re
 import { api } from '../api/client';
 import { useToast } from '../components/ui/Toast';
 import { fmt, fmtD } from '../lib/format';
+import { openDatePicker } from '../lib/datePicker';
 import { NewRentalUnitModal } from '../components/rentals/NewRentalUnitModal';
 import { NewRentalLeaseModal } from '../components/rentals/NewRentalLeaseModal';
 import { LeaseRentLedgerModal } from '../components/rentals/LeaseRentLedgerModal';
 import { NewRentalWorkOrderModal } from '../components/rentals/NewRentalWorkOrderModal';
 import { MoneyField } from '../components/rentals/MoneyField';
 import { VisitLogModal } from '../components/rentals/VisitLogModal';
-import { PropertyDetailModal } from '../components/rentals/PropertyDetailModal';
 import { useAuth } from '../auth/AuthContext';
-import type { RentalLease, RentalProperty, RentalPropertyDetail, RentalPropertyVisit, RentalWorkOrder } from '../types';
+import type { RentalLease, RentalProperty, RentalPropertyVisit, RentalWorkOrder } from '../types';
 
 const TABS = ['Overview', 'Financials', 'Units & Tenants', 'Leases', 'Maintenance', 'Home Details', 'Visit Log'];
 
@@ -41,6 +41,24 @@ const FINANCIAL_FIELDS = [
 ] as const;
 type FinancialField = (typeof FINANCIAL_FIELDS)[number];
 const TEXT_FIELDS: FinancialField[] = ['lender', 'loan_number', 'parcel_number', 'ownership_name'];
+
+// Fixed set of house facts, each a plain-text value plus its own date --
+// "boxes like the financials" per Brent's explicit ask, not an open-ended
+// log. Each is a real column pair (e.g. roof/roof_date) on rental_properties,
+// same PATCH-on-blur convention as FINANCIAL_FIELDS above.
+const HOME_DETAIL_FIELDS = [
+  { key: 'roof', dateKey: 'roof_date', label: 'Roof' },
+  { key: 'paint_color', dateKey: 'paint_color_date', label: 'Paint color' },
+  { key: 'flooring', dateKey: 'flooring_date', label: 'Flooring' },
+  { key: 'furnace_filter_size', dateKey: 'furnace_filter_size_date', label: 'Furnace filter size' },
+  { key: 'water_heater', dateKey: 'water_heater_date', label: 'Water heater' },
+  { key: 'furnace', dateKey: 'furnace_date', label: 'Furnace' },
+  { key: 'ac', dateKey: 'ac_date', label: 'AC' },
+  { key: 'gutter_guards', dateKey: 'gutter_guards_date', label: 'Gutter guards' },
+  { key: 'downspouts', dateKey: 'downspouts_date', label: 'Downspouts' },
+  { key: 'tree_issues', dateKey: 'tree_issues_date', label: 'Tree issues' },
+] as const;
+type HomeDetailKey = (typeof HOME_DETAIL_FIELDS)[number]['key'] | (typeof HOME_DETAIL_FIELDS)[number]['dateKey'];
 const WO_STATUS_BADGE: Record<string, string> = { open: 'bg-gray', in_progress: 'bg-amber', resolved: 'bg-green' };
 const WO_PRIORITY_BADGE: Record<string, string> = { low: 'bg-gray', normal: 'bg-blue', high: 'bg-amber', urgent: 'bg-red' };
 const SECTION_SCROLL_MARGIN = 108;
@@ -60,7 +78,6 @@ export default function RentalPropertyDetail() {
   const [leases, setLeases] = useState<RentalLease[]>([]);
   const [workOrders, setWorkOrders] = useState<RentalWorkOrder[]>([]);
   const [visits, setVisits] = useState<RentalPropertyVisit[]>([]);
-  const [propertyDetails, setPropertyDetails] = useState<RentalPropertyDetail[]>([]);
   const [activeTab, setActiveTab] = useState('Overview');
   const [showNewUnit, setShowNewUnit] = useState(false);
   const [showNewLease, setShowNewLease] = useState(false);
@@ -68,10 +85,12 @@ export default function RentalPropertyDetail() {
   const [ledgerLease, setLedgerLease] = useState<RentalLease | null>(null);
   const [editingVisit, setEditingVisit] = useState<RentalPropertyVisit | null>(null);
   const [loggingVisit, setLoggingVisit] = useState(false);
-  const [editingDetail, setEditingDetail] = useState<RentalPropertyDetail | null>(null);
-  const [addingDetail, setAddingDetail] = useState(false);
   const [financials, setFinancials] = useState<Record<FinancialField, string>>(
     () => Object.fromEntries(FINANCIAL_FIELDS.map((f) => [f, ''])) as Record<FinancialField, string>
+  );
+  const [homeDetails, setHomeDetails] = useState<Record<HomeDetailKey, string>>(
+    () =>
+      Object.fromEntries(HOME_DETAIL_FIELDS.flatMap((f) => [[f.key, ''], [f.dateKey, '']])) as Record<HomeDetailKey, string>
   );
 
   function loadProperty() {
@@ -86,8 +105,27 @@ export default function RentalPropertyDetail() {
             string
           >
         );
+        setHomeDetails(
+          Object.fromEntries(
+            HOME_DETAIL_FIELDS.flatMap((f) => [
+              [f.key, p[f.key] || ''],
+              [f.dateKey, p[f.dateKey] || ''],
+            ])
+          ) as Record<HomeDetailKey, string>
+        );
       })
       .catch(() => toast('Failed to load property', true));
+  }
+
+  async function saveHomeDetail(field: HomeDetailKey, value: string) {
+    if (!id) return;
+    const trimmed = value.trim();
+    try {
+      await api.patch(`/rental-properties/${id}`, { [field]: trimmed || null });
+      loadProperty();
+    } catch {
+      toast('Failed to save', true);
+    }
   }
 
   async function saveFinancial(field: FinancialField, value: string) {
@@ -130,20 +168,11 @@ export default function RentalPropertyDetail() {
       .catch(() => toast('Failed to load visit log', true));
   }
 
-  function loadPropertyDetails() {
-    if (!id) return;
-    api
-      .get<RentalPropertyDetail[]>(`/rental-properties/${id}/details`)
-      .then(setPropertyDetails)
-      .catch(() => toast('Failed to load property details', true));
-  }
-
   useEffect(() => {
     loadProperty();
     loadLeases();
     loadWorkOrders();
     loadVisits();
-    loadPropertyDetails();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [id]);
 
@@ -507,50 +536,37 @@ export default function RentalPropertyDetail() {
           id={sectionId('Home Details')}
           style={{ scrollMarginTop: SECTION_SCROLL_MARGIN, marginTop: 24, paddingTop: 24, borderTop: '1px solid var(--border)' }}
         >
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4 }}>
-            <div className="ibt" style={{ fontSize: 13, textTransform: 'none', letterSpacing: 0, border: 'none', padding: 0 }}>
-              Home Details
-            </div>
-            <button className="btn btn-sm" onClick={() => setAddingDetail(true)}>
-              <IconPlus size={14} /> Add detail
-            </button>
+          <div className="ibt" style={{ fontSize: 13, textTransform: 'none', letterSpacing: 0, border: 'none', padding: 0, marginBottom: 4 }}>
+            Home Details
           </div>
           <p style={{ fontSize: 12, color: 'var(--t2)', marginBottom: 14 }}>
-            Paint colors, roof, appliances, landscaping, and anything else worth knowing about this house — each dated so you can tell what's current.
+            Roof, paint color, flooring, and the rest of this house's fixtures — each with the date it was last done or confirmed, so you can tell what's current.
           </p>
-          {propertyDetails.length === 0 ? (
-            <div style={{ fontSize: 13, color: 'var(--t2)' }}>No details logged yet.</div>
-          ) : (
-            Object.entries(
-              propertyDetails.reduce<Record<string, RentalPropertyDetail[]>>((acc, d) => {
-                (acc[d.category] ||= []).push(d);
-                return acc;
-              }, {})
-            ).map(([category, items]) => (
-              <div key={category} style={{ marginBottom: 4 }}>
-                <div style={{ fontSize: 11, fontWeight: 600, color: 'var(--t2)', textTransform: 'uppercase', letterSpacing: 0.3, margin: '10px 0 2px' }}>
-                  {category}
-                </div>
-                {items.map((d) => (
-                  <button
-                    key={d.id}
-                    type="button"
-                    className="cc btn-reset"
-                    style={{ width: '100%', textAlign: 'left', alignItems: 'flex-start', cursor: 'pointer' }}
-                    onClick={() => setEditingDetail(d)}
-                  >
-                    <div style={{ flex: 1, minWidth: 0 }}>
-                      <div style={{ fontSize: 13, fontWeight: 500 }}>{d.detail}</div>
-                      <div style={{ fontSize: 12, color: 'var(--t2)', marginTop: 2 }}>
-                        {d.detail_date ? fmtD(d.detail_date) : 'No date'}
-                        {d.notes ? ` · ${d.notes}` : ''}
-                      </div>
-                    </div>
-                  </button>
-                ))}
+          <div className="fr3">
+            {HOME_DETAIL_FIELDS.map((f) => (
+              <div className="fg" key={f.key}>
+                <label className="fl">{f.label}</label>
+                <input
+                  className="fi"
+                  value={homeDetails[f.key]}
+                  placeholder="—"
+                  onChange={(e) => setHomeDetails((h) => ({ ...h, [f.key]: e.target.value }))}
+                  onBlur={(e) => saveHomeDetail(f.key, e.target.value)}
+                />
+                <input
+                  className="fi"
+                  type="date"
+                  style={{ marginTop: 6 }}
+                  value={homeDetails[f.dateKey]}
+                  onClick={openDatePicker}
+                  onChange={(e) => {
+                    setHomeDetails((h) => ({ ...h, [f.dateKey]: e.target.value }));
+                    saveHomeDetail(f.dateKey, e.target.value);
+                  }}
+                />
               </div>
-            ))
-          )}
+            ))}
+          </div>
         </div>
 
         <div
@@ -647,25 +663,6 @@ export default function RentalPropertyDetail() {
           onSaved={() => {
             setEditingVisit(null);
             loadVisits();
-          }}
-        />
-      )}
-      {(addingDetail || editingDetail) && property && (
-        <PropertyDetailModal
-          propertyId={property.id}
-          detail={editingDetail || undefined}
-          onClose={() => {
-            setAddingDetail(false);
-            setEditingDetail(null);
-          }}
-          onSaved={() => {
-            setAddingDetail(false);
-            setEditingDetail(null);
-            loadPropertyDetails();
-          }}
-          onDeleted={() => {
-            setEditingDetail(null);
-            loadPropertyDetails();
           }}
         />
       )}

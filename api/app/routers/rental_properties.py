@@ -6,9 +6,6 @@ from fastapi import APIRouter, Depends, HTTPException
 from ..deps import CurrentUser, get_current_user
 from ..schemas.rentals import (
     RentalPropertyCreate,
-    RentalPropertyDetailCreate,
-    RentalPropertyDetailOut,
-    RentalPropertyDetailUpdate,
     RentalPropertyOut,
     RentalPropertyUpdate,
     RentalPropertyVisitCreate,
@@ -236,41 +233,3 @@ async def delete_visit(visit_id: str, _: CurrentUser = Depends(get_current_user)
     await db_delete("rental_property_visits", visit_id)
     return {"ok": True}
 
-
-# "House facts" log -- paint colors, roof color/material, appliance brands,
-# major landscaping, etc., each with its own optional date. Sorted by
-# category first (so entries about the same thing group together on screen)
-# then newest-dated first within a category.
-@router.get("/{property_id}/details", response_model=list[RentalPropertyDetailOut])
-async def list_property_details(property_id: str, _: CurrentUser = Depends(get_current_user)):
-    return await db_get(
-        "rental_property_details",
-        f"?property_id=eq.{property_id}&order=category.asc,detail_date.desc.nullslast",
-    )
-
-
-@router.post("/{property_id}/details", response_model=RentalPropertyDetailOut)
-async def create_property_detail(property_id: str, body: RentalPropertyDetailCreate, _: CurrentUser = Depends(get_current_user)):
-    data = {
-        "property_id": property_id,
-        "category": body.category,
-        "detail": body.detail,
-        "detail_date": body.detail_date,
-        "notes": body.notes,
-    }
-    rows = await db_post("rental_property_details", data)
-    return rows[0]
-
-
-@router.patch("/details/{detail_id}", response_model=RentalPropertyDetailOut)
-async def update_property_detail(detail_id: str, body: RentalPropertyDetailUpdate, _: CurrentUser = Depends(get_current_user)):
-    rows = await db_patch("rental_property_details", detail_id, body.model_dump(exclude_unset=True))
-    if not rows:
-        raise HTTPException(status_code=404, detail="Detail not found")
-    return rows[0]
-
-
-@router.delete("/details/{detail_id}")
-async def delete_property_detail(detail_id: str, _: CurrentUser = Depends(get_current_user)):
-    await db_delete("rental_property_details", detail_id)
-    return {"ok": True}
