@@ -9,6 +9,7 @@ import { LeaseTimeline } from '../components/rentals/LeaseTimeline';
 import { MoneyField } from '../components/rentals/MoneyField';
 import { DesktopOnlyNotice } from '../components/ui/DesktopOnlyNotice';
 import { useIsMobile } from '../hooks/useMediaQuery';
+import { useAuth } from '../auth/AuthContext';
 import type { RentalLease, RentalProperty, RentRollRow } from '../types';
 
 function visitColor(daysSince: number | null): string {
@@ -157,6 +158,7 @@ function SortTh({
 
 export default function RentalProperties() {
   const toast = useToast();
+  const { user } = useAuth();
   const isMobile = useIsMobile();
   const [properties, setProperties] = useState<RentalProperty[] | null>(null);
   const [leases, setLeases] = useState<RentalLease[]>([]);
@@ -206,7 +208,13 @@ export default function RentalProperties() {
       cashFlow: sum((p) => p.estimated_monthly_cash_flow),
     };
   }, [properties]);
-  const hasFinancials = financialTotals.value > 0 || financialTotals.debt > 0;
+  // Includes targetRent/cashFlow, not just value/debt -- a user with
+  // hide_rental_financials set has value/debt/equity redacted to null by
+  // the API (summed as 0 above), but should still see the card for the
+  // operational numbers (target rent, cash flow) that aren't hidden from
+  // them; gating on value/debt alone would hide the whole card, including
+  // data they're allowed to see, just because the two hidden fields sum to 0.
+  const hasFinancials = financialTotals.value > 0 || financialTotals.debt > 0 || financialTotals.targetRent > 0 || financialTotals.cashFlow !== 0;
 
   async function logVisit(propertyId: string) {
     try {
@@ -326,20 +334,24 @@ export default function RentalProperties() {
             Portfolio financials
           </div>
           <div className="metrics">
-            <div className="metric">
-              <div className="m-label">Portfolio value</div>
-              <div className="m-val">{fmt(financialTotals.value)}</div>
-            </div>
-            <div className="metric">
-              <div className="m-label">Debt</div>
-              <div className="m-val">{fmt(financialTotals.debt)}</div>
-            </div>
-            <div className="metric">
-              <div className="m-label">Equity</div>
-              <div className="m-val" style={{ color: 'var(--green)' }}>
-                {fmt(financialTotals.equity)}
-              </div>
-            </div>
+            {!user?.hide_rental_financials && (
+              <>
+                <div className="metric">
+                  <div className="m-label">Portfolio value</div>
+                  <div className="m-val">{fmt(financialTotals.value)}</div>
+                </div>
+                <div className="metric">
+                  <div className="m-label">Debt</div>
+                  <div className="m-val">{fmt(financialTotals.debt)}</div>
+                </div>
+                <div className="metric">
+                  <div className="m-label">Equity</div>
+                  <div className="m-val" style={{ color: 'var(--green)' }}>
+                    {fmt(financialTotals.equity)}
+                  </div>
+                </div>
+              </>
+            )}
             <div className="metric">
               <div className="m-label">Target monthly rent</div>
               <div className="m-val">{fmt(financialTotals.targetRent)}</div>

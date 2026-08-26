@@ -11,6 +11,7 @@ import { NewRentalWorkOrderModal } from '../components/rentals/NewRentalWorkOrde
 import { MoneyField } from '../components/rentals/MoneyField';
 import { VisitLogModal } from '../components/rentals/VisitLogModal';
 import { PropertyDetailModal } from '../components/rentals/PropertyDetailModal';
+import { useAuth } from '../auth/AuthContext';
 import type { RentalLease, RentalProperty, RentalPropertyDetail, RentalPropertyVisit, RentalWorkOrder } from '../types';
 
 const TABS = ['Overview', 'Financials', 'Units & Tenants', 'Leases', 'Maintenance', 'Home Details', 'Visit Log'];
@@ -54,6 +55,7 @@ export default function RentalPropertyDetail() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const toast = useToast();
+  const { user } = useAuth();
   const [property, setProperty] = useState<RentalProperty | null>(null);
   const [leases, setLeases] = useState<RentalLease[]>([]);
   const [workOrders, setWorkOrders] = useState<RentalWorkOrder[]>([]);
@@ -253,10 +255,12 @@ export default function RentalPropertyDetail() {
             Financials
           </div>
           <div className="metrics">
-            <div className="metric">
-              <div className="m-label">Equity</div>
-              <div className="m-val">{property.equity !== null ? fmt(property.equity) : '—'}</div>
-            </div>
+            {!user?.hide_rental_financials && (
+              <div className="metric">
+                <div className="m-label">Equity</div>
+                <div className="m-val">{property.equity !== null ? fmt(property.equity) : '—'}</div>
+              </div>
+            )}
             <div className="metric">
               <div className="m-label">Est. monthly cash flow</div>
               <div
@@ -269,14 +273,18 @@ export default function RentalPropertyDetail() {
           </div>
 
           <div className="fr3" style={{ marginTop: 14 }}>
-            <div className="fg">
-              <label className="fl">Purchase value</label>
-              <MoneyField value={financials.purchase_value} onCommit={(v) => saveFinancial('purchase_value', v)} />
-            </div>
-            <div className="fg">
-              <label className="fl">Debt</label>
-              <MoneyField value={financials.debt} onCommit={(v) => saveFinancial('debt', v)} />
-            </div>
+            {!user?.hide_rental_financials && (
+              <>
+                <div className="fg">
+                  <label className="fl">Purchase value</label>
+                  <MoneyField value={financials.purchase_value} onCommit={(v) => saveFinancial('purchase_value', v)} />
+                </div>
+                <div className="fg">
+                  <label className="fl">Debt</label>
+                  <MoneyField value={financials.debt} onCommit={(v) => saveFinancial('debt', v)} />
+                </div>
+              </>
+            )}
             <div className="fg">
               <label className="fl">Target monthly rent</label>
               <MoneyField value={financials.target_monthly_rent} onCommit={(v) => saveFinancial('target_monthly_rent', v)} />

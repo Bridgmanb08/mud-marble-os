@@ -27,6 +27,19 @@ export default function Users() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  async function toggleHideRentalFinancials(u: UserSummary) {
+    const next = !u.hide_rental_financials;
+    // Optimistic -- same instant-feedback pattern used throughout this app
+    // rather than waiting on the round trip.
+    setUsers((prev) => prev && prev.map((x) => (x.id === u.id ? { ...x, hide_rental_financials: next } : x)));
+    try {
+      await api.patch(`/users/${u.id}`, { hide_rental_financials: next });
+    } catch (e) {
+      setUsers((prev) => prev && prev.map((x) => (x.id === u.id ? { ...x, hide_rental_financials: !next } : x)));
+      toast(e instanceof Error ? e.message : 'Failed to update', true);
+    }
+  }
+
   return (
     <>
       <div className="ph">
@@ -63,6 +76,13 @@ export default function Users() {
                   <IconShieldCheck size={11} style={{ marginRight: 3 }} /> Admin
                 </span>
               )}
+              <label
+                style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12, color: 'var(--t2)', cursor: 'pointer' }}
+                title="Hides rental property purchase value, debt, and equity from this person -- rent, expenses, and other operational data stay visible."
+              >
+                <input type="checkbox" checked={u.hide_rental_financials} onChange={() => toggleHideRentalFinancials(u)} />
+                Hide rental value/equity
+              </label>
               <button className="btn btn-sm" onClick={() => setResetTarget(u)}>
                 <IconKey size={12} /> Reset password
               </button>

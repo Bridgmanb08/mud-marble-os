@@ -23,8 +23,14 @@ async def login(body: LoginRequest, response: Response):
 
     role = user.get("role", "member")
     is_admin = user.get("is_admin", False)
+    hide_rental_financials = user.get("hide_rental_financials", False)
     token = create_access_token(
-        user_id=str(user["id"]), email=user["email"], name=user.get("name", ""), role=role, is_admin=is_admin
+        user_id=str(user["id"]),
+        email=user["email"],
+        name=user.get("name", ""),
+        role=role,
+        is_admin=is_admin,
+        hide_rental_financials=hide_rental_financials,
     )
     response.set_cookie(
         key=COOKIE_NAME,
@@ -35,7 +41,14 @@ async def login(body: LoginRequest, response: Response):
         samesite="lax",
         path="/",
     )
-    return UserOut(id=str(user["id"]), email=user["email"], name=user.get("name", ""), role=role, is_admin=is_admin)
+    return UserOut(
+        id=str(user["id"]),
+        email=user["email"],
+        name=user.get("name", ""),
+        role=role,
+        is_admin=is_admin,
+        hide_rental_financials=hide_rental_financials,
+    )
 
 
 @router.post("/logout")
@@ -52,4 +65,5 @@ async def me(current_user: CurrentUser = Depends(get_current_user)):
         name=current_user.name,
         role=current_user.role,
         is_admin=current_user.is_admin,
+        hide_rental_financials=current_user.hide_rental_financials,
     )

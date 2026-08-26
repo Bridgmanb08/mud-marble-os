@@ -7,6 +7,7 @@ export interface CurrentUser {
   name: string;
   role: string;
   is_admin: boolean;
+  hide_rental_financials: boolean;
 }
 
 interface AuthContextValue {

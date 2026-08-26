@@ -850,6 +850,7 @@ export interface UserSummary {
   email: string;
   role: string;
   is_admin: boolean;
+  hide_rental_financials: boolean;
 }
 
 export interface UserDirectoryEntry {

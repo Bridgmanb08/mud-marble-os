@@ -44,15 +44,29 @@ def _attach_unit_occupancy(unit: dict, active_by_unit: dict[str, dict]) -> dict:
     return unit
 
 
-def _attach_financials(prop: dict) -> dict:
+def _attach_financials(prop: dict, hide_value_and_equity: bool = False) -> dict:
     """Equity and estimated cash flow are computed from the underlying
     numbers, not stored -- same convention as lease_status/is_late (derive
     rather than trust a value that can drift). Both are None (not 0) when
     there isn't enough information to compute them, so the frontend can tell
-    "unknown" apart from "actually zero"."""
+    "unknown" apart from "actually zero".
+
+    hide_value_and_equity redacts purchase_value/debt/equity server-side for
+    a user with app_users.hide_rental_financials set (e.g. a property
+    manager who needs full operational visibility but not ownership
+    value/equity) -- redacted here, not just hidden in the frontend, since
+    the API must never hand the real numbers to a client that isn't allowed
+    to see them. mortgage_payment/interest_rate/lender/loan_number are
+    deliberately NOT redacted: they're operational financing details, not
+    "value" or "equity", and estimated_monthly_cash_flow's accuracy depends
+    on mortgage_payment staying visible."""
     value = prop.get("purchase_value")
     debt = prop.get("debt")
     prop["equity"] = (value - debt) if value is not None and debt is not None else None
+    if hide_value_and_equity:
+        prop["purchase_value"] = None
+        prop["debt"] = None
+        prop["equity"] = None
 
     target_rent = prop.get("target_monthly_rent")
     if target_rent is None:
@@ -97,7 +111,7 @@ def _attach_visit_info(prop: dict, last_visited_by_property: dict[str, str]) -> 
     return prop
 
 
-async def _enrich_properties(rows: list[dict]) -> list[RentalPropertyOut]:
+async def _enrich_properties(rows: list[dict], hide_value_and_equity: bool = False) -> list[RentalPropertyOut]:
     if not rows:
         return []
     ids = [r["id"] for r in rows]
@@ -112,43 +126,46 @@ async def _enrich_properties(rows: list[dict]) -> list[RentalPropertyOut]:
         units_by_property.setdefault(u["property_id"], []).append(_attach_unit_occupancy(u, active_by_unit))
 
     return [
-        RentalPropertyOut(**_attach_visit_info(_attach_financials(r), last_visited_by_property), units=units_by_property.get(r["id"], []))
+        RentalPropertyOut(
+            **_attach_visit_info(_attach_financials(r, hide_value_and_equity), last_visited_by_property),
+            units=units_by_property.get(r["id"], []),
+        )
         for r in rows
     ]
 
 
 @router.get("", response_model=list[RentalPropertyOut])
-async def list_properties(include_archived: bool = False, _: CurrentUser = Depends(get_current_user)):
+async def list_properties(include_archived: bool = False, current_user: CurrentUser = Depends(get_current_user)):
     query = "?order=address.asc"
     if not include_archived:
         query += "&is_archived=eq.false"
     rows = await db_get("rental_properties", query)
-    return await _enrich_properties(rows)
+    return await _enrich_properties(rows, current_user.hide_rental_financials)
 
 
 @router.post("", response_model=RentalPropertyOut)
-async def create_property(body: RentalPropertyCreate, _: CurrentUser = Depends(get_current_user)):
+async def create_property(body: RentalPropertyCreate, current_user: CurrentUser = Depends(get_current_user)):
     rows = await db_post("rental_properties", body.model_dump())
-    enriched = await _enrich_properties(rows)
+    enriched = await _enrich_properties(rows, current_user.hide_rental_financials)
     return enriched[0]
 
 
 @router.get("/{property_id}", response_model=RentalPropertyOut)
-async def get_property(property_id: str, _: CurrentUser = Depends(get_current_user)):
+async def get_property(property_id: str, current_user: CurrentUser = Depends(get_current_user)):
     rows = await db_get("rental_properties", f"?id=eq.{property_id}")
     if not rows:
         raise HTTPException(status_code=404, detail="Property not found")
-    enriched = await _enrich_properties(rows)
+    enriched = await _enrich_properties(rows, current_user.hide_rental_financials)
     return enriched[0]
 
 
 @router.patch("/{property_id}", response_model=RentalPropertyOut)
-async def update_property(property_id: str, body: RentalPropertyUpdate, _: CurrentUser = Depends(get_current_user)):
+async def update_property(property_id: str, body: RentalPropertyUpdate, current_user: CurrentUser = Depends(get_current_user)):
     await db_patch("rental_properties", property_id, body.model_dump(exclude_unset=True))
     rows = await db_get("rental_properties", f"?id=eq.{property_id}")
     if not rows:
         raise HTTPException(status_code=404, detail="Property not found")
-    enriched = await _enrich_properties(rows)
+    enriched = await _enrich_properties(rows, current_user.hide_rental_financials)
     return enriched[0]
 
 
