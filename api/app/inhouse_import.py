@@ -94,11 +94,18 @@ def parse_estimate_sheet(ws, existing_by_key: dict) -> list[dict]:
     (id, quantity, markup_type, markup_value, description, notes_internal,
     bucket), so a re-imported row can be compared field-by-field instead of
     just flagged present/absent."""
+    # Case/whitespace-insensitive header matching -- a hand-maintained sheet's
+    # header text ("Internal Notes" vs "internal notes ", etc.) doesn't
+    # always match byte-for-byte, and an exact-string lookup used to fail
+    # SILENTLY (col.get() just returns None, same as a genuinely missing
+    # column), quietly dropping every value in that column with no error.
+    # This was traced back as the likely cause of an entire re-imported
+    # estimate coming through with no internal notes at all.
     header_row = next(ws.iter_rows(min_row=1, max_row=1))
-    col = {cell.value: i for i, cell in enumerate(header_row) if cell.value}
+    col = {str(cell.value).strip().lower(): i for i, cell in enumerate(header_row) if cell.value}
 
     def cell(row, name):
-        i = col.get(name)
+        i = col.get(name.strip().lower())
         if i is None or i >= len(row):
             return None
         v = row[i].value
