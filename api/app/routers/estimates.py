@@ -1,6 +1,7 @@
 import io
 from datetime import datetime
 from typing import Optional
+from xml.sax.saxutils import escape as _xml_escape
 
 from fastapi import APIRouter, Depends, HTTPException
 from fastapi.responses import Response
@@ -384,6 +385,14 @@ async def export_estimate_pdf(estimate_id: str, _: CurrentUser = Depends(get_cur
 
     who = client_name or project_name
     breadcrumb = who + (f" | {project_name}" if project_name and project_name != who else "")
+    # Every free-text value below (client/project name, estimate title, group
+    # names, item titles/descriptions/units) is user-entered and now flows
+    # through reportlab's Paragraph(), which parses a small XML-like markup
+    # subset -- an unescaped '<' followed by a letter with no matching '>'
+    # (e.g. someone typing "a<b" or "<8ft" as a quantity note) throws a
+    # paraparser syntax error and 500s the whole export. Escaping & / < / >
+    # up front, before any Paragraph() call, closes that off entirely.
+    breadcrumb = _xml_escape(breadcrumb)
 
     buf = io.BytesIO()
     # Slightly tighter side margins than reportlab's 1in default (0.6in,
@@ -440,7 +449,8 @@ async def export_estimate_pdf(estimate_id: str, _: CurrentUser = Depends(get_cur
         )
     )
     elements.append(header_row)
-    elements.append(Paragraph(estimate.get("title") or f"Proposal for {breadcrumb}", title_style))
+    title_text = _xml_escape(estimate.get("title")) if estimate.get("title") else f"Proposal for {breadcrumb}"
+    elements.append(Paragraph(title_text, title_style))
     elements.append(HRFlowable(width="100%", thickness=0.75, color=colors.lightgrey, spaceAfter=8))
 
     intro = estimate.get("introductory_text")
@@ -467,7 +477,7 @@ async def export_estimate_pdf(estimate_id: str, _: CurrentUser = Depends(get_cur
         # header row so the two read as one cohesive block, not two
         # differently-styled pieces stacked on top of each other.
         group_band = Table(
-            [[Paragraph(group_name.upper(), group_header), Paragraph(f"${group_subtotal_value:,.2f}", group_subtotal)]],
+            [[Paragraph(_xml_escape(group_name.upper()), group_header), Paragraph(f"${group_subtotal_value:,.2f}", group_subtotal)]],
             colWidths=[PAGE_WIDTH * 0.7, PAGE_WIDTH * 0.3],
         )
         group_band.setStyle(
@@ -496,8 +506,8 @@ async def export_estimate_pdf(estimate_id: str, _: CurrentUser = Depends(get_cur
         for item in items:
             # Cost codes are internal categorization, not something a client
             # needs to see on their proposal -- title only.
-            item_label = item.get("title") or ""
-            qty_unit = f"{item.get('quantity') or 0:g}" + (f" {item['unit']}" if item.get("unit") else "")
+            item_label = _xml_escape(item.get("title") or "")
+            qty_unit = _xml_escape(f"{item.get('quantity') or 0:g}" + (f" {item['unit']}" if item.get("unit") else ""))
             # Client-facing figures only -- unit_cost/builder_cost are internal
             # margin data and must never appear on anything a client sees.
             # "Unit Price" here is a derived per-unit client price
@@ -509,7 +519,7 @@ async def export_estimate_pdf(estimate_id: str, _: CurrentUser = Depends(get_cur
             table_data.append(
                 [
                     Paragraph(item_label, cell),
-                    Paragraph(item.get("description") or "", cell),
+                    Paragraph(_xml_escape(item.get("description") or ""), cell),
                     Paragraph(qty_unit, cell_right),
                     Paragraph(f"${client_unit_price:,.2f}", cell_right),
                     Paragraph(f"${owner_price:,.2f}", cell_right),

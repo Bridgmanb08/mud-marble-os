@@ -55,7 +55,7 @@ export function useGroupedLineItemDrag<T extends GroupableLineItem>({
   // moving an item across groups) against a partial view would corrupt
   // sort_order for whatever's hidden, so both drag kinds are disabled.
   searchActive: boolean;
-  patchItem: (itemId: string, body: { sort_order?: number; group_name?: string }) => Promise<unknown>;
+  patchItem: (itemId: string, body: { sort_order?: number; group_name?: string; bucket?: string }) => Promise<unknown>;
   onSaveError: (message: string) => void;
   onSettled: () => void;
 }) {
@@ -108,8 +108,17 @@ export function useGroupedLineItemDrag<T extends GroupableLineItem>({
     setItems((prev) => {
       const idx = prev.findIndex((i) => i.id === active.id);
       if (idx === -1) return prev;
-      const moved = { ...prev[idx], group_name: overGroup } as T;
       const without = prev.filter((i) => i.id !== active.id);
+      // A group's bucket (pm_fee / construction / allowance) is what
+      // `_recalc_estimate_totals` sums by on the server -- if a dragged item
+      // kept its OLD bucket while displaying under a group whose other items
+      // are a different bucket, its price would silently keep counting
+      // toward the wrong total (e.g. a PM Fee item dragged into a
+      // Construction group still counting as pm_fee_total). Infer the
+      // destination group's bucket from any item already in it; an empty
+      // destination group has no bucket to infer, so the item keeps its own.
+      const destExample = without.find((i) => groupKeyForItem(i) === overGroup);
+      const moved = { ...prev[idx], group_name: overGroup, ...(destExample ? { bucket: destExample.bucket } : {}) } as T;
       let insertAt = without.length;
       for (let i = without.length - 1; i >= 0; i--) {
         if (groupKeyForItem(without[i]) === overGroup) {
@@ -128,9 +137,18 @@ export function useGroupedLineItemDrag<T extends GroupableLineItem>({
         const prev = byId.get(item.id);
         const sortChanged = !prev || prev.sort_order !== i;
         const groupChanged = !prev || (prev.group_name || null) !== (item.group_name || null);
-        return { id: item.id, sort_order: i, group_name: item.group_name || undefined, sortChanged, groupChanged };
+        const bucketChanged = !prev || prev.bucket !== item.bucket;
+        return {
+          id: item.id,
+          sort_order: i,
+          group_name: item.group_name || undefined,
+          bucket: item.bucket,
+          sortChanged,
+          groupChanged,
+          bucketChanged,
+        };
       })
-      .filter((c) => c.sortChanged || c.groupChanged);
+      .filter((c) => c.sortChanged || c.groupChanged || c.bucketChanged);
     if (!changed.length) return;
     try {
       await Promise.all(
@@ -138,6 +156,7 @@ export function useGroupedLineItemDrag<T extends GroupableLineItem>({
           patchItem(c.id, {
             ...(c.sortChanged ? { sort_order: c.sort_order } : {}),
             ...(c.groupChanged ? { group_name: c.group_name } : {}),
+            ...(c.bucketChanged ? { bucket: c.bucket } : {}),
           })
         )
       );
@@ -153,7 +172,17 @@ export function useGroupedLineItemDrag<T extends GroupableLineItem>({
     const { active, over } = event;
     const rollback = snapshotRef.current;
     snapshotRef.current = null;
-    if (!over) return;
+    if (!over) {
+      // A drop with no valid target (released past the table edge, over the
+      // search box, or cancelled with Escape) must roll back -- onDragOver
+      // may have already relocated an item into a different group in local
+      // state (a real mutation, not just a visual overlay), and leaving that
+      // in place with nothing persisted server-side meant the item sat
+      // visibly in the wrong group until the next reload silently snapped
+      // it back.
+      if (rollback) setItems(() => rollback);
+      return;
+    }
 
     if (active.data.current?.type === 'group') {
       if (searchActive) return;

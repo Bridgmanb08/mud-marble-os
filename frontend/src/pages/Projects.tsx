@@ -7,6 +7,7 @@ import { fmt } from '../lib/format';
 import type { Project } from '../types';
 import { NewProjectModal } from '../components/projects/NewProjectModal';
 import { Skeleton } from '../components/ui/Skeleton';
+import { statusOptionsIncluding } from '../lib/projectStatuses';
 
 const STATUS_BADGE: Record<string, string> = {
   active: 'bg-green',
@@ -21,8 +22,6 @@ const STATUS_BADGE: Record<string, string> = {
   on_hold: 'bg-amber',
   lost: 'bg-red',
 };
-
-const STATUS_OPTIONS = ['lead', 'vetting', 'estimating', 'proposed', 'pre_construction', 'active', 'closed', 'warranty', 'on_hold', 'punch_list', 'lost'];
 
 const FILTERS = ['all', 'lead', 'vetting', 'estimating', 'proposed', 'pre_construction', 'active', 'closed', 'warranty', 'on_hold'];
 
@@ -160,7 +159,7 @@ export default function Projects() {
                   handleStatusChange(p, e.target.value);
                 }}
               >
-                {(STATUS_OPTIONS.includes(p.status) ? STATUS_OPTIONS : [p.status, ...STATUS_OPTIONS]).map((s) => (
+                {statusOptionsIncluding(p.status).map((s) => (
                   <option key={s} value={s}>
                     {s.replace('_', ' ')}
                   </option>

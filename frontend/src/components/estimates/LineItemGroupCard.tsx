@@ -163,56 +163,63 @@ export function LineItemGroupCard<T extends LineItemLike>({
         opacity: isGroupDragging ? 0.5 : 1,
       }}
     >
-      <div style={{ display: 'flex', alignItems: 'center', flexWrap: 'wrap', gap: 8, marginBottom: collapsed ? 0 : 8 }}>
-        <button
-          type="button"
-          className="btn-reset"
-          {...(dragDisabled || editing ? {} : groupAttributes)}
-          {...(dragDisabled || editing ? {} : groupListeners)}
-          style={{
-            display: 'flex',
-            cursor: dragDisabled || editing ? 'not-allowed' : 'grab',
-            color: dragDisabled || editing ? 'var(--border-md)' : 'var(--t3)',
-            touchAction: 'none',
-          }}
-          title={dragDisabled ? 'Clear the search to reorder groups' : 'Drag to reorder this group'}
-          onClick={(e) => e.stopPropagation()}
-        >
-          <IconGripVertical size={14} />
-        </button>
-        <button type="button" className="btn-reset" onClick={onToggleCollapse} style={{ display: 'flex', color: 'var(--t2)' }}>
-          {collapsed ? <IconChevronRight size={16} /> : <IconChevronDown size={16} />}
-        </button>
-        {editing ? (
-          <input
-            className="fi"
-            autoFocus
-            value={editingValue}
-            onChange={(e) => onRenameChange(e.target.value)}
-            onBlur={onCommitRename}
-            onKeyDown={(e) => {
-              if (e.key === 'Enter') {
-                e.preventDefault();
-                (e.target as HTMLInputElement).blur();
-              }
+      {/* The item-drop target wraps the header row too, not just the
+          (conditionally-rendered) table below -- a collapsed group has no
+          table in the DOM at all, so binding the droppable ref only inside
+          `{!collapsed && ...}` left collapsed groups with no drop target
+          whatsoever. The always-visible header row gives a collapsed group
+          a real, sized area to drop an item onto. */}
+      <div ref={setItemsDroppableRef}>
+        <div style={{ display: 'flex', alignItems: 'center', flexWrap: 'wrap', gap: 8, marginBottom: collapsed ? 0 : 8 }}>
+          <button
+            type="button"
+            className="btn-reset"
+            {...(dragDisabled || editing ? {} : groupAttributes)}
+            {...(dragDisabled || editing ? {} : groupListeners)}
+            style={{
+              display: 'flex',
+              cursor: dragDisabled || editing ? 'not-allowed' : 'grab',
+              color: dragDisabled || editing ? 'var(--border-md)' : 'var(--t3)',
+              touchAction: 'none',
             }}
-            style={{ maxWidth: 260 }}
-          />
-        ) : (
-          <div className="ibt" style={{ margin: 0, border: 'none', padding: 0, cursor: 'text' }} onClick={onStartRename} title="Click to rename group">
-            {groupKey}
+            title={dragDisabled ? 'Clear the search to reorder groups' : 'Drag to reorder this group'}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <IconGripVertical size={14} />
+          </button>
+          <button type="button" className="btn-reset" onClick={onToggleCollapse} style={{ display: 'flex', color: 'var(--t2)' }}>
+            {collapsed ? <IconChevronRight size={16} /> : <IconChevronDown size={16} />}
+          </button>
+          {editing ? (
+            <input
+              className="fi"
+              autoFocus
+              value={editingValue}
+              onChange={(e) => onRenameChange(e.target.value)}
+              onBlur={onCommitRename}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter') {
+                  e.preventDefault();
+                  (e.target as HTMLInputElement).blur();
+                }
+              }}
+              style={{ maxWidth: 260 }}
+            />
+          ) : (
+            <div className="ibt" style={{ margin: 0, border: 'none', padding: 0, cursor: 'text' }} onClick={onStartRename} title="Click to rename group">
+              {groupKey}
+            </div>
+          )}
+          <div style={{ flex: 1 }} />
+          <div style={{ fontSize: 12, color: 'var(--t2)' }}>
+            {groupItems.length} item{groupItems.length !== 1 ? 's' : ''} · {fmt(subtotal)}
           </div>
-        )}
-        <div style={{ flex: 1 }} />
-        <div style={{ fontSize: 12, color: 'var(--t2)' }}>
-          {groupItems.length} item{groupItems.length !== 1 ? 's' : ''} · {fmt(subtotal)}
+          <button className="btn btn-ghost btn-sm" onClick={onAddItem}>
+            <IconPlus size={13} /> Add item
+          </button>
         </div>
-        <button className="btn btn-ghost btn-sm" onClick={onAddItem}>
-          <IconPlus size={13} /> Add item
-        </button>
-      </div>
-      {!collapsed && (
-        <div className="tbl-scroll" ref={setItemsDroppableRef}>
+        {!collapsed && (
+        <div className="tbl-scroll">
           <table className="tbl tbl-sticky-head">
             <thead>
               <tr>
@@ -250,7 +257,8 @@ export function LineItemGroupCard<T extends LineItemLike>({
             </SortableContext>
           </table>
         </div>
-      )}
+        )}
+      </div>
     </div>
   );
 }
