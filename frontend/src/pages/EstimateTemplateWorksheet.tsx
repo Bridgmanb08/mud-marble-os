@@ -1,13 +1,14 @@
 import { useEffect, useState } from 'react';
 import { useParams, useNavigate, useLocation } from 'react-router-dom';
-import { PointerSensor, useSensor, useSensors, type DragEndEvent } from '@dnd-kit/core';
-import { arrayMove } from '@dnd-kit/sortable';
+import { DndContext } from '@dnd-kit/core';
+import { SortableContext, verticalListSortingStrategy } from '@dnd-kit/sortable';
 import { IconArrowLeft, IconPlus, IconSearch, IconRocket } from '@tabler/icons-react';
 import { api, ApiError } from '../api/client';
 import { useToast } from '../components/ui/Toast';
 import { fmt } from '../lib/format';
 import { LineItemModal } from '../components/estimates/LineItemModal';
 import { LineItemGroupCard } from '../components/estimates/LineItemGroupCard';
+import { useGroupedLineItemDrag } from '../components/estimates/useGroupedLineItemDrag';
 import { ApplyTemplateModal } from '../components/estimates/ApplyTemplateModal';
 import type { EstimateTemplate, EstimateTemplateItem } from '../types';
 
@@ -35,7 +36,14 @@ export default function EstimateTemplateWorksheet() {
   const [editingGroupValue, setEditingGroupValue] = useState('');
   const [showNewGroupPrompt, setShowNewGroupPrompt] = useState(false);
   const [newGroupName, setNewGroupName] = useState('');
-  const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 5 } }));
+  const { sensors, collisionDetection, onDragStart, onDragOver, onDragEnd } = useGroupedLineItemDrag({
+    items,
+    setItems,
+    searchActive: !!searchQuery.trim(),
+    patchItem: (itemId, body) => api.patch(`/estimate-templates/${id}/items/${itemId}`, body),
+    onSaveError: (message) => toast(message, true),
+    onSettled: load,
+  });
 
   async function load() {
     if (!id) return;
@@ -167,49 +175,6 @@ export default function EstimateTemplateWorksheet() {
     openNewItem('construction', trimmed);
   }
 
-  async function handleReorder(
-    groupName: string,
-    groupItems: EstimateTemplateItem[],
-    event: DragEndEvent,
-    groups: Record<string, EstimateTemplateItem[]>
-  ) {
-    // Defense in depth alongside LineItemGroupCard's own dragDisabled prop --
-    // groupItems here can be a search-filtered SUBSET of the real group; a
-    // reorder computed against it would silently drop the hidden items and
-    // corrupt sort_order for the whole template. The drag handle is already
-    // disabled while searching, so this should be unreachable in practice,
-    // but bail out explicitly rather than trust that alone.
-    if (searchQuery.trim()) return;
-    const { active, over } = event;
-    if (!over || active.id === over.id) return;
-    const oldIndex = groupItems.findIndex((i) => i.id === active.id);
-    const newIndex = groupItems.findIndex((i) => i.id === over.id);
-    if (oldIndex === -1 || newIndex === -1) return;
-    const reorderedGroup = arrayMove(groupItems, oldIndex, newIndex);
-
-    const flattened: EstimateTemplateItem[] = [];
-    for (const [name, groupItemsInner] of Object.entries(groups)) {
-      flattened.push(...(name === groupName ? reorderedGroup : groupItemsInner));
-    }
-
-    const changed = flattened
-      .map((item, i) => ({ id: item.id, oldOrder: item.sort_order, newOrder: i }))
-      .filter(({ oldOrder, newOrder }) => oldOrder !== newOrder);
-
-    setItems(flattened.map((item, i) => (item.sort_order === i ? item : { ...item, sort_order: i })));
-
-    if (!id || changed.length === 0) return;
-    try {
-      await Promise.all(
-        changed.map(({ id: itemId, newOrder }) => api.patch(`/estimate-templates/${id}/items/${itemId}`, { sort_order: newOrder }))
-      );
-    } catch (e) {
-      toast(e instanceof ApiError ? e.message : 'Failed to save the new order', true);
-    } finally {
-      load();
-    }
-  }
-
   return (
     <>
       <button className="btn btn-sm" style={{ marginBottom: 12 }} onClick={() => navigate('/estimates/templates')}>
@@ -335,26 +300,28 @@ export default function EstimateTemplateWorksheet() {
           <div className="empty-s">Nothing in this template matches "{searchQuery}".</div>
         </div>
       ) : (
-        visibleGroups.map(([groupName, groupItems]) => (
-          <LineItemGroupCard
-            key={groupName}
-            groupKey={groupName}
-            items={groupItems}
-            hasDays={hasDays}
-            collapsed={!query && !!collapsedGroups[groupName]}
-            editing={editingGroupKey === groupName}
-            editingValue={editingGroupValue}
-            itemSensors={sensors}
-            dragDisabled={!!query}
-            onToggleCollapse={() => toggleGroupCollapse(groupName)}
-            onStartRename={() => startRenameGroup(groupName)}
-            onRenameChange={setEditingGroupValue}
-            onCommitRename={() => commitRenameGroup(groupName, groups[groupName])}
-            onAddItem={() => openNewItem(groupItems[0].bucket, groupName)}
-            onItemClick={openEditItem}
-            onReorderItems={(e) => handleReorder(groupName, groupItems, e, groups)}
-          />
-        ))
+        <DndContext sensors={sensors} collisionDetection={collisionDetection} onDragStart={onDragStart} onDragOver={onDragOver} onDragEnd={onDragEnd}>
+          <SortableContext items={visibleGroups.map(([k]) => `group:${k}`)} strategy={verticalListSortingStrategy}>
+            {visibleGroups.map(([groupName, groupItems]) => (
+              <LineItemGroupCard
+                key={groupName}
+                groupKey={groupName}
+                items={groupItems}
+                hasDays={hasDays}
+                collapsed={!query && !!collapsedGroups[groupName]}
+                editing={editingGroupKey === groupName}
+                editingValue={editingGroupValue}
+                dragDisabled={!!query}
+                onToggleCollapse={() => toggleGroupCollapse(groupName)}
+                onStartRename={() => startRenameGroup(groupName)}
+                onRenameChange={setEditingGroupValue}
+                onCommitRename={() => commitRenameGroup(groupName, groups[groupName])}
+                onAddItem={() => openNewItem(groupItems[0].bucket, groupName)}
+                onItemClick={openEditItem}
+              />
+            ))}
+          </SortableContext>
+        </DndContext>
       )}
 
       {showItemModal && id && (
