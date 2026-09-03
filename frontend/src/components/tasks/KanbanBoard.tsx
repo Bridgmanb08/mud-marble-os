@@ -25,6 +25,7 @@ import { fmtD } from '../../lib/format';
 import { colorForPerson } from '../../lib/personColor';
 import { hasUnseenComment } from '../../lib/commentSeen';
 import { useIsMobile } from '../../hooks/useMediaQuery';
+import { ProjectPicker } from './ProjectPicker';
 import type { Task, TaskSubtask, Project, UserDirectoryEntry } from '../../types';
 import { taskAssignees } from '../../lib/taskAssignees';
 
@@ -178,8 +179,7 @@ function TaskCard({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [task.status]);
 
-  async function handleProjectChange(e: ChangeEvent<HTMLSelectElement>) {
-    const projectId = e.target.value;
+  async function handleProjectChange(projectId: string) {
     try {
       await api.patch(`/tasks/${task.id}`, { project_id: projectId || null, expected_version: task.version });
       onChanged();
@@ -272,21 +272,7 @@ function TaskCard({
       {task.project_id ? (
         <div className="task-meta">{task.projects?.name?.replace(/\|.*/, '').trim() || 'No project'}</div>
       ) : (
-        <select
-          className="fi"
-          value=""
-          onClick={(e) => e.stopPropagation()}
-          onPointerDown={(e) => e.stopPropagation()}
-          onChange={handleProjectChange}
-          style={{ fontSize: 11, padding: '2px 4px', marginTop: 2, maxWidth: '100%' }}
-        >
-          <option value="">No project — assign…</option>
-          {projects.map((p) => (
-            <option key={p.id} value={p.id}>
-              {p.name.replace(/\|.*/, '').trim()}
-            </option>
-          ))}
-        </select>
+        <ProjectPicker projects={projects} onSelect={handleProjectChange} />
       )}
       {assignees.length > 0 && (
         <div className="task-meta" style={{ marginTop: 3, display: 'flex', gap: 4, flexWrap: 'wrap' }}>
