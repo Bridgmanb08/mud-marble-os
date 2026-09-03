@@ -27,6 +27,7 @@ export interface LeadStage {
 
 export interface ProjectBrief {
   name: string;
+  status?: string | null;
 }
 
 export interface SubcontractorBrief {

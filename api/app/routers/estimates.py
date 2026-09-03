@@ -81,7 +81,11 @@ async def _recalc_estimate_totals(estimate_id: str) -> None:
 
 @router.get("", response_model=list[EstimateOut])
 async def list_estimates(project_id: Optional[str] = None, _: CurrentUser = Depends(get_current_user)):
-    query = "?order=created_at.desc&select=*,projects(name)"
+    # Embeds the project's status (not just its name) so the Estimates page
+    # can group estimates by where their project actually is in the
+    # pipeline (active / pre construction / closed / etc.) instead of only
+    # showing the estimate's own draft/sent/approved status.
+    query = "?order=created_at.desc&select=*,projects(name,status)"
     if project_id:
         query += f"&project_id=eq.{project_id}"
     return await db_get("estimates", query)
