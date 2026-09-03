@@ -3,10 +3,22 @@ import type { ProjectFile, RentalFile, SubcontractorFile, UploadUrlResponse } fr
 
 const SUPABASE_ANON_KEY = import.meta.env.VITE_SUPABASE_ANON_KEY as string | undefined;
 
-export function inferFileType(mime: string): 'photo' | 'video' | 'plan' | 'other' {
+const SPREADSHEET_MIME_TYPES = new Set([
+  'application/vnd.ms-excel',
+  'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+  'application/vnd.ms-excel.sheet.macroEnabled.12',
+  'text/csv',
+]);
+const SPREADSHEET_EXTENSIONS = /\.(xls|xlsx|xlsm|csv)$/i;
+
+export function inferFileType(mime: string, fileName?: string): 'photo' | 'video' | 'plan' | 'document' | 'other' {
   if (mime.startsWith('image/')) return 'photo';
   if (mime.startsWith('video/')) return 'video';
   if (mime === 'application/pdf') return 'plan';
+  // Browsers sometimes send a blank/generic mime type for .xls uploads --
+  // fall back to the file extension so spreadsheets still land in the
+  // right category instead of the catch-all "Other" bucket.
+  if (SPREADSHEET_MIME_TYPES.has(mime) || (fileName && SPREADSHEET_EXTENSIONS.test(fileName))) return 'document';
   return 'other';
 }
 
@@ -28,7 +40,7 @@ export async function uploadProjectFile(
   taskIds: string[] = [],
   subitemIds: string[] = []
 ): Promise<ProjectFile> {
-  const fileType = inferFileType(file.type);
+  const fileType = inferFileType(file.type, file.name);
   const { upload_url, storage_path } = await api.post<UploadUrlResponse>(
     `/projects/${projectId}/files/upload-url`,
     { file_name: file.name, file_type: fileType, mime_type: file.type || null }
@@ -66,7 +78,7 @@ export async function uploadSignedEstimateFile(projectId: string, file: File): P
 }
 
 export async function uploadSubcontractorFile(subId: string, file: File): Promise<SubcontractorFile> {
-  const fileType = inferFileType(file.type);
+  const fileType = inferFileType(file.type, file.name);
   const { upload_url, storage_path } = await api.post<UploadUrlResponse>(
     `/subcontractors/${subId}/files/upload-url`,
     { file_name: file.name, file_type: fileType, mime_type: file.type || null }
@@ -102,7 +114,7 @@ export async function uploadRentalFile(leaseId: string, file: File): Promise<Ren
 // rental-files bucket/upload flow as lease documents, just tagged with
 // visit_id instead of lease_id.
 export async function uploadRentalVisitFile(visitId: string, file: File): Promise<RentalFile> {
-  const fileType = inferFileType(file.type);
+  const fileType = inferFileType(file.type, file.name);
   const { upload_url, storage_path } = await api.post<UploadUrlResponse>('/rental-files/upload-url', {
     file_name: file.name,
     file_type: fileType,

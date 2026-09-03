@@ -39,7 +39,7 @@ export function FilePreviewModal({ file, onClose }: FilePreviewModalProps) {
           {url && file.file_type === 'photo' && <img src={url} alt={file.file_name} />}
           {url && file.file_type === 'video' && <video src={url} controls autoPlay />}
           {url && file.file_type === 'plan' && <iframe src={url} title={file.file_name} />}
-          {url && file.file_type === 'other' && (
+          {url && (file.file_type === 'other' || file.file_type === 'document') && (
             <span style={{ fontSize: 12, color: 'var(--t2)' }}>No inline preview available for this file type — use Download.</span>
           )}
         </div>

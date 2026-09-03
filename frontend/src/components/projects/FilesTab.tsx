@@ -2,6 +2,7 @@ import { useEffect, useRef, useState, type DragEvent } from 'react';
 import {
   IconFile,
   IconFileTypePdf,
+  IconFileTypeXls,
   IconPaperclip,
   IconPhoto,
   IconSignature,
@@ -20,6 +21,7 @@ const FILTERS: { key: string; label: string }[] = [
   { key: 'photo', label: 'Photos' },
   { key: 'video', label: 'Videos' },
   { key: 'plan', label: 'Plans' },
+  { key: 'document', label: 'Documents' },
   { key: 'signed_estimate', label: 'Signed estimates' },
   { key: 'other', label: 'Other' },
 ];
@@ -28,6 +30,7 @@ function FileIcon({ type }: { type: string }) {
   if (type === 'photo') return <IconPhoto size={28} />;
   if (type === 'video') return <IconVideo size={28} />;
   if (type === 'plan') return <IconFileTypePdf size={28} />;
+  if (type === 'document') return <IconFileTypeXls size={28} />;
   if (type === 'signed_estimate') return <IconSignature size={28} />;
   return <IconFile size={28} />;
 }
@@ -140,7 +143,7 @@ export function FilesTab({ projectId, tasks }: FilesTabProps) {
         onDrop={onDrop}
       >
         <IconUpload size={18} style={{ marginBottom: 4 }} />
-        <div>{uploading ? 'Uploading…' : 'Click to upload or drag photos, videos, and plans here'}</div>
+        <div>{uploading ? 'Uploading…' : 'Click to upload or drag photos, videos, plans, and spreadsheets here'}</div>
         <input
           ref={inputRef}
           type="file"
