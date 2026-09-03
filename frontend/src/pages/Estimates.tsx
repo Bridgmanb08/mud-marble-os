@@ -4,6 +4,7 @@ import { IconFileDollar } from '@tabler/icons-react';
 import { api } from '../api/client';
 import { useToast } from '../components/ui/Toast';
 import { fmt } from '../lib/format';
+import { PROJECT_STATUS_OPTIONS as PROJECT_STATUS_ORDER, projectStatusLabel } from '../lib/projectStatuses';
 import type { Estimate } from '../types';
 
 const STATUS_BADGE: Record<string, string> = {
@@ -12,41 +13,6 @@ const STATUS_BADGE: Record<string, string> = {
   approved: 'bg-green',
   rejected: 'bg-red',
 };
-
-// Same pipeline order and status set as Projects.tsx's own STATUS_OPTIONS --
-// groups estimates by where their project actually is (active, pre
-// construction, closed, etc.), not by the estimate's own draft/sent/
-// approved status, which is a different axis shown per-row below.
-const PROJECT_STATUS_ORDER = [
-  'lead',
-  'vetting',
-  'estimating',
-  'proposed',
-  'pre_construction',
-  'active',
-  'punch_list',
-  'warranty',
-  'on_hold',
-  'closed',
-  'lost',
-];
-const PROJECT_STATUS_LABEL: Record<string, string> = {
-  lead: 'Lead',
-  vetting: 'Vetting',
-  estimating: 'Estimating',
-  proposed: 'Proposed',
-  pre_construction: 'Pre Construction',
-  active: 'Active',
-  punch_list: 'Punch List',
-  warranty: 'Warranty',
-  on_hold: 'On Hold',
-  closed: 'Closed',
-  lost: 'Lost',
-};
-
-function projectStatusLabel(status: string): string {
-  return PROJECT_STATUS_LABEL[status] || status.replace(/_/g, ' ');
-}
 
 export default function Estimates() {
   const [estimates, setEstimates] = useState<Estimate[] | null>(null);
@@ -78,7 +44,7 @@ export default function Estimates() {
       map.get(status)!.push(e);
     }
     const known = PROJECT_STATUS_ORDER.filter((s) => map.has(s));
-    const rest = [...map.keys()].filter((s) => !PROJECT_STATUS_ORDER.includes(s)).sort();
+    const rest = [...map.keys()].filter((s) => !(PROJECT_STATUS_ORDER as readonly string[]).includes(s)).sort();
     return [...known, ...rest].map((status) => ({ status, items: map.get(status)! }));
   }, [estimates]);
 

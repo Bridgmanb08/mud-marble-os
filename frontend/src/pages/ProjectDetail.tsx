@@ -8,6 +8,7 @@ import { useReferenceData } from '../reference-data/ReferenceDataContext';
 import type { ChangeOrder, CostCodeVariance, Estimate, FinancialSummary, Invoice, Project, ProjectNote, Task } from '../types';
 import { NewNoteModal } from '../components/projects/NewNoteModal';
 import { NewProjectModal } from '../components/projects/NewProjectModal';
+import { statusOptionsIncluding } from '../lib/projectStatuses';
 import { NewChangeOrderModal } from '../components/change-orders/NewChangeOrderModal';
 import { NewInvoiceModal } from '../components/invoices/NewInvoiceModal';
 import { NewTaskModal } from '../components/tasks/NewTaskModal';
@@ -34,19 +35,6 @@ const NOTE_COLORS: Record<string, string> = {
   daily_log: 'var(--green)',
 };
 
-const PROJECT_STATUS_OPTIONS = [
-  'lead',
-  'vetting',
-  'estimating',
-  'proposed',
-  'pre_construction',
-  'active',
-  'closed',
-  'warranty',
-  'on_hold',
-  'punch_list',
-  'lost',
-];
 
 const CO_TYPE_BADGE: Record<string, string> = { oversight: 'bg-amber', client_addition: 'bg-blue', unforeseen: 'bg-red' };
 const CO_STATUS_BADGE: Record<string, string> = { pending: 'bg-gray', sent: 'bg-amber', approved: 'bg-green', rejected: 'bg-red' };
@@ -265,13 +253,11 @@ export default function ProjectDetail() {
             value={project.status}
             onChange={(e) => handleStatusChange(e.target.value)}
           >
-            {(PROJECT_STATUS_OPTIONS.includes(project.status) ? PROJECT_STATUS_OPTIONS : [project.status, ...PROJECT_STATUS_OPTIONS]).map(
-              (s) => (
-                <option key={s} value={s}>
-                  {s.replace(/_/g, ' ')}
-                </option>
-              )
-            )}
+            {statusOptionsIncluding(project.status).map((s) => (
+              <option key={s} value={s}>
+                {s.replace(/_/g, ' ')}
+              </option>
+            ))}
           </select>
         </div>
       </div>

@@ -2,6 +2,7 @@ import { useEffect, useState, type FormEvent } from 'react';
 import { api, ApiError } from '../../api/client';
 import { Modal } from '../ui/Modal';
 import { openDatePicker } from '../../lib/datePicker';
+import { statusOptionsIncluding } from '../../lib/projectStatuses';
 import type { Client, Project } from '../../types';
 
 interface NewProjectModalProps {
@@ -9,20 +10,6 @@ interface NewProjectModalProps {
   onCreated: (project: Project) => void;
   project?: Project;
 }
-
-const STATUS_OPTIONS = [
-  'lead',
-  'vetting',
-  'estimating',
-  'proposed',
-  'pre_construction',
-  'active',
-  'punch_list',
-  'warranty',
-  'on_hold',
-  'closed',
-  'lost',
-];
 
 export function NewProjectModal({ onClose, onCreated, project }: NewProjectModalProps) {
   const [name, setName] = useState(project?.name || '');
@@ -111,7 +98,7 @@ export function NewProjectModal({ onClose, onCreated, project }: NewProjectModal
           <div className="fg">
             <label className="fl">Status</label>
             <select className="fi" value={status} onChange={(e) => setStatus(e.target.value)}>
-              {(STATUS_OPTIONS.includes(status) ? STATUS_OPTIONS : [status, ...STATUS_OPTIONS]).map((s) => (
+              {statusOptionsIncluding(status).map((s) => (
                 <option key={s} value={s}>
                   {s.replace(/_/g, ' ')}
                 </option>
