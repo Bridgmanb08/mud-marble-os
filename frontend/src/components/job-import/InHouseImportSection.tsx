@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { api, ApiError } from '../../api/client';
 import { useToast } from '../ui/Toast';
 import { FileDropzone } from '../ui/FileDropzone';
+import { defaultConflictAction } from '../../lib/importConflicts';
 import type { ContractItemRow, ContractorBlock, InHouseSheetPreview, Subcontractor, TransactionSheetRow } from '../../types';
 
 type RowAction = 'add' | 'skip' | 'update';
@@ -38,11 +39,17 @@ export function InHouseImportSection({ projectId }: { projectId: string }) {
       const result = await api.postForm<InHouseSheetPreview>(`/job-import/${projectId}/inhouse-sheet/preview`, formData);
       setPreview(result);
       // Conflicting/duplicate rows default to "skip" -- Shannon has to actively
-      // opt into overwriting a record with the imported values.
-      setTxActions(result.transactions.map((r) => (r.already_present ? 'skip' : 'add')));
+      // opt into overwriting a record with the imported values -- UNLESS every
+      // differing field is blank on the existing record, in which case "update"
+      // only fills in what was missing, never overwrites real data.
+      setTxActions(
+        result.transactions.map((r) => (!r.already_present ? 'add' : r.conflict ? defaultConflictAction(r.diff) : 'skip'))
+      );
       setBlockChecked(result.contractors.map(() => true));
       setItemActions(
-        result.contractors.map((block) => block.contract_items.map((item) => (item.already_present ? 'skip' : 'add')))
+        result.contractors.map((block) =>
+          block.contract_items.map((item) => (!item.already_present ? 'add' : item.conflict ? defaultConflictAction(item.diff) : 'skip'))
+        )
       );
       if (result.dropped_count > 0) {
         toast(`${result.dropped_count} row(s) couldn't be read clearly and were skipped`, true);
