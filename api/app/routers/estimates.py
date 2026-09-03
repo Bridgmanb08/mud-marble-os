@@ -386,13 +386,27 @@ async def export_estimate_pdf(estimate_id: str, _: CurrentUser = Depends(get_cur
     breadcrumb = who + (f" | {project_name}" if project_name and project_name != who else "")
 
     buf = io.BytesIO()
-    doc = SimpleDocTemplate(buf, pagesize=letter, topMargin=0.5 * inch, bottomMargin=0.5 * inch)
+    # Slightly tighter side margins than reportlab's 1in default (0.6in,
+    # matching the density of the BuilderTrend reference proposal) --
+    # PAGE_WIDTH is the one number every table's colWidths below is sized
+    # against, so a table summing to less than this leaves a lopsided gap on
+    # the right, and one summing to more silently overflows the margin. Both
+    # happened before this pass (the two-column breadcrumb/print-date row
+    # summed to 7.2in against a 6.5in page -- overflowing the right margin --
+    # while the line-item table summed to only 6.4in, leaving a stray gap).
+    side_margin = 0.6 * inch
+    doc = SimpleDocTemplate(buf, pagesize=letter, topMargin=0.5 * inch, bottomMargin=0.5 * inch, leftMargin=side_margin, rightMargin=side_margin)
+    PAGE_WIDTH = letter[0] - 2 * side_margin
     styles = getSampleStyleSheet()
     wordmark_h1 = ParagraphStyle("wordmark_h1", parent=styles["Heading1"], fontSize=14, alignment=1, spaceBefore=4, spaceAfter=1)
     company_line = ParagraphStyle("company_line", parent=styles["Normal"], fontSize=8, alignment=1, textColor=colors.grey, spaceAfter=10)
-    h2 = ParagraphStyle("h2", parent=styles["Heading2"], fontSize=10.5, spaceBefore=8, spaceAfter=4)
-    body = ParagraphStyle("body", parent=styles["Normal"], fontSize=8.5, leading=11.5)
-    cell = ParagraphStyle("cell", parent=styles["Normal"], fontSize=7.8, leading=10)
+    group_header = ParagraphStyle("group_header", parent=styles["Normal"], fontSize=10, fontName="Helvetica-Bold", textColor=colors.white)
+    group_subtotal = ParagraphStyle("group_subtotal", parent=group_header, alignment=2)
+    body = ParagraphStyle("body", parent=styles["Normal"], fontSize=8.5, leading=12)
+    cell = ParagraphStyle("cell", parent=styles["Normal"], fontSize=8.2, leading=11)
+    cell_right = ParagraphStyle("cell_right", parent=cell, alignment=2)
+    th = ParagraphStyle("th", parent=cell, fontName="Helvetica-Bold", textColor=branding.BRAND_BROWN)
+    th_right = ParagraphStyle("th_right", parent=th, alignment=2)
     small = ParagraphStyle("small", parent=styles["Normal"], fontSize=8, textColor=colors.grey)
     small_right = ParagraphStyle("small_right", parent=small, alignment=2)
     title_style = ParagraphStyle("title", parent=styles["Normal"], fontSize=13, spaceBefore=6, spaceAfter=2, fontName="Helvetica-Bold")
@@ -413,7 +427,7 @@ async def export_estimate_pdf(estimate_id: str, _: CurrentUser = Depends(get_cur
             Paragraph(breadcrumb, small),
             Paragraph(f"Print Date: {print_date.month}-{print_date.day}-{print_date.year}", small_right),
         ]],
-        colWidths=[4.2 * inch, 3 * inch],
+        colWidths=[PAGE_WIDTH * 0.6, PAGE_WIDTH * 0.4],
     )
     header_row.setStyle(
         TableStyle(
@@ -434,9 +448,51 @@ async def export_estimate_pdf(estimate_id: str, _: CurrentUser = Depends(get_cur
         elements.append(Paragraph(rich_text_to_pdf_markup(intro), body))
         elements.append(Spacer(1, 8))
 
+    # Column widths sum to exactly PAGE_WIDTH -- Item/Description get the
+    # bulk of the space (that's the text that actually wraps), the three
+    # numeric columns are just wide enough for "$12,345.67" without wrapping.
+    item_col = PAGE_WIDTH * 0.20
+    desc_col = PAGE_WIDTH * 0.38
+    qty_col = PAGE_WIDTH * 0.14
+    unit_price_col = PAGE_WIDTH * 0.14
+    price_col = PAGE_WIDTH - item_col - desc_col - qty_col - unit_price_col
+    col_widths = [item_col, desc_col, qty_col, unit_price_col, price_col]
+
     for group_name, items in groups.items():
-        elements.append(Paragraph(group_name, h2))
-        table_data = [["Item", "Description", "Qty/Unit", "Unit Price", "Price"]]
+        group_subtotal_value = sum(item.get("owner_price") or 0 for item in items)
+        # A shaded, full-width band per group (title left, subtotal right) --
+        # gives each section clear visual separation and a running subtotal,
+        # instead of a plain bold heading floating with no boundary, and
+        # reuses the same brand-brown/cream pairing as the item table's own
+        # header row so the two read as one cohesive block, not two
+        # differently-styled pieces stacked on top of each other.
+        group_band = Table(
+            [[Paragraph(group_name.upper(), group_header), Paragraph(f"${group_subtotal_value:,.2f}", group_subtotal)]],
+            colWidths=[PAGE_WIDTH * 0.7, PAGE_WIDTH * 0.3],
+        )
+        group_band.setStyle(
+            TableStyle(
+                [
+                    ("BACKGROUND", (0, 0), (-1, -1), branding.BRAND_BROWN),
+                    ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
+                    ("LEFTPADDING", (0, 0), (0, 0), 6),
+                    ("RIGHTPADDING", (-1, 0), (-1, 0), 6),
+                    ("TOPPADDING", (0, 0), (-1, -1), 5),
+                    ("BOTTOMPADDING", (0, 0), (-1, -1), 5),
+                ]
+            )
+        )
+        elements.append(group_band)
+
+        table_data = [
+            [
+                Paragraph("Item", th),
+                Paragraph("Description", th),
+                Paragraph("Qty/Unit", th_right),
+                Paragraph("Unit Price", th_right),
+                Paragraph("Price", th_right),
+            ]
+        ]
         for item in items:
             # Cost codes are internal categorization, not something a client
             # needs to see on their proposal -- title only.
@@ -454,27 +510,32 @@ async def export_estimate_pdf(estimate_id: str, _: CurrentUser = Depends(get_cur
                 [
                     Paragraph(item_label, cell),
                     Paragraph(item.get("description") or "", cell),
-                    qty_unit,
-                    f"${client_unit_price:,.2f}",
-                    f"${owner_price:,.2f}",
+                    Paragraph(qty_unit, cell_right),
+                    Paragraph(f"${client_unit_price:,.2f}", cell_right),
+                    Paragraph(f"${owner_price:,.2f}", cell_right),
                 ]
             )
-        t = Table(table_data, colWidths=[1.3 * inch, 2.6 * inch, 0.75 * inch, 0.85 * inch, 0.85 * inch])
+        t = Table(table_data, colWidths=col_widths, repeatRows=1)
         t.setStyle(
             TableStyle(
                 [
-                    ("FONTSIZE", (0, 0), (-1, -1), 7.8),
                     ("BACKGROUND", (0, 0), (-1, 0), branding.BRAND_CREAM),
                     ("LINEBELOW", (0, 0), (-1, 0), 0.75, branding.BRAND_BROWN),
                     ("LINEBELOW", (0, 1), (-1, -1), 0.25, colors.lightgrey),
+                    # Subtle zebra striping on data rows only (row 0 is the
+                    # header, already shaded cream above) -- easier to track
+                    # a row across five columns than a flat white table.
+                    ("ROWBACKGROUNDS", (0, 1), (-1, -1), [colors.white, colors.HexColor("#FAF8F3")]),
                     ("VALIGN", (0, 0), (-1, -1), "TOP"),
-                    ("TOPPADDING", (0, 0), (-1, -1), 3),
-                    ("BOTTOMPADDING", (0, 0), (-1, -1), 3),
+                    ("TOPPADDING", (0, 0), (-1, -1), 5),
+                    ("BOTTOMPADDING", (0, 0), (-1, -1), 5),
+                    ("LEFTPADDING", (0, 0), (0, -1), 6),
+                    ("RIGHTPADDING", (-1, 0), (-1, -1), 6),
                 ]
             )
         )
         elements.append(t)
-        elements.append(Spacer(1, 6))
+        elements.append(Spacer(1, 12))
 
     total = estimate.get("grand_total_owner_price") or 0
     elements.append(Spacer(1, 4))

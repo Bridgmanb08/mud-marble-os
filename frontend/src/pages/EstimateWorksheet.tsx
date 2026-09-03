@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { PointerSensor, useSensor, useSensors, type DragEndEvent } from '@dnd-kit/core';
-import { arrayMove } from '@dnd-kit/sortable';
+import { DndContext } from '@dnd-kit/core';
+import { SortableContext, verticalListSortingStrategy } from '@dnd-kit/sortable';
 import {
   IconArrowLeft,
   IconPlus,
@@ -20,6 +20,7 @@ import { fmt, fmtD } from '../lib/format';
 import { LineItemModal } from '../components/estimates/LineItemModal';
 import { EstimateCopilotPanel } from '../components/estimates/EstimateCopilotPanel';
 import { LineItemGroupCard } from '../components/estimates/LineItemGroupCard';
+import { useGroupedLineItemDrag } from '../components/estimates/useGroupedLineItemDrag';
 import { SaveAsTemplateModal } from '../components/estimates/SaveAsTemplateModal';
 import { InsertFromTemplateModal } from '../components/estimates/InsertFromTemplateModal';
 import { RichTextEditor } from '../components/ui/RichTextEditor';
@@ -80,7 +81,14 @@ export default function EstimateWorksheet() {
   const [newGroupName, setNewGroupName] = useState('');
   const [showSaveAsTemplate, setShowSaveAsTemplate] = useState(false);
   const [showInsertFromTemplate, setShowInsertFromTemplate] = useState(false);
-  const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 5 } }));
+  const { sensors, collisionDetection, onDragStart, onDragOver, onDragEnd } = useGroupedLineItemDrag({
+    items,
+    setItems,
+    searchActive: !!searchQuery.trim(),
+    patchItem: (itemId, body) => api.patch(`/estimates/${id}/items/${itemId}`, body),
+    onSaveError: (message) => toast(message, true),
+    onSettled: load,
+  });
 
   async function load() {
     if (!id) return;
@@ -282,45 +290,6 @@ export default function EstimateWorksheet() {
     setShowNewGroupPrompt(false);
     setNewGroupName('');
     openNewItem('construction', trimmed);
-  }
-
-  async function handleReorder(groupName: string, groupItems: EstimateLineItem[], event: DragEndEvent, groups: Record<string, EstimateLineItem[]>) {
-    // Defense in depth alongside LineItemGroupCard's own dragDisabled prop --
-    // groupItems here can be a search-filtered SUBSET of the real group; a
-    // reorder computed against it would silently drop the hidden items and
-    // corrupt sort_order for the whole estimate. The drag handle is already
-    // disabled while searching, so this should be unreachable in practice,
-    // but bail out explicitly rather than trust that alone.
-    if (searchQuery.trim()) return;
-    const { active, over } = event;
-    if (!over || active.id === over.id) return;
-    const oldIndex = groupItems.findIndex((i) => i.id === active.id);
-    const newIndex = groupItems.findIndex((i) => i.id === over.id);
-    if (oldIndex === -1 || newIndex === -1) return;
-    const reorderedGroup = arrayMove(groupItems, oldIndex, newIndex);
-
-    // sort_order is one shared sequence across the whole estimate (not scoped
-    // per group), so splice the reordered group's new sub-order back into the
-    // full flattened list, leaving every other group's relative order as-is.
-    const flattened: EstimateLineItem[] = [];
-    for (const [name, groupItemsInner] of Object.entries(groups)) {
-      flattened.push(...(name === groupName ? reorderedGroup : groupItemsInner));
-    }
-
-    const changed = flattened
-      .map((item, i) => ({ id: item.id, oldOrder: item.sort_order, newOrder: i }))
-      .filter(({ oldOrder, newOrder }) => oldOrder !== newOrder);
-
-    setItems(flattened.map((item, i) => (item.sort_order === i ? item : { ...item, sort_order: i })));
-
-    if (!id || changed.length === 0) return;
-    try {
-      await Promise.all(changed.map(({ id: itemId, newOrder }) => api.patch(`/estimates/${id}/items/${itemId}`, { sort_order: newOrder })));
-    } catch (e) {
-      toast(e instanceof ApiError ? e.message : 'Failed to save the new order', true);
-    } finally {
-      load();
-    }
   }
 
   return (
@@ -533,26 +502,28 @@ export default function EstimateWorksheet() {
           <div className="empty-s">Nothing in this estimate matches "{searchQuery}".</div>
         </div>
       ) : (
-        visibleGroups.map(([groupName, groupItems]) => (
-          <LineItemGroupCard
-            key={groupName}
-            groupKey={groupName}
-            items={groupItems}
-            hasDays={hasDays}
-            collapsed={!query && !!collapsedGroups[groupName]}
-            editing={editingGroupKey === groupName}
-            editingValue={editingGroupValue}
-            itemSensors={sensors}
-            dragDisabled={!!query}
-            onToggleCollapse={() => toggleGroupCollapse(groupName)}
-            onStartRename={() => startRenameGroup(groupName)}
-            onRenameChange={setEditingGroupValue}
-            onCommitRename={() => commitRenameGroup(groupName, groups[groupName])}
-            onAddItem={() => openNewItem(groupItems[0].bucket, groupName)}
-            onItemClick={openEditItem}
-            onReorderItems={(e) => handleReorder(groupName, groupItems, e, groups)}
-          />
-        ))
+        <DndContext sensors={sensors} collisionDetection={collisionDetection} onDragStart={onDragStart} onDragOver={onDragOver} onDragEnd={onDragEnd}>
+          <SortableContext items={visibleGroups.map(([k]) => `group:${k}`)} strategy={verticalListSortingStrategy}>
+            {visibleGroups.map(([groupName, groupItems]) => (
+              <LineItemGroupCard
+                key={groupName}
+                groupKey={groupName}
+                items={groupItems}
+                hasDays={hasDays}
+                collapsed={!query && !!collapsedGroups[groupName]}
+                editing={editingGroupKey === groupName}
+                editingValue={editingGroupValue}
+                dragDisabled={!!query}
+                onToggleCollapse={() => toggleGroupCollapse(groupName)}
+                onStartRename={() => startRenameGroup(groupName)}
+                onRenameChange={setEditingGroupValue}
+                onCommitRename={() => commitRenameGroup(groupName, groups[groupName])}
+                onAddItem={() => openNewItem(groupItems[0].bucket, groupName)}
+                onItemClick={openEditItem}
+              />
+            ))}
+          </SortableContext>
+        </DndContext>
       )}
 
       {nextSuggestion?.title && !query && (
