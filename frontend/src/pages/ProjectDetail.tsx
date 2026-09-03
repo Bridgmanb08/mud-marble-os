@@ -1,12 +1,13 @@
 import { useEffect, useState } from 'react';
 import { useParams, useNavigate, useSearchParams, Link } from 'react-router-dom';
-import { IconArrowLeft, IconPlus, IconCalendar, IconList } from '@tabler/icons-react';
+import { IconArrowLeft, IconPencil, IconPlus, IconCalendar, IconList } from '@tabler/icons-react';
 import { api } from '../api/client';
 import { useToast } from '../components/ui/Toast';
 import { fmt, fmtD } from '../lib/format';
 import { useReferenceData } from '../reference-data/ReferenceDataContext';
 import type { ChangeOrder, CostCodeVariance, Estimate, FinancialSummary, Invoice, Project, ProjectNote, Task } from '../types';
 import { NewNoteModal } from '../components/projects/NewNoteModal';
+import { NewProjectModal } from '../components/projects/NewProjectModal';
 import { NewChangeOrderModal } from '../components/change-orders/NewChangeOrderModal';
 import { NewInvoiceModal } from '../components/invoices/NewInvoiceModal';
 import { NewTaskModal } from '../components/tasks/NewTaskModal';
@@ -69,6 +70,7 @@ export default function ProjectDetail() {
   const requestedTab = searchParams.get('tab');
   const [activeTab, setActiveTab] = useState(requestedTab && TABS.includes(requestedTab) ? requestedTab : 'Overview');
   const [showNewNote, setShowNewNote] = useState(false);
+  const [showEditProject, setShowEditProject] = useState(false);
   const [showNewCO, setShowNewCO] = useState(false);
   const [showNewInvoice, setShowNewInvoice] = useState(false);
   const [showNewTask, setShowNewTask] = useState(false);
@@ -253,21 +255,38 @@ export default function ProjectDetail() {
             <p style={{ fontSize: 12, color: 'var(--t3)', fontStyle: 'italic' }}>"{project.clients.notes}"</p>
           )}
         </div>
-        <select
-          className="fi"
-          style={{ maxWidth: 180, textTransform: 'capitalize' }}
-          value={project.status}
-          onChange={(e) => handleStatusChange(e.target.value)}
-        >
-          {(PROJECT_STATUS_OPTIONS.includes(project.status) ? PROJECT_STATUS_OPTIONS : [project.status, ...PROJECT_STATUS_OPTIONS]).map(
-            (s) => (
-              <option key={s} value={s}>
-                {s.replace(/_/g, ' ')}
-              </option>
-            )
-          )}
-        </select>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+          <button type="button" className="btn btn-sm" onClick={() => setShowEditProject(true)}>
+            <IconPencil size={14} /> Edit project
+          </button>
+          <select
+            className="fi"
+            style={{ maxWidth: 180, textTransform: 'capitalize' }}
+            value={project.status}
+            onChange={(e) => handleStatusChange(e.target.value)}
+          >
+            {(PROJECT_STATUS_OPTIONS.includes(project.status) ? PROJECT_STATUS_OPTIONS : [project.status, ...PROJECT_STATUS_OPTIONS]).map(
+              (s) => (
+                <option key={s} value={s}>
+                  {s.replace(/_/g, ' ')}
+                </option>
+              )
+            )}
+          </select>
+        </div>
       </div>
+
+      {showEditProject && (
+        <NewProjectModal
+          project={project}
+          onClose={() => setShowEditProject(false)}
+          onCreated={(updated) => {
+            setProject(updated);
+            setShowEditProject(false);
+            toast('Project updated');
+          }}
+        />
+      )}
 
       <div
         className="tabs"
