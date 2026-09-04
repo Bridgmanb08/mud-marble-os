@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { api, ApiError } from '../../api/client';
 import { useToast } from '../ui/Toast';
 import { FileDropzone } from '../ui/FileDropzone';
-import { defaultConflictAction } from '../../lib/importConflicts';
+import { resolveImportAction } from '../../lib/importConflicts';
 import type { Estimate, EstimateSheetPreview, EstimateSheetRow } from '../../types';
 
 type RowAction = 'add' | 'skip' | 'update';
@@ -40,7 +40,7 @@ export function EstimateImportSection({ projectId }: { projectId: string }) {
       // has to actively opt into overwriting a record with the imported values --
       // UNLESS every differing field is blank on the existing record, in which
       // case "update" only fills in what was missing, never overwrites real data.
-      setActions(result.rows.map((r) => (!r.already_present ? 'add' : r.conflict ? defaultConflictAction(r.diff) : 'skip')));
+      setActions(result.rows.map(resolveImportAction));
       if (result.dropped_count > 0) {
         toast(`${result.dropped_count} row(s) couldn't be read clearly and were skipped`, true);
       }

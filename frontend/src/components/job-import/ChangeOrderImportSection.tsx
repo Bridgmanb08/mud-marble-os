@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { api, ApiError } from '../../api/client';
 import { useToast } from '../ui/Toast';
 import { FileDropzone } from '../ui/FileDropzone';
-import { defaultConflictAction } from '../../lib/importConflicts';
+import { resolveImportAction } from '../../lib/importConflicts';
 import type { ChangeOrderScanPreview } from '../../types';
 
 type Action = 'add' | 'skip' | 'update';
@@ -63,7 +63,7 @@ export function ChangeOrderImportSection({ projectId, onImported }: { projectId:
       // reviewer has to actively opt into overwriting it with scanned values --
       // UNLESS every differing field is blank on the existing record, in which
       // case "update" only fills in what was missing, never overwrites real data.
-      setAction(!result.row.already_present ? 'add' : result.row.conflict ? defaultConflictAction(result.row.diff) : 'skip');
+      setAction(resolveImportAction(result.row));
     } catch (err) {
       setError(err instanceof ApiError ? err.message : 'Failed to read that file');
     } finally {
