@@ -74,13 +74,22 @@
 .qr-add-teamwide{display:flex;align-items:center;gap:6px;font-size:11.5px;color:var(--t2);cursor:pointer;}
 .qr-add-actions{display:flex;justify-content:flex-end;gap:6px;}
 
-/* --- Searchable project picker (Kanban card's "assign a project" combobox) --- */
+/* --- Searchable project picker -- reused as a compact inline "assign"
+   trigger on a Kanban card, and as a full form field elsewhere (task detail
+   drawer, new task modal). Default styling matches .fi (index.css) so it
+   sits naturally beside its sibling form inputs; .compact overrides that
+   for the dense-card context. --- */
 .project-picker{position:relative;}
 .project-picker-trigger{
-  display:block;width:100%;text-align:left;font-size:11px;padding:2px 4px;margin-top:2px;
-  color:var(--t3);background:none;border:1px solid transparent;border-radius:var(--r);cursor:pointer;
+  display:block;width:100%;text-align:left;font-family:var(--font);
+  font-size:13px;padding:8px 10px;border:1px solid var(--border-md);border-radius:var(--r);
+  background:var(--surface);color:var(--text);cursor:pointer;
 }
-.project-picker-trigger:hover{color:var(--t2);border-color:var(--border);}
+.project-picker-trigger.compact{
+  font-size:11px;padding:2px 4px;margin-top:2px;color:var(--t3);
+  background:none;border:1px solid transparent;
+}
+.project-picker-trigger.compact:hover{color:var(--t2);border-color:var(--border);}
 .project-picker-menu{
   position:absolute;top:100%;left:0;right:0;z-index:20;margin-top:2px;
   background:var(--surface);border:1px solid var(--border);border-radius:var(--r);
@@ -88,6 +97,7 @@
 }
 .project-picker-option{padding:5px 8px;font-size:11px;cursor:pointer;color:var(--text);}
 .project-picker-option.on{background:var(--bg);}
+.project-picker-option.project-picker-clear{color:var(--t3);font-style:italic;border-bottom:1px solid var(--border);}
 .project-picker-empty{padding:6px 8px;font-size:11px;color:var(--t3);}
 
 /* --- Mobile (job site use) --- */
