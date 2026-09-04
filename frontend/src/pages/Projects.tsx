@@ -7,7 +7,7 @@ import { fmt } from '../lib/format';
 import type { Project } from '../types';
 import { NewProjectModal } from '../components/projects/NewProjectModal';
 import { Skeleton } from '../components/ui/Skeleton';
-import { statusOptionsIncluding } from '../lib/projectStatuses';
+import { PROJECT_STATUS_OPTIONS as PROJECT_STATUS_ORDER, projectStatusLabel, statusOptionsIncluding } from '../lib/projectStatuses';
 
 const STATUS_BADGE: Record<string, string> = {
   active: 'bg-green',
@@ -56,6 +56,22 @@ export default function Projects() {
     return filter === 'all' ? projects : projects.filter((p) => p.status === filter);
   }, [projects, filter]);
 
+  // Grouped by status -- same pipeline-order pattern as the Estimates page's
+  // own project-status grouping, just one axis instead of two (a project has
+  // only its own status, not a separate line-item-style status to track).
+  // The existing filter chips above still narrow this down first, so picking
+  // one status naturally collapses this to a single section.
+  const groups = useMemo(() => {
+    const map = new Map<string, Project[]>();
+    for (const p of filtered) {
+      if (!map.has(p.status)) map.set(p.status, []);
+      map.get(p.status)!.push(p);
+    }
+    const known = PROJECT_STATUS_ORDER.filter((s) => map.has(s));
+    const rest = [...map.keys()].filter((s) => !(PROJECT_STATUS_ORDER as readonly string[]).includes(s)).sort();
+    return [...known, ...rest].map((status) => ({ status, items: map.get(status)! }));
+  }, [filtered]);
+
   const activeCount = projects?.filter((p) => p.status === 'active').length ?? 0;
   const totalContractValue = projects?.reduce((s, p) => s + (p.contract_value || 0), 0) ?? 0;
 
@@ -75,7 +91,7 @@ export default function Projects() {
       <div className="ph">
         <div>
           <h1>Projects</h1>
-          <p>All active and pipeline projects</p>
+          <p>All active and pipeline projects, grouped by status</p>
         </div>
         <button className="btn btn-p btn-sm" onClick={() => setShowNew(true)}>
           <IconPlus size={14} /> New project
@@ -126,46 +142,16 @@ export default function Projects() {
           <div className="empty-s">Create a project to get started.</div>
         </div>
       ) : (
-        filtered.map((p) => (
-          <div
-            key={p.id}
-            className="pc"
-            role="link"
-            tabIndex={0}
-            style={{ textDecoration: 'none', color: 'inherit', cursor: 'pointer' }}
-            onClick={() => navigate(`/projects/${p.id}`)}
-            onKeyDown={(e) => {
-              if (e.key === 'Enter') navigate(`/projects/${p.id}`);
-            }}
-          >
-            <div className="pi">
-              <div className="pn">{projectTitle(p.name)}</div>
-              <div className="ps">
-                {p.clients ? `${p.clients.first_name || ''} ${p.clients.last_name || ''}`.trim() : 'No client'}
-                {p.project_type ? ` · ${p.project_type}` : ''}
+        groups.map(({ status, items }) => (
+          <div key={status} style={{ marginBottom: 20 }}>
+            <div className="sh">
+              <div className="st">
+                {projectStatusLabel(status)} ({items.length})
               </div>
             </div>
-            <div className="pm">
-              {p.contract_value ? <span style={{ fontSize: 12, color: 'var(--t2)' }}>{fmt(p.contract_value)}</span> : null}
-              <select
-                className={`badge ${STATUS_BADGE[p.status] || 'bg-gray'}`}
-                style={{ border: 'none', WebkitAppearance: 'none', appearance: 'none', cursor: 'pointer', textTransform: 'capitalize', font: 'inherit' }}
-                value={p.status}
-                title="Change status"
-                onClick={(e) => e.stopPropagation()}
-                onMouseDown={(e) => e.stopPropagation()}
-                onChange={(e) => {
-                  e.stopPropagation();
-                  handleStatusChange(p, e.target.value);
-                }}
-              >
-                {statusOptionsIncluding(p.status).map((s) => (
-                  <option key={s} value={s}>
-                    {s.replace('_', ' ')}
-                  </option>
-                ))}
-              </select>
-            </div>
+            {items.map((p) => (
+              <ProjectCard key={p.id} project={p} onNavigate={() => navigate(`/projects/${p.id}`)} onStatusChange={handleStatusChange} />
+            ))}
           </div>
         ))
       )}
@@ -181,5 +167,57 @@ export default function Projects() {
         />
       )}
     </>
+  );
+}
+
+function ProjectCard({
+  project: p,
+  onNavigate,
+  onStatusChange,
+}: {
+  project: Project;
+  onNavigate: () => void;
+  onStatusChange: (project: Project, newStatus: string) => void;
+}) {
+  return (
+    <div
+      className="pc"
+      role="link"
+      tabIndex={0}
+      style={{ textDecoration: 'none', color: 'inherit', cursor: 'pointer' }}
+      onClick={onNavigate}
+      onKeyDown={(e) => {
+        if (e.key === 'Enter') onNavigate();
+      }}
+    >
+      <div className="pi">
+        <div className="pn">{projectTitle(p.name)}</div>
+        <div className="ps">
+          {p.clients ? `${p.clients.first_name || ''} ${p.clients.last_name || ''}`.trim() : 'No client'}
+          {p.project_type ? ` · ${p.project_type}` : ''}
+        </div>
+      </div>
+      <div className="pm">
+        {p.contract_value ? <span style={{ fontSize: 12, color: 'var(--t2)' }}>{fmt(p.contract_value)}</span> : null}
+        <select
+          className={`badge ${STATUS_BADGE[p.status] || 'bg-gray'}`}
+          style={{ border: 'none', WebkitAppearance: 'none', appearance: 'none', cursor: 'pointer', textTransform: 'capitalize', font: 'inherit' }}
+          value={p.status}
+          title="Change status"
+          onClick={(e) => e.stopPropagation()}
+          onMouseDown={(e) => e.stopPropagation()}
+          onChange={(e) => {
+            e.stopPropagation();
+            onStatusChange(p, e.target.value);
+          }}
+        >
+          {statusOptionsIncluding(p.status).map((s) => (
+            <option key={s} value={s}>
+              {s.replace('_', ' ')}
+            </option>
+          ))}
+        </select>
+      </div>
+    </div>
   );
 }
