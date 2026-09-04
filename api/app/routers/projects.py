@@ -9,6 +9,8 @@ from ..schemas.projects import (
     CostCodeVarianceOut,
     CostCodeVarianceRow,
     FinancialSummaryOut,
+    ProjectBoardLayoutOut,
+    ProjectBoardLayoutUpdate,
     ProjectCreate,
     ProjectNoteCreate,
     ProjectNoteOut,
@@ -54,6 +56,34 @@ async def create_project(body: ProjectCreate, _: CurrentUser = Depends(get_curre
     rows = await db_post("projects", body.model_dump(exclude_none=True))
     full = await db_get("projects", f"?id=eq.{rows[0]['id']}&select=*,clients(id,first_name,last_name,preferred_contact_method,is_advocate,is_repeat_client,notes),sms_contacts(id,phone_number,name)")
     return full[0]
+
+
+# Registered before /{project_id} -- a literal path segment must be declared
+# ahead of a competing parameterized route or FastAPI matches "board-layout"
+# as if it were a project_id and routes it to get_project/get 404 instead.
+@router.get("/board-layout", response_model=ProjectBoardLayoutOut)
+async def get_board_layout(current_user: CurrentUser = Depends(get_current_user)):
+    rows = await db_get(
+        "project_board_layout", f"?user_id=eq.{current_user.id}&select=status_order,collapsed_statuses"
+    )
+    if rows:
+        return ProjectBoardLayoutOut(**rows[0])
+    return ProjectBoardLayoutOut()
+
+
+@router.put("/board-layout", response_model=ProjectBoardLayoutOut)
+async def update_board_layout(body: ProjectBoardLayoutUpdate, current_user: CurrentUser = Depends(get_current_user)):
+    updates = body.model_dump(exclude_unset=True)
+    existing = await db_get(
+        "project_board_layout", f"?user_id=eq.{current_user.id}&select=id,status_order,collapsed_statuses"
+    )
+    if existing:
+        merged = {**existing[0], **updates}
+        await db_patch("project_board_layout", existing[0]["id"], updates)
+    else:
+        merged = {"status_order": [], "collapsed_statuses": [], **updates}
+        await db_post("project_board_layout", {"user_id": current_user.id, **merged})
+    return ProjectBoardLayoutOut(status_order=merged.get("status_order", []), collapsed_statuses=merged.get("collapsed_statuses", []))
 
 
 @router.get("/{project_id}", response_model=ProjectOut)

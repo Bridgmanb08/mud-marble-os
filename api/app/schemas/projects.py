@@ -133,3 +133,17 @@ class ProjectNoteOut(ProjectNoteCreate):
     id: str
     project_id: str
     created_at: str
+
+
+class ProjectBoardLayoutOut(BaseModel):
+    # Empty means "use the app's default pipeline order" / "nothing
+    # collapsed" -- the frontend already has that canonical order
+    # (frontend/src/lib/projectStatuses.ts), so an empty list here isn't
+    # ambiguous with "no preference saved yet".
+    status_order: list[str] = []
+    collapsed_statuses: list[str] = []
+
+
+class ProjectBoardLayoutUpdate(BaseModel):
+    status_order: Optional[list[str]] = None
+    collapsed_statuses: Optional[list[str]] = None
