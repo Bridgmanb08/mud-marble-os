@@ -4,6 +4,7 @@ import { api, ApiError } from '../../api/client';
 import { Modal } from '../ui/Modal';
 import { NewSubcontractorModal } from '../subcontractors/NewSubcontractorModal';
 import { MultiAssigneeInput } from './MultiAssigneeInput';
+import { ProjectPicker } from './ProjectPicker';
 import { openDatePicker } from '../../lib/datePicker';
 import { useReferenceData } from '../../reference-data/ReferenceDataContext';
 import type { Project, UserDirectoryEntry } from '../../types';
@@ -109,14 +110,7 @@ export function NewTaskModal({ onClose, onSaved, defaultStatus, defaultProjectId
           <div className="fr">
             <div className="fg">
               <label className="fl">Project</label>
-              <select className="fi" value={projectId} onChange={(e) => setProjectId(e.target.value)}>
-                <option value="">— No project —</option>
-                {projects.map((p) => (
-                  <option key={p.id} value={p.id}>
-                    {p.name.replace(/\|.*/, '').trim()}
-                  </option>
-                ))}
-              </select>
+              <ProjectPicker projects={projects} value={projectId} onSelect={setProjectId} placeholder="— No project —" allowClear />
             </div>
             <div className="fg">
               <label className="fl">Assigned to</label>

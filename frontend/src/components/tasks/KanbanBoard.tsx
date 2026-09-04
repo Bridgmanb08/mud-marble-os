@@ -272,7 +272,7 @@ function TaskCard({
       {task.project_id ? (
         <div className="task-meta">{task.projects?.name?.replace(/\|.*/, '').trim() || 'No project'}</div>
       ) : (
-        <ProjectPicker projects={projects} onSelect={handleProjectChange} />
+        <ProjectPicker projects={projects} onSelect={handleProjectChange} compact />
       )}
       {assignees.length > 0 && (
         <div className="task-meta" style={{ marginTop: 3, display: 'flex', gap: 4, flexWrap: 'wrap' }}>
