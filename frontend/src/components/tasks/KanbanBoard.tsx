@@ -4,18 +4,13 @@ import {
   DragOverlay,
   closestCorners,
   pointerWithin,
-  PointerSensor,
-  TouchSensor,
-  KeyboardSensor,
-  useSensor,
-  useSensors,
   useDroppable,
   type CollisionDetection,
   type DragEndEvent,
   type DragOverEvent,
   type DragStartEvent,
 } from '@dnd-kit/core';
-import { SortableContext, verticalListSortingStrategy, useSortable, arrayMove, sortableKeyboardCoordinates } from '@dnd-kit/sortable';
+import { SortableContext, verticalListSortingStrategy, useSortable, arrayMove } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
 import { IconMessageCircle, IconChecklist, IconLock, IconChevronDown, IconChevronRight, IconPlus, IconFlag, IconX } from '@tabler/icons-react';
 import { api, ApiError } from '../../api/client';
@@ -25,6 +20,7 @@ import { fmtD } from '../../lib/format';
 import { colorForPerson } from '../../lib/personColor';
 import { hasUnseenComment } from '../../lib/commentSeen';
 import { useIsMobile } from '../../hooks/useMediaQuery';
+import { useDndSensors } from '../../hooks/useDndSensors';
 import { ProjectPicker } from './ProjectPicker';
 import type { Task, TaskSubtask, Project, UserDirectoryEntry } from '../../types';
 import { taskAssignees } from '../../lib/taskAssignees';
@@ -587,11 +583,7 @@ export function KanbanBoard({
     api.get<UserDirectoryEntry[]>('/users/directory').then(setDirectory).catch(() => {});
   }, []);
 
-  const sensors = useSensors(
-    useSensor(PointerSensor, { activationConstraint: { distance: 5 } }),
-    useSensor(TouchSensor, { activationConstraint: { delay: 150, tolerance: 8 } }),
-    useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates })
-  );
+  const sensors = useDndSensors();
 
   function findColumn(id: string): string | undefined {
     return Object.keys(columns).find((col) => columns[col].includes(id));

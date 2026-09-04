@@ -1,10 +1,5 @@
-import { useRef } from 'react';
+import { useMemo, useRef, useState } from 'react';
 import {
-  PointerSensor,
-  TouchSensor,
-  KeyboardSensor,
-  useSensor,
-  useSensors,
   pointerWithin,
   closestCorners,
   type CollisionDetection,
@@ -12,7 +7,8 @@ import {
   type DragOverEvent,
   type DragEndEvent,
 } from '@dnd-kit/core';
-import { arrayMove, sortableKeyboardCoordinates } from '@dnd-kit/sortable';
+import { arrayMove } from '@dnd-kit/sortable';
+import { useDndSensors } from '../../hooks/useDndSensors';
 
 const BUCKET_LABEL: Record<string, string> = { pm_fee: 'PM Fee', construction: 'Construction', allowance: 'Allowance' };
 
@@ -32,7 +28,13 @@ export function groupKeyForItem(item: GroupableLineItem): string {
 // shape against two different PATCH endpoints, so the drag mechanics (a
 // group-of-groups drag layered over a group-of-items drag, sharing one
 // DndContext so an item can cross from one group's table into another) only
-// need writing once.
+// need writing once. This hook now also OWNS the grouping itself (groups/
+// groupKeys), not just the drag mechanics -- both worksheet pages used to
+// each keep their own local BUCKET_LABEL/grouping-loop copy that could
+// silently drift from what actually drives drag behavior; consuming the
+// hook's own grouping closes that gap, and gives both pages the same
+// "don't let a group disappear out from under you mid-drag" fix for free
+// (see phantomGroups below).
 //
 // Two drag "kinds" share one DndContext (a cross-group item drop needs every
 // group's items visible to the same context -- the old per-group DndContext
@@ -60,12 +62,37 @@ export function useGroupedLineItemDrag<T extends GroupableLineItem>({
   onSettled: () => void;
 }) {
   const snapshotRef = useRef<T[] | null>(null);
+  // Every group that existed at the moment a drag started, in their
+  // on-screen order -- kept visible (as an empty group, if it comes to
+  // that) for the rest of THAT drag even if onDragOver's live preview
+  // empties it by moving its last item elsewhere. A group that's still
+  // genuinely empty once the drag actually ends drops out again on the
+  // next render (this only pins it DURING an active drag, not permanently
+  // -- there's no backend concept of a named-but-empty group to persist
+  // one beyond that).
+  const [phantomGroups, setPhantomGroups] = useState<string[]>([]);
 
-  const sensors = useSensors(
-    useSensor(PointerSensor, { activationConstraint: { distance: 5 } }),
-    useSensor(TouchSensor, { activationConstraint: { delay: 150, tolerance: 8 } }),
-    useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates })
-  );
+  const { groups, groupKeys } = useMemo(() => {
+    const g: Record<string, T[]> = {};
+    const order: string[] = [];
+    for (const key of phantomGroups) {
+      if (!(key in g)) {
+        g[key] = [];
+        order.push(key);
+      }
+    }
+    for (const item of items) {
+      const k = groupKeyForItem(item);
+      if (!(k in g)) {
+        g[k] = [];
+        order.push(k);
+      }
+      g[k].push(item);
+    }
+    return { groups: g, groupKeys: order };
+  }, [items, phantomGroups]);
+
+  const sensors = useDndSensors();
 
   const collisionDetection: CollisionDetection = (args) => {
     const activeType = args.active.data.current?.type;
@@ -82,6 +109,7 @@ export function useGroupedLineItemDrag<T extends GroupableLineItem>({
 
   function onDragStart(_event: DragStartEvent) {
     snapshotRef.current = items;
+    setPhantomGroups(groupKeys);
   }
 
   // Live cross-group preview: as soon as an item is dragged over a DIFFERENT
@@ -168,37 +196,52 @@ export function useGroupedLineItemDrag<T extends GroupableLineItem>({
     }
   }
 
+  // Escape (or a programmatic cancelDrag()) fires onDragCancel, NOT
+  // onDragEnd -- dnd-kit treats them as genuinely different outcomes. A
+  // drag cancelled this way must roll back exactly like onDragEnd's own
+  // "dropped on nothing" branch below, or an Escape-cancelled cross-group
+  // move would leave the item stranded in its live-preview group with
+  // nothing persisted, same bug as the !over case but through a path
+  // onDragEnd never even sees.
+  function onDragCancel() {
+    const rollback = snapshotRef.current;
+    snapshotRef.current = null;
+    if (rollback) setItems(() => rollback);
+    setPhantomGroups([]);
+  }
+
   function onDragEnd(event: DragEndEvent) {
     const { active, over } = event;
     const rollback = snapshotRef.current;
     snapshotRef.current = null;
     if (!over) {
       // A drop with no valid target (released past the table edge, over the
-      // search box, or cancelled with Escape) must roll back -- onDragOver
-      // may have already relocated an item into a different group in local
-      // state (a real mutation, not just a visual overlay), and leaving that
-      // in place with nothing persisted server-side meant the item sat
-      // visibly in the wrong group until the next reload silently snapped
-      // it back.
+      // search box) must roll back -- onDragOver may have already relocated
+      // an item into a different group in local state (a real mutation, not
+      // just a visual overlay), and leaving that in place with nothing
+      // persisted server-side meant the item sat visibly in the wrong group
+      // until the next reload silently snapped it back.
       if (rollback) setItems(() => rollback);
+      setPhantomGroups([]);
       return;
     }
 
     if (active.data.current?.type === 'group') {
-      if (searchActive) return;
+      if (searchActive) {
+        setPhantomGroups([]);
+        return;
+      }
       const activeKey = typeof active.id === 'string' && active.id.startsWith('group:') ? active.id.slice('group:'.length) : null;
       const overKey = typeof over.id === 'string' && over.id.startsWith('group:') ? over.id.slice('group:'.length) : null;
-      if (!activeKey || !overKey || activeKey === overKey) return;
-      const groups: Record<string, T[]> = {};
-      for (const item of items) {
-        const k = groupKeyForItem(item);
-        (groups[k] ||= []).push(item);
+      if (!activeKey || !overKey || activeKey === overKey) {
+        setPhantomGroups([]);
+        return;
       }
-      const keys = Object.keys(groups);
-      const oldIdx = keys.indexOf(activeKey);
-      const newIdx = keys.indexOf(overKey);
+      const oldIdx = groupKeys.indexOf(activeKey);
+      const newIdx = groupKeys.indexOf(overKey);
+      setPhantomGroups([]);
       if (oldIdx === -1 || newIdx === -1) return;
-      const reorderedKeys = arrayMove(keys, oldIdx, newIdx);
+      const reorderedKeys = arrayMove(groupKeys, oldIdx, newIdx);
       const flattened: T[] = [];
       for (const k of reorderedKeys) flattened.push(...groups[k]);
       setItems(() => flattened);
@@ -209,6 +252,7 @@ export function useGroupedLineItemDrag<T extends GroupableLineItem>({
     // Item drag.
     if (searchActive) {
       if (rollback) setItems(() => rollback);
+      setPhantomGroups([]);
       return;
     }
     let finalItems = items;
@@ -234,8 +278,9 @@ export function useGroupedLineItemDrag<T extends GroupableLineItem>({
         }
       }
     }
+    setPhantomGroups([]);
     persist(finalItems, rollback);
   }
 
-  return { sensors, collisionDetection, onDragStart, onDragOver, onDragEnd };
+  return { sensors, collisionDetection, onDragStart, onDragOver, onDragEnd, onDragCancel, groups, groupKeys };
 }

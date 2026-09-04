@@ -40,8 +40,6 @@ const STATUS_BADGE: Record<string, string> = {
   rejected: 'bg-red',
 };
 
-const BUCKET_LABEL: Record<string, string> = { pm_fee: 'PM Fee', construction: 'Construction', allowance: 'Allowance' };
-
 export default function EstimateWorksheet() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
@@ -81,7 +79,7 @@ export default function EstimateWorksheet() {
   const [newGroupName, setNewGroupName] = useState('');
   const [showSaveAsTemplate, setShowSaveAsTemplate] = useState(false);
   const [showInsertFromTemplate, setShowInsertFromTemplate] = useState(false);
-  const { sensors, collisionDetection, onDragStart, onDragOver, onDragEnd } = useGroupedLineItemDrag({
+  const { sensors, collisionDetection, onDragStart, onDragOver, onDragEnd, onDragCancel, groups, groupKeys } = useGroupedLineItemDrag({
     items,
     setItems,
     searchActive: !!searchQuery.trim(),
@@ -150,13 +148,6 @@ export default function EstimateWorksheet() {
     );
   }
 
-  const groups: Record<string, EstimateLineItem[]> = {};
-  for (const item of items) {
-    const key = item.group_name || BUCKET_LABEL[item.bucket] || 'Ungrouped';
-    if (!groups[key]) groups[key] = [];
-    groups[key].push(item);
-  }
-  const groupKeys = Object.keys(groups);
   const existingGroups = Array.from(new Set(items.map((i) => i.group_name).filter((g): g is string => !!g))).sort();
   const allCollapsed = groupKeys.length > 0 && groupKeys.every((k) => collapsedGroups[k]);
 
@@ -173,7 +164,11 @@ export default function EstimateWorksheet() {
       );
       return [name, filteredItems];
     })
-    .filter(([, groupItems]) => groupItems.length > 0);
+    // Only drop a zero-match group while ACTIVELY searching -- groups can
+    // now legitimately be empty with no search involved (a phantom group
+    // kept visible for the rest of an in-progress drag, see
+    // useGroupedLineItemDrag's own comment), and those must still render.
+    .filter(([, groupItems]) => (query ? groupItems.length > 0 : true));
 
   const builderCostTotal = items.reduce((s, i) => s + (i.builder_cost || 0), 0);
   const clientPriceTotal = estimate.grand_total_owner_price || 0;
@@ -502,7 +497,7 @@ export default function EstimateWorksheet() {
           <div className="empty-s">Nothing in this estimate matches "{searchQuery}".</div>
         </div>
       ) : (
-        <DndContext sensors={sensors} collisionDetection={collisionDetection} onDragStart={onDragStart} onDragOver={onDragOver} onDragEnd={onDragEnd}>
+        <DndContext sensors={sensors} collisionDetection={collisionDetection} onDragStart={onDragStart} onDragOver={onDragOver} onDragEnd={onDragEnd} onDragCancel={onDragCancel}>
           <SortableContext items={visibleGroups.map(([k]) => `group:${k}`)} strategy={verticalListSortingStrategy}>
             {visibleGroups.map(([groupName, groupItems]) => (
               <LineItemGroupCard
@@ -518,7 +513,7 @@ export default function EstimateWorksheet() {
                 onStartRename={() => startRenameGroup(groupName)}
                 onRenameChange={setEditingGroupValue}
                 onCommitRename={() => commitRenameGroup(groupName, groups[groupName])}
-                onAddItem={() => openNewItem(groupItems[0].bucket, groupName)}
+                onAddItem={() => openNewItem(groupItems[0]?.bucket ?? 'construction', groupName)}
                 onItemClick={openEditItem}
               />
             ))}

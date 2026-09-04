@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { api, ApiError } from '../../api/client';
 import { useToast } from '../ui/Toast';
 import { FileDropzone } from '../ui/FileDropzone';
-import { defaultConflictAction } from '../../lib/importConflicts';
+import { resolveImportAction } from '../../lib/importConflicts';
 import type { ContractItemRow, ContractorBlock, InHouseSheetPreview, Subcontractor, TransactionSheetRow } from '../../types';
 
 type RowAction = 'add' | 'skip' | 'update';
@@ -42,15 +42,9 @@ export function InHouseImportSection({ projectId }: { projectId: string }) {
       // opt into overwriting a record with the imported values -- UNLESS every
       // differing field is blank on the existing record, in which case "update"
       // only fills in what was missing, never overwrites real data.
-      setTxActions(
-        result.transactions.map((r) => (!r.already_present ? 'add' : r.conflict ? defaultConflictAction(r.diff) : 'skip'))
-      );
+      setTxActions(result.transactions.map(resolveImportAction));
       setBlockChecked(result.contractors.map(() => true));
-      setItemActions(
-        result.contractors.map((block) =>
-          block.contract_items.map((item) => (!item.already_present ? 'add' : item.conflict ? defaultConflictAction(item.diff) : 'skip'))
-        )
-      );
+      setItemActions(result.contractors.map((block) => block.contract_items.map(resolveImportAction)));
       if (result.dropped_count > 0) {
         toast(`${result.dropped_count} row(s) couldn't be read clearly and were skipped`, true);
       }
