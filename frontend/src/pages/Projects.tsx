@@ -1,10 +1,14 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { IconPlus, IconBuilding } from '@tabler/icons-react';
+import { DndContext, closestCenter, type DragEndEvent } from '@dnd-kit/core';
+import { SortableContext, verticalListSortingStrategy, useSortable, arrayMove } from '@dnd-kit/sortable';
+import { CSS } from '@dnd-kit/utilities';
+import { IconPlus, IconBuilding, IconGripVertical, IconChevronDown, IconChevronRight } from '@tabler/icons-react';
 import { api, ApiError } from '../api/client';
 import { useToast } from '../components/ui/Toast';
+import { useDndSensors } from '../hooks/useDndSensors';
 import { fmt } from '../lib/format';
-import type { Project } from '../types';
+import type { Project, ProjectBoardLayout } from '../types';
 import { NewProjectModal } from '../components/projects/NewProjectModal';
 import { Skeleton } from '../components/ui/Skeleton';
 import { PROJECT_STATUS_OPTIONS as PROJECT_STATUS_ORDER, projectStatusLabel, statusOptionsIncluding } from '../lib/projectStatuses';
@@ -29,12 +33,36 @@ function projectTitle(name: string) {
   return name.replace(/\|.*/, '').trim();
 }
 
+// Applies a saved custom section order on top of the app's canonical
+// pipeline order: statuses the user has explicitly arranged come first, in
+// their saved order; any status with projects that isn't in that saved
+// order yet (a brand-new status, or the very first load before anything's
+// been customized) falls back to its normal pipeline position instead of
+// vanishing or landing somewhere arbitrary.
+function orderedStatuses(customOrder: string[], present: string[]): string[] {
+  if (customOrder.length === 0) {
+    const known = PROJECT_STATUS_ORDER.filter((s) => present.includes(s));
+    const rest = present.filter((s) => !(PROJECT_STATUS_ORDER as readonly string[]).includes(s)).sort();
+    return [...known, ...rest];
+  }
+  const known = customOrder.filter((s) => present.includes(s));
+  const missing = present.filter((s) => !customOrder.includes(s));
+  const missingKnown = PROJECT_STATUS_ORDER.filter((s) => missing.includes(s));
+  const missingRest = missing.filter((s) => !(PROJECT_STATUS_ORDER as readonly string[]).includes(s)).sort();
+  return [...known, ...missingKnown, ...missingRest];
+}
+
 export default function Projects() {
   const navigate = useNavigate();
   const [projects, setProjects] = useState<Project[] | null>(null);
   const [filter, setFilter] = useState('all');
   const [showNew, setShowNew] = useState(false);
+  // Saved section order/collapse state -- fetched once, then kept in sync
+  // locally (optimistic) as the user drags/collapses, PUT back to persist.
+  const [statusOrder, setStatusOrder] = useState<string[]>([]);
+  const [collapsed, setCollapsed] = useState<Record<string, boolean>>({});
   const toast = useToast();
+  const sensors = useDndSensors();
 
   async function load() {
     try {
@@ -48,6 +76,16 @@ export default function Projects() {
 
   useEffect(() => {
     load();
+    api
+      .get<ProjectBoardLayout>('/projects/board-layout')
+      .then((layout) => {
+        setStatusOrder(layout.status_order);
+        setCollapsed(Object.fromEntries(layout.collapsed_statuses.map((s) => [s, true])));
+      })
+      .catch(() => {
+        // No saved layout yet (or failed to load) -- canonical order,
+        // nothing collapsed, same as before this feature existed.
+      });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -60,17 +98,45 @@ export default function Projects() {
   // own project-status grouping, just one axis instead of two (a project has
   // only its own status, not a separate line-item-style status to track).
   // The existing filter chips above still narrow this down first, so picking
-  // one status naturally collapses this to a single section.
+  // one status naturally collapses this to a single section. Section order
+  // defaults to the canonical pipeline order but can be dragged into
+  // whatever order the user prefers (persisted via statusOrder).
   const groups = useMemo(() => {
     const map = new Map<string, Project[]>();
     for (const p of filtered) {
       if (!map.has(p.status)) map.set(p.status, []);
       map.get(p.status)!.push(p);
     }
-    const known = PROJECT_STATUS_ORDER.filter((s) => map.has(s));
-    const rest = [...map.keys()].filter((s) => !(PROJECT_STATUS_ORDER as readonly string[]).includes(s)).sort();
-    return [...known, ...rest].map((status) => ({ status, items: map.get(status)! }));
-  }, [filtered]);
+    return orderedStatuses(statusOrder, [...map.keys()]).map((status) => ({ status, items: map.get(status)! }));
+  }, [filtered, statusOrder]);
+
+  async function saveLayout(next: { status_order?: string[]; collapsed_statuses?: string[] }) {
+    try {
+      await api.put('/projects/board-layout', next);
+    } catch (e) {
+      toast(e instanceof ApiError ? e.message : 'Failed to save your project board layout', true);
+    }
+  }
+
+  function toggleCollapsed(status: string) {
+    setCollapsed((prev) => {
+      const next = { ...prev, [status]: !prev[status] };
+      saveLayout({ collapsed_statuses: Object.keys(next).filter((s) => next[s]) });
+      return next;
+    });
+  }
+
+  function handleSectionDragEnd(event: DragEndEvent) {
+    const { active, over } = event;
+    if (!over || active.id === over.id) return;
+    const currentOrder = groups.map((g) => g.status);
+    const oldIndex = currentOrder.indexOf(active.id as string);
+    const newIndex = currentOrder.indexOf(over.id as string);
+    if (oldIndex === -1 || newIndex === -1) return;
+    const reordered = arrayMove(currentOrder, oldIndex, newIndex);
+    setStatusOrder(reordered);
+    saveLayout({ status_order: reordered });
+  }
 
   const activeCount = projects?.filter((p) => p.status === 'active').length ?? 0;
   const totalContractValue = projects?.reduce((s, p) => s + (p.contract_value || 0), 0) ?? 0;
@@ -142,18 +208,22 @@ export default function Projects() {
           <div className="empty-s">Create a project to get started.</div>
         </div>
       ) : (
-        groups.map(({ status, items }) => (
-          <div key={status} style={{ marginBottom: 20 }}>
-            <div className="sh">
-              <div className="st">
-                {projectStatusLabel(status)} ({items.length})
-              </div>
-            </div>
-            {items.map((p) => (
-              <ProjectCard key={p.id} project={p} onNavigate={() => navigate(`/projects/${p.id}`)} onStatusChange={handleStatusChange} />
+        <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleSectionDragEnd}>
+          <SortableContext items={groups.map((g) => g.status)} strategy={verticalListSortingStrategy}>
+            {groups.map(({ status, items }) => (
+              <ProjectStatusSection
+                key={status}
+                status={status}
+                items={items}
+                collapsed={!!collapsed[status]}
+                dragDisabled={filter !== 'all'}
+                onToggleCollapsed={() => toggleCollapsed(status)}
+                onNavigate={(id) => navigate(`/projects/${id}`)}
+                onStatusChange={handleStatusChange}
+              />
             ))}
-          </div>
-        ))
+          </SortableContext>
+        </DndContext>
       )}
 
       {showNew && (
@@ -167,6 +237,64 @@ export default function Projects() {
         />
       )}
     </>
+  );
+}
+
+function ProjectStatusSection({
+  status,
+  items,
+  collapsed,
+  dragDisabled,
+  onToggleCollapsed,
+  onNavigate,
+  onStatusChange,
+}: {
+  status: string;
+  items: Project[];
+  collapsed: boolean;
+  dragDisabled: boolean;
+  onToggleCollapsed: () => void;
+  onNavigate: (id: string) => void;
+  onStatusChange: (project: Project, newStatus: string) => void;
+}) {
+  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
+    id: status,
+    disabled: dragDisabled,
+  });
+
+  return (
+    <div
+      ref={setNodeRef}
+      style={{ marginBottom: 20, transform: CSS.Transform.toString(transform), transition, opacity: isDragging ? 0.5 : 1 }}
+    >
+      <div className="sh">
+        <div className="st" style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+          <button
+            type="button"
+            className="btn-reset"
+            {...(dragDisabled ? {} : attributes)}
+            {...(dragDisabled ? {} : listeners)}
+            style={{
+              display: 'flex',
+              cursor: dragDisabled ? 'not-allowed' : 'grab',
+              color: dragDisabled ? 'var(--border-md)' : 'var(--t3)',
+              touchAction: 'none',
+            }}
+            title={dragDisabled ? 'Clear the status filter to reorder sections' : 'Drag to reorder this section'}
+          >
+            <IconGripVertical size={14} />
+          </button>
+          <button type="button" className="btn-reset" onClick={onToggleCollapsed} style={{ display: 'flex', color: 'var(--t2)' }} title={collapsed ? 'Expand' : 'Minimize'}>
+            {collapsed ? <IconChevronRight size={16} /> : <IconChevronDown size={16} />}
+          </button>
+          {projectStatusLabel(status)} ({items.length})
+        </div>
+      </div>
+      {!collapsed &&
+        items.map((p) => (
+          <ProjectCard key={p.id} project={p} onNavigate={() => onNavigate(p.id)} onStatusChange={onStatusChange} />
+        ))}
+    </div>
   );
 }
 

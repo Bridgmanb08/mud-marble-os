@@ -487,6 +487,11 @@ export interface Project {
   sms_contacts: SmsContactBrief[];
 }
 
+export interface ProjectBoardLayout {
+  status_order: string[];
+  collapsed_statuses: string[];
+}
+
 export interface FinancialSummary {
   owner_price: number;
   builder_cost: number;
