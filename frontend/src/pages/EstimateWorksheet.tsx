@@ -12,6 +12,8 @@ import {
   IconTemplate,
   IconSparkles,
   IconX,
+  IconChevronDown,
+  IconChevronRight,
 } from '@tabler/icons-react';
 import { api, ApiError } from '../api/client';
 import { useToast } from '../components/ui/Toast';
@@ -49,6 +51,11 @@ export default function EstimateWorksheet() {
   const [items, setItems] = useState<EstimateLineItem[]>([]);
   const [siblings, setSiblings] = useState<Estimate[]>([]);
   const [showMore, setShowMore] = useState(false);
+  // Collapsed by default -- the closing text editor in particular is a
+  // tall, always-scrollable box full of boilerplate; left expanded, a mouse
+  // wheel scroll over it gets captured by the editor's own inner scroll
+  // instead of continuing down the page toward the worksheet below.
+  const [showTextFields, setShowTextFields] = useState(false);
   const [title, setTitle] = useState('');
   const [approvalDeadline, setApprovalDeadline] = useState('');
   const [notesInternal, setNotesInternal] = useState('');
@@ -369,14 +376,28 @@ export default function EstimateWorksheet() {
             style={{ maxWidth: 220 }}
           />
         </div>
-        <div className="fg">
-          <label className="fl">Introductory text</label>
-          <RichTextEditor value={introductoryText} onChange={setIntroductoryText} minHeight={100} />
-        </div>
-        <div className="fg">
-          <label className="fl">Closing text</label>
-          <RichTextEditor value={closingText} onChange={setClosingText} minHeight={220} />
-        </div>
+        <button
+          type="button"
+          className="btn-reset"
+          onClick={() => setShowTextFields((v) => !v)}
+          style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: showTextFields ? 8 : 14, color: 'var(--t2)', fontSize: 12.5, fontWeight: 500 }}
+        >
+          {showTextFields ? <IconChevronDown size={14} /> : <IconChevronRight size={14} />}
+          Introductory &amp; closing text
+          {!showTextFields && (introductoryText || closingText) && <span style={{ fontWeight: 400, color: 'var(--t3)' }}>(has content)</span>}
+        </button>
+        {showTextFields && (
+          <>
+            <div className="fg">
+              <label className="fl">Introductory text</label>
+              <RichTextEditor value={introductoryText} onChange={setIntroductoryText} minHeight={100} />
+            </div>
+            <div className="fg">
+              <label className="fl">Closing text</label>
+              <RichTextEditor value={closingText} onChange={setClosingText} minHeight={220} />
+            </div>
+          </>
+        )}
 
         <button type="button" className="btn btn-ghost btn-sm" style={{ marginBottom: 14 }} onClick={() => setShowMore((v) => !v)}>
           {showMore ? 'Hide' : 'Show'} internal notes
