@@ -7,6 +7,7 @@ import { MultiAssigneeInput } from './MultiAssigneeInput';
 import { ProjectPicker } from './ProjectPicker';
 import { openDatePicker } from '../../lib/datePicker';
 import { useReferenceData } from '../../reference-data/ReferenceDataContext';
+import { PROJECT_PHASES, projectPhaseLabel } from '../../lib/projectPhases';
 import type { Project, UserDirectoryEntry } from '../../types';
 
 interface NewTaskModalProps {
@@ -27,6 +28,7 @@ export function NewTaskModal({ onClose, onSaved, defaultStatus, defaultProjectId
   const [assignees, setAssignees] = useState<string[]>([]);
   const [subcontractorId, setSubcontractorId] = useState('');
   const [phase, setPhase] = useState('');
+  const [constructionPhase, setConstructionPhase] = useState('');
   const [status, setStatus] = useState(defaultStatus || 'upcoming');
   const [priority, setPriority] = useState('normal');
   const [scheduledStart, setScheduledStart] = useState('');
@@ -78,6 +80,7 @@ export function NewTaskModal({ onClose, onSaved, defaultStatus, defaultProjectId
       assignees,
       subcontractor_id: subcontractorId || null,
       phase: phase.trim() || null,
+      construction_phase: constructionPhase || null,
       status,
       priority,
       scheduled_start: scheduledStart || null,
@@ -148,6 +151,17 @@ export function NewTaskModal({ onClose, onSaved, defaultStatus, defaultProjectId
                 ))}
               </select>
             </div>
+          </div>
+          <div className="fg">
+            <label className="fl">Build phase</label>
+            <select className="fi" value={constructionPhase} onChange={(e) => setConstructionPhase(e.target.value)}>
+              <option value="">— Not tagged —</option>
+              {PROJECT_PHASES.map((p) => (
+                <option key={p} value={p}>
+                  {projectPhaseLabel(p)}
+                </option>
+              ))}
+            </select>
           </div>
         </div>
 

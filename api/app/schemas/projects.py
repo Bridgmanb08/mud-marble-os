@@ -46,6 +46,20 @@ class ProjectUpdate(BaseModel):
     checking_balance: Optional[float] = None
     credit_card_balance: Optional[float] = None
     pending_invoices_manual: Optional[float] = None
+    current_phase: Optional[str] = None
+    permit_structural_pulled: Optional[bool] = None
+    permit_structural_date: Optional[str] = None
+    permit_plumbing_pulled: Optional[bool] = None
+    permit_plumbing_date: Optional[str] = None
+    permit_electrical_pulled: Optional[bool] = None
+    permit_electrical_date: Optional[str] = None
+    permit_hvac_pulled: Optional[bool] = None
+    permit_hvac_date: Optional[str] = None
+    foundation_inspection_required: Optional[bool] = None
+    foundation_inspection_date: Optional[str] = None
+    dumpster_on_site: Optional[bool] = None
+    dumpster_size: Optional[str] = None
+    dumpster_supplier: Optional[str] = None
 
     @model_validator(mode="after")
     def _validate_dates(self):
@@ -83,6 +97,20 @@ class ProjectOut(BaseModel):
     checking_balance: Optional[float] = None
     credit_card_balance: Optional[float] = None
     pending_invoices_manual: Optional[float] = None
+    current_phase: Optional[str] = None
+    permit_structural_pulled: bool = False
+    permit_structural_date: Optional[str] = None
+    permit_plumbing_pulled: bool = False
+    permit_plumbing_date: Optional[str] = None
+    permit_electrical_pulled: bool = False
+    permit_electrical_date: Optional[str] = None
+    permit_hvac_pulled: bool = False
+    permit_hvac_date: Optional[str] = None
+    foundation_inspection_required: bool = False
+    foundation_inspection_date: Optional[str] = None
+    dumpster_on_site: bool = False
+    dumpster_size: Optional[str] = None
+    dumpster_supplier: Optional[str] = None
     created_at: str
     clients: Optional[ClientBrief] = None
     sms_contacts: list[SmsContactBrief] = []
@@ -147,3 +175,17 @@ class ProjectBoardLayoutOut(BaseModel):
 class ProjectBoardLayoutUpdate(BaseModel):
     status_order: Optional[list[str]] = None
     collapsed_statuses: Optional[list[str]] = None
+
+
+class PhaseProgressRow(BaseModel):
+    phase: str
+    task_count: int = 0
+    has_overdue: bool = False
+    all_complete: bool = False
+    earliest_start: Optional[str] = None
+    latest_end: Optional[str] = None
+
+
+class PhaseProgressOut(BaseModel):
+    current_phase: Optional[str] = None
+    phases: list[PhaseProgressRow] = []
