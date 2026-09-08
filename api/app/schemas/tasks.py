@@ -12,6 +12,12 @@ class TaskCreate(BaseModel):
     assignees: list[str] = []
     subcontractor_id: Optional[str] = None
     phase: Optional[str] = None
+    # Which fixed construction phase (Demo, Framing, etc. -- see
+    # api/app/project_phases.py) this task belongs to, for the project's
+    # phase tracker. Distinct from `phase` above, which is an unrelated,
+    # pre-existing free-text label populated from cost codes in the task
+    # form today (e.g. "12.15 - Cabinets Install Labor").
+    construction_phase: Optional[str] = None
     status: str = "upcoming"
     priority: str = "normal"
     scheduled_start: Optional[str] = None
@@ -33,6 +39,7 @@ class TaskUpdate(BaseModel):
     assignees: Optional[list[str]] = None
     subcontractor_id: Optional[str] = None
     phase: Optional[str] = None
+    construction_phase: Optional[str] = None
     status: Optional[str] = None
     priority: Optional[str] = None
     scheduled_start: Optional[str] = None
@@ -72,6 +79,7 @@ class TaskOut(BaseModel):
     assignees: list[str] = []
     subcontractor_id: Optional[str] = None
     phase: Optional[str] = None
+    construction_phase: Optional[str] = None
     status: str
     priority: str = "normal"
     position: int = 0

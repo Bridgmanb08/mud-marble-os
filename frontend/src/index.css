@@ -2,6 +2,7 @@
 @import './styles/week-calendar.css';
 @import './styles/job-colors.css';
 @import './styles/team-reminders.css';
+@import './styles/project-phase-tracker.css';
 
 :root{
   --bg:#F5F1E8;--surface:#FFF;--border:#E6DFCF;--border-md:#D6CBB0;

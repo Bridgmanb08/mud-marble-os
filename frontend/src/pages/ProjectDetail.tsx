@@ -17,6 +17,9 @@ import { KanbanBoard } from '../components/tasks/KanbanBoard';
 import { FilesTab } from '../components/projects/FilesTab';
 import { WeekScrollCalendar } from '../components/schedule/WeekScrollCalendar';
 import { FathomImportWidget } from '../components/projects/FathomImportWidget';
+import { PhaseTracker } from '../components/projects/PhaseTracker';
+import { PermitsChecklist } from '../components/projects/PermitsChecklist';
+import { DumpsterCard } from '../components/projects/DumpsterCard';
 
 const TABS = ['Overview', 'Notes', 'Estimate', 'Budget', 'Change Orders', 'Invoices', 'Tasks', 'Schedule', 'Files'];
 
@@ -289,6 +292,27 @@ export default function ProjectDetail() {
           <div className="ibt" style={{ fontSize: 13, textTransform: 'none', letterSpacing: 0, border: 'none', padding: 0, marginBottom: 14 }}>
             Overview
           </div>
+
+          <div className="card" style={{ padding: 16, marginBottom: 20 }}>
+            <div className="ibt" style={{ margin: '0 0 4px' }}>Phase</div>
+            <PhaseTracker
+              projectId={project.id}
+              currentPhase={project.current_phase}
+              onPhaseChange={(phase) => setProject((p) => (p ? { ...p, current_phase: phase } : p))}
+            />
+          </div>
+
+          <div className="fr" style={{ marginBottom: 20, alignItems: 'flex-start' }}>
+            <div className="card" style={{ padding: 16, flex: 1 }}>
+              <div className="ibt" style={{ margin: '0 0 10px' }}>Permits</div>
+              <PermitsChecklist project={project} onSaved={setProject} />
+            </div>
+            <div className="card" style={{ padding: 16, flex: 1 }}>
+              <div className="ibt" style={{ margin: '0 0 10px' }}>Dumpster</div>
+              <DumpsterCard project={project} onSaved={setProject} />
+            </div>
+          </div>
+
           <div className="ig">
             <div>
               <div className="ibt">Project details</div>

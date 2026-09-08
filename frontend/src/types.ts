@@ -43,6 +43,10 @@ export interface Task {
   assignees: string[];
   subcontractor_id: string | null;
   phase: string | null;
+  // Which fixed construction phase (see lib/projectPhases.ts) this task
+  // belongs to, for the project's phase tracker -- distinct from `phase`
+  // above (an unrelated, pre-existing free-text label from cost codes).
+  construction_phase: string | null;
   status: string;
   priority: string;
   position: number;
@@ -482,9 +486,37 @@ export interface Project {
   checking_balance: number | null;
   credit_card_balance: number | null;
   pending_invoices_manual: number | null;
+  current_phase: string | null;
+  permit_structural_pulled: boolean;
+  permit_structural_date: string | null;
+  permit_plumbing_pulled: boolean;
+  permit_plumbing_date: string | null;
+  permit_electrical_pulled: boolean;
+  permit_electrical_date: string | null;
+  permit_hvac_pulled: boolean;
+  permit_hvac_date: string | null;
+  foundation_inspection_required: boolean;
+  foundation_inspection_date: string | null;
+  dumpster_on_site: boolean;
+  dumpster_size: string | null;
+  dumpster_supplier: string | null;
   created_at: string;
   clients: ClientBrief | null;
   sms_contacts: SmsContactBrief[];
+}
+
+export interface PhaseProgressRow {
+  phase: string;
+  task_count: number;
+  has_overdue: boolean;
+  all_complete: boolean;
+  earliest_start: string | null;
+  latest_end: string | null;
+}
+
+export interface ProjectPhaseProgress {
+  current_phase: string | null;
+  phases: PhaseProgressRow[];
 }
 
 export interface ProjectBoardLayout {

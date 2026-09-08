@@ -1,14 +1,18 @@
+from datetime import date
 from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException
 
 from ..deps import CurrentUser, get_current_user
 from ..mentions import create_mention_notifications
+from ..project_phases import PROJECT_PHASES
 from ..schemas.invoices import EstimateItemForInvoiceOut
 from ..schemas.projects import (
     CostCodeVarianceOut,
     CostCodeVarianceRow,
     FinancialSummaryOut,
+    PhaseProgressOut,
+    PhaseProgressRow,
     ProjectBoardLayoutOut,
     ProjectBoardLayoutUpdate,
     ProjectCreate,
@@ -102,6 +106,54 @@ async def update_project(project_id: str, body: ProjectUpdate, _: CurrentUser = 
     await db_patch("projects", project_id, body.model_dump(exclude_unset=True))
     full = await db_get("projects", f"?id=eq.{project_id}&select=*,clients(id,first_name,last_name,preferred_contact_method,is_advocate,is_repeat_client,notes),sms_contacts(id,phone_number,name)")
     return full[0]
+
+
+@router.get("/{project_id}/phase-progress", response_model=PhaseProgressOut)
+async def get_phase_progress(project_id: str, _: CurrentUser = Depends(get_current_user)):
+    projects = await db_get("projects", f"?id=eq.{project_id}&select=current_phase")
+    if not projects:
+        raise HTTPException(status_code=404, detail="Project not found")
+
+    # Every scheduled task for this project that's tagged with a
+    # construction_phase -- the fixed source of truth the phase tracker
+    # reasons over, not a separately-maintained target date. A task with no
+    # construction_phase set (most existing tasks, until this feature gets
+    # used) simply isn't counted against any phase.
+    tasks = await db_get(
+        "schedule_items",
+        f"?project_id=eq.{project_id}&construction_phase=not.is.null&select=construction_phase,status,scheduled_start,scheduled_end",
+    )
+    by_phase: dict[str, list[dict]] = {}
+    for t in tasks:
+        by_phase.setdefault(t["construction_phase"], []).append(t)
+
+    today = date.today().isoformat()
+    rows = []
+    for phase in PROJECT_PHASES:
+        phase_tasks = by_phase.get(phase, [])
+        starts = [t["scheduled_start"] for t in phase_tasks if t.get("scheduled_start")]
+        ends = [t["scheduled_end"] for t in phase_tasks if t.get("scheduled_end")]
+        # "Behind schedule" per the real Schedule tab data: any task tagged
+        # to this phase whose end date has passed without being marked
+        # complete -- the same overdue definition the Task Board itself
+        # already uses, just scoped to one phase's tasks instead of all of
+        # them, so the alert can say WHICH phase is stuck.
+        has_overdue = any(
+            t.get("scheduled_end") and t["scheduled_end"] < today and t.get("status") != "complete"
+            for t in phase_tasks
+        )
+        all_complete = bool(phase_tasks) and all(t.get("status") == "complete" for t in phase_tasks)
+        rows.append(
+            PhaseProgressRow(
+                phase=phase,
+                task_count=len(phase_tasks),
+                has_overdue=has_overdue,
+                all_complete=all_complete,
+                earliest_start=min(starts) if starts else None,
+                latest_end=max(ends) if ends else None,
+            )
+        )
+    return PhaseProgressOut(current_phase=projects[0].get("current_phase"), phases=rows)
 
 
 @router.get("/{project_id}/financial-summary", response_model=FinancialSummaryOut)

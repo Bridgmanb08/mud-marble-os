@@ -13,6 +13,7 @@ import { openDatePicker } from '../../lib/datePicker';
 import { useReferenceData } from '../../reference-data/ReferenceDataContext';
 import { colorForPerson, initialsForPerson } from '../../lib/personColor';
 import { markCommentsSeen } from '../../lib/commentSeen';
+import { PROJECT_PHASES, projectPhaseLabel } from '../../lib/projectPhases';
 import type { Project, Task, TaskComment, TaskDependency, TaskSubtask, UserDirectoryEntry } from '../../types';
 
 // Small, fixed set -- iMessage-tapback style, not a full picker -- kept
@@ -196,6 +197,7 @@ export function TaskDetailDrawer({ task, allTasks, onClose, onSaved, onDeleted, 
   // don't send a now-stale expected_version and get rejected with a 409.
   const [currentVersion, setCurrentVersion] = useState(task.version);
   const [phase, setPhase] = useState(task.phase || '');
+  const [constructionPhase, setConstructionPhase] = useState(task.construction_phase || '');
   const [status, setStatus] = useState(task.status);
   const [priority, setPriority] = useState(task.priority);
   const [scheduledStart, setScheduledStart] = useState(task.scheduled_start?.slice(0, 10) || '');
@@ -299,6 +301,7 @@ export function TaskDetailDrawer({ task, allTasks, onClose, onSaved, onDeleted, 
         assignees,
         subcontractor_id: subcontractorId || null,
         phase: phase.trim() || null,
+        construction_phase: constructionPhase || null,
         status,
         priority,
         scheduled_start: scheduledStart || null,
@@ -525,6 +528,17 @@ export function TaskDetailDrawer({ task, allTasks, onClose, onSaved, onDeleted, 
               ))}
             </select>
           </div>
+        </div>
+        <div className="fg">
+          <label className="fl">Build phase</label>
+          <select className="fi" value={constructionPhase} onChange={(e) => setConstructionPhase(e.target.value)}>
+            <option value="">— Not tagged —</option>
+            {PROJECT_PHASES.map((p) => (
+              <option key={p} value={p}>
+                {projectPhaseLabel(p)}
+              </option>
+            ))}
+          </select>
         </div>
         <div className="fr">
           <div className="fg">
