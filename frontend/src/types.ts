@@ -234,6 +234,7 @@ export interface Estimate {
   grand_total_owner_price: number | null;
   construction_total_owner_price: number | null;
   allowance_total: number | null;
+  is_archived: boolean | null;
   created_at: string;
   projects?: ProjectBrief;
 }
