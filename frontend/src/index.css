@@ -151,7 +151,12 @@ body{font-family:var(--font);background:var(--bg);color:var(--text);font-size:14
 .confidence-fill{height:100%;background:var(--border-md);border-radius:3px;}
 
 /* Project / lead / client cards */
-.pc{background:var(--surface);border:1px solid var(--border);border-radius:var(--rl);padding:14px 18px;cursor:pointer;display:flex;align-items:center;gap:14px;transition:border-color .1s;margin-bottom:6px;}
+/* .pc only (Projects.tsx) gets a max-width -- on a wide monitor the row
+   otherwise stretches edge-to-edge, leaving a huge gap between the address
+   on the left and the status badge on the right that makes it hard to
+   tell which row you're actually looking at. .cc/.lc (clients/leads) are
+   left alone since this was reported specifically for Projects. */
+.pc{background:var(--surface);border:1px solid var(--border);border-radius:var(--rl);padding:14px 18px;cursor:pointer;display:flex;align-items:center;gap:14px;transition:border-color .1s;margin-bottom:6px;max-width:640px;}
 .pc:hover{border-color:var(--border-md);}
 .pi{flex:1;min-width:0;}
 .pn{font-size:13px;font-weight:500;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
