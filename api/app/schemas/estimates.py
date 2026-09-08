@@ -31,10 +31,11 @@ class EstimateUpdate(BaseModel):
     introductory_text: Optional[str] = None
     closing_text: Optional[str] = None
     sent_at: Optional[str] = None
+    is_archived: Optional[bool] = None
 
     @model_validator(mode="after")
     def _validate_no_null_required(self):
-        forbid_null(self, {"status"})
+        forbid_null(self, {"status", "is_archived"})
         return self
 
 
@@ -54,6 +55,7 @@ class EstimateOut(BaseModel):
     grand_total_owner_price: Optional[float] = None
     construction_total_owner_price: Optional[float] = None
     allowance_total: Optional[float] = None
+    is_archived: Optional[bool] = None
     created_at: str
     projects: Optional[ProjectBrief] = None
 

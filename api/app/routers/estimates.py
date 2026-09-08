@@ -28,7 +28,7 @@ from ..schemas.estimates import (
     LineItemReference,
     LineItemUpdate,
 )
-from ..supabase_client import db_delete, db_get, db_patch, db_post, db_post_many
+from ..supabase_client import db_delete, db_delete_query, db_get, db_patch, db_post, db_post_many
 
 router = APIRouter(prefix="/estimates", tags=["estimates"])
 
@@ -214,6 +214,34 @@ async def update_estimate(estimate_id: str, body: EstimateUpdate, _: CurrentUser
         await db_patch("projects", estimate["project_id"], {"contract_value": new_contract_value})
 
     return estimate
+
+
+@router.delete("/{estimate_id}")
+async def delete_estimate(estimate_id: str, _: CurrentUser = Depends(get_current_user)):
+    existing = await db_get("estimates", f"?id=eq.{estimate_id}&select=id")
+    if not existing:
+        raise HTTPException(status_code=404, detail="Estimate not found")
+
+    items = await db_get("estimate_line_items", f"?estimate_id=eq.{estimate_id}&select=id")
+    item_ids = [i["id"] for i in items]
+    if item_ids:
+        # A line item that's already been invoiced against is real financial
+        # history, not draft clutter -- deleting the estimate out from under
+        # it would orphan the invoice's line reference and its "remaining to
+        # invoice" math with no way to trace what it was ever billed against.
+        # Archiving (is_archived) is the safe alternative for a version like
+        # that; this only blocks a hard delete, never an archive.
+        id_filter = ",".join(item_ids)
+        invoiced = await db_get("invoice_line_items", f"?source_line_item_id=in.({id_filter})&select=id&limit=1")
+        if invoiced:
+            raise HTTPException(
+                status_code=400,
+                detail="Can't delete this estimate -- one or more of its line items has already been invoiced. Archive it instead to hide it without losing that history.",
+            )
+        await db_delete_query("estimate_line_items", f"?estimate_id=eq.{estimate_id}")
+
+    await db_delete("estimates", estimate_id)
+    return {"ok": True}
 
 
 @router.post("/{estimate_id}/duplicate", response_model=EstimateOut)
