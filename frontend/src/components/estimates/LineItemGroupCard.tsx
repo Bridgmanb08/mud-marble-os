@@ -220,7 +220,16 @@ export function LineItemGroupCard<T extends LineItemLike>({
         </div>
         {!collapsed && (
         <div className="tbl-scroll">
-          <table className="tbl tbl-sticky-head">
+          {/* Not tbl-sticky-head -- that sticks each table's <thead> to the
+              page's own scroll (top: var(--tb)), which works for a single
+              long table elsewhere in the app but breaks down badly here:
+              this page stacks one small table PER GROUP, so every group's
+              header independently tries to pin itself at the same on-screen
+              position while scrolling, and whichever one wins ends up
+              floating on top of a completely different group's rows
+              underneath it -- exactly the "can't read the numbers" bug
+              this comment is here to prevent someone reintroducing. */}
+          <table className="tbl">
             <thead>
               <tr>
                 <th style={{ width: 24 }} />
