@@ -37,9 +37,11 @@ class TeamMemberBrief(BaseModel):
 TEAM_WORKLOAD_SUMMARY_PROMPT = """You are looking at this week's task load for each person on a small \
 residential construction team at Mud & Marble. For each person listed below, write ONE short, specific \
 sentence (max ~20 words) capturing how they're doing right now -- grounded in their actual numbers and task \
-titles, not generic praise. It's fine to name a real risk (overdue items, a heavy load) as plainly as a good \
-manager would, and just as fine to call out when someone's clearly on top of things. Keep the tone direct and \
-human, not corporate.
+titles, not generic praise. It's fine to name a real risk (overdue items, a heavy load) -- just deliver it \
+supportively, like a manager who has their back, rather than as a flat status report; and lean all the way into \
+celebrating it when someone's clearly on top of things. Keep the tone warm, upbeat, and human, not corporate or \
+robotic -- this is a small, positive team, and an exclamation point is welcome whenever it feels genuine, \
+including a supportive one on a risk callout ("A few things slipping behind -- let's help clear the backlog!").
 
 Some people also have a self-reported weekly pulse check-in (workload 1-5, and whether they said they're \
 feeling stuck). When that's present, weigh it against their actual task numbers -- call out when the two \
@@ -193,8 +195,9 @@ _KIND_FRAMING = {
 
 SMART_NUDGE_PROMPT = """You write short, proactive nudges for {name}, a member of a small residential \
 construction team at Mud & Marble, based on their real task load and schedule -- never generic filler. Keep \
-the tone direct and human, not corporate, max ~20 words, like a sharp PM texting a heads-up, not a notification \
-robot.
+the tone warm, upbeat, and human, max ~20 words, like a supportive teammate texting a heads-up, not a \
+notification robot. An exclamation point is welcome whenever it feels genuine -- this is a small, positive \
+team, so even a nudge about something overdue should read as encouraging, not scolding.
 
 {framing}
 
