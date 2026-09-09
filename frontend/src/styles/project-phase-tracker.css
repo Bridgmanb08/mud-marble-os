@@ -17,6 +17,18 @@
 
 .phase-label{font-size:10.5px;color:var(--t2);margin-top:6px;text-align:center;line-height:1.25;max-width:76px;}
 .phase-segment.current .phase-label{color:var(--text);font-weight:600;}
+.phase-dates{font-size:9px;color:var(--t3);margin-top:2px;text-align:center;white-space:nowrap;}
+
+/* A dashed "+" sitting on the connector line between two phase bubbles --
+   hidden until the segment is hovered, so the tracker stays clean by
+   default. Clicking it inserts a one-off custom phase right there. */
+.phase-insert-btn{
+  position:absolute;top:10px;left:0;transform:translate(-50%,-50%);width:16px;height:16px;border-radius:50%;
+  border:1px dashed var(--border-md);background:var(--surface);color:var(--t3);display:flex;align-items:center;
+  justify-content:center;cursor:pointer;padding:0;z-index:3;opacity:0;transition:opacity .12s,border-color .12s,color .12s;
+}
+.phase-segment:hover .phase-insert-btn,.phase-insert-btn:focus-visible{opacity:1;}
+.phase-insert-btn:hover{border-color:var(--accent);color:var(--accent);background:var(--brand-cream);}
 
 .phase-badge{
   position:absolute;top:-3px;right:calc(50% - 22px);width:15px;height:15px;border-radius:50%;

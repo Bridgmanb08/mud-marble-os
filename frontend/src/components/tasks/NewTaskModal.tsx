@@ -7,7 +7,7 @@ import { MultiAssigneeInput } from './MultiAssigneeInput';
 import { ProjectPicker } from './ProjectPicker';
 import { openDatePicker } from '../../lib/datePicker';
 import { useReferenceData } from '../../reference-data/ReferenceDataContext';
-import { PROJECT_PHASES, projectPhaseLabel } from '../../lib/projectPhases';
+import { mergeCustomPhases } from '../../lib/projectPhases';
 import type { Project, UserDirectoryEntry } from '../../types';
 
 interface NewTaskModalProps {
@@ -61,6 +61,16 @@ export function NewTaskModal({ onClose, onSaved, defaultStatus, defaultProjectId
     api.get<Project[]>('/projects').then(setProjects).catch(() => {});
     api.get<UserDirectoryEntry[]>('/users/directory').then(setDirectory).catch(() => {});
   }, []);
+
+  // The selected project's own custom phases (if any -- see PhaseTracker's
+  // "insert a phase between two bubbles" feature) get folded into this
+  // dropdown's options, in the right position, so tagging a task matches
+  // exactly what that project's own phase tracker shows.
+  const selectedProject = projects.find((p) => p.id === projectId);
+  const { keys: phaseKeys, labels: phaseLabels } = useMemo(
+    () => mergeCustomPhases(selectedProject?.custom_phases),
+    [selectedProject]
+  );
 
   async function handleSubmit(e: FormEvent) {
     e.preventDefault();
@@ -156,9 +166,9 @@ export function NewTaskModal({ onClose, onSaved, defaultStatus, defaultProjectId
             <label className="fl">Build phase</label>
             <select className="fi" value={constructionPhase} onChange={(e) => setConstructionPhase(e.target.value)}>
               <option value="">— Not tagged —</option>
-              {PROJECT_PHASES.map((p) => (
+              {phaseKeys.map((p) => (
                 <option key={p} value={p}>
-                  {projectPhaseLabel(p)}
+                  {phaseLabels[p]}
                 </option>
               ))}
             </select>

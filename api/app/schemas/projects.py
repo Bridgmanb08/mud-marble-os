@@ -67,6 +67,17 @@ class ProjectUpdate(BaseModel):
         return self
 
 
+class CustomPhase(BaseModel):
+    key: str
+    label: str
+    after: str
+
+
+class CustomPhaseCreate(BaseModel):
+    label: str
+    after: str
+
+
 class ClientBrief(BaseModel):
     id: str
     first_name: Optional[str] = None
@@ -111,6 +122,7 @@ class ProjectOut(BaseModel):
     dumpster_on_site: bool = False
     dumpster_size: Optional[str] = None
     dumpster_supplier: Optional[str] = None
+    custom_phases: list[CustomPhase] = []
     created_at: str
     clients: Optional[ClientBrief] = None
     sms_contacts: list[SmsContactBrief] = []

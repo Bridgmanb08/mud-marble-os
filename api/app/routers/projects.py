@@ -1,3 +1,4 @@
+import re
 from datetime import date
 from typing import Optional
 
@@ -5,11 +6,12 @@ from fastapi import APIRouter, Depends, HTTPException
 
 from ..deps import CurrentUser, get_current_user
 from ..mentions import create_mention_notifications
-from ..project_phases import PROJECT_PHASES
+from ..project_phases import merge_custom_phases
 from ..schemas.invoices import EstimateItemForInvoiceOut
 from ..schemas.projects import (
     CostCodeVarianceOut,
     CostCodeVarianceRow,
+    CustomPhaseCreate,
     FinancialSummaryOut,
     PhaseProgressOut,
     PhaseProgressRow,
@@ -110,9 +112,10 @@ async def update_project(project_id: str, body: ProjectUpdate, _: CurrentUser = 
 
 @router.get("/{project_id}/phase-progress", response_model=PhaseProgressOut)
 async def get_phase_progress(project_id: str, _: CurrentUser = Depends(get_current_user)):
-    projects = await db_get("projects", f"?id=eq.{project_id}&select=current_phase")
+    projects = await db_get("projects", f"?id=eq.{project_id}&select=current_phase,custom_phases")
     if not projects:
         raise HTTPException(status_code=404, detail="Project not found")
+    phase_keys, _ = merge_custom_phases(projects[0].get("custom_phases") or [])
 
     # Every scheduled task for this project that's tagged with a
     # construction_phase -- the fixed source of truth the phase tracker
@@ -129,7 +132,7 @@ async def get_phase_progress(project_id: str, _: CurrentUser = Depends(get_curre
 
     today = date.today().isoformat()
     rows = []
-    for phase in PROJECT_PHASES:
+    for phase in phase_keys:
         phase_tasks = by_phase.get(phase, [])
         starts = [t["scheduled_start"] for t in phase_tasks if t.get("scheduled_start")]
         ends = [t["scheduled_end"] for t in phase_tasks if t.get("scheduled_end")]
@@ -154,6 +157,38 @@ async def get_phase_progress(project_id: str, _: CurrentUser = Depends(get_curre
             )
         )
     return PhaseProgressOut(current_phase=projects[0].get("current_phase"), phases=rows)
+
+
+def _slugify_phase_key(label: str, existing_keys: list[str]) -> str:
+    base = re.sub(r"[^a-z0-9]+", "_", label.strip().lower()).strip("_") or "phase"
+    key = base
+    n = 2
+    while key in existing_keys:
+        key = f"{base}_{n}"
+        n += 1
+    return key
+
+
+@router.post("/{project_id}/custom-phases", response_model=ProjectOut)
+async def add_custom_phase(project_id: str, body: CustomPhaseCreate, _: CurrentUser = Depends(get_current_user)):
+    """Inserts one one-off custom phase (e.g. "Roof") into this project's phase
+    tracker, right after `body.after` -- appended to the project's own
+    custom_phases delta list, never touching the app-wide default (see
+    project_phases.merge_custom_phases and the migration's comment)."""
+    projects = await db_get("projects", f"?id=eq.{project_id}&select=custom_phases")
+    if not projects:
+        raise HTTPException(status_code=404, detail="Project not found")
+    custom_phases = projects[0].get("custom_phases") or []
+    existing_keys, _ = merge_custom_phases(custom_phases)
+    if body.after not in existing_keys:
+        raise HTTPException(status_code=400, detail="Unknown anchor phase")
+    if not body.label.strip():
+        raise HTTPException(status_code=400, detail="Phase name is required")
+    key = _slugify_phase_key(body.label, existing_keys)
+    updated_custom_phases = custom_phases + [{"key": key, "label": body.label.strip(), "after": body.after}]
+    await db_patch("projects", project_id, {"custom_phases": updated_custom_phases})
+    full = await db_get("projects", f"?id=eq.{project_id}&select=*,clients(id,first_name,last_name,preferred_contact_method,is_advocate,is_repeat_client,notes),sms_contacts(id,phone_number,name)")
+    return full[0]
 
 
 @router.get("/{project_id}/financial-summary", response_model=FinancialSummaryOut)
