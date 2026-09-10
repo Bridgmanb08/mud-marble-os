@@ -3,6 +3,7 @@ import { Routes, Route } from 'react-router-dom';
 import { AuthProvider } from './auth/AuthContext';
 import { ToastProvider } from './components/ui/Toast';
 import { AppLayout } from './components/layout/AppLayout';
+import { ScrollToTop } from './components/layout/ScrollToTop';
 import { ProtectedRoute } from './components/layout/ProtectedRoute';
 import { ReferenceDataProvider } from './reference-data/ReferenceDataContext';
 import { AdminRoute } from './components/layout/AdminRoute';
@@ -50,6 +51,7 @@ export default function App() {
     <AuthProvider>
       <ToastProvider>
         <Suspense fallback={<PageLoader />}>
+          <ScrollToTop />
           <Routes>
             <Route path="/login" element={<Login />} />
             <Route

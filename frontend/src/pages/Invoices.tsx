@@ -1,11 +1,12 @@
 import { useEffect, useMemo, useState } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
+import { useNavigate } from 'react-router-dom';
 import { IconPlus, IconReceipt } from '@tabler/icons-react';
-import { api } from '../api/client';
+import { api, ApiError } from '../api/client';
 import { useToast } from '../components/ui/Toast';
 import { fmt, fmtD } from '../lib/format';
 import type { Invoice } from '../types';
 import { NewInvoiceModal } from '../components/invoices/NewInvoiceModal';
+import { InvoiceRowMenu } from '../components/invoices/InvoiceRowMenu';
 
 const STATUS_BADGE: Record<string, string> = {
   draft: 'bg-gray',
@@ -38,6 +39,26 @@ export default function Invoices() {
     load();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  async function renameInvoice(invoiceId: string, newNumber: string) {
+    try {
+      await api.patch(`/invoices/${invoiceId}`, { invoice_number: newNumber || null });
+      load();
+    } catch (e) {
+      toast(e instanceof ApiError ? e.message : 'Failed to rename invoice', true);
+    }
+  }
+
+  async function deleteInvoice(inv: Invoice) {
+    if (!window.confirm(`Permanently delete invoice ${inv.invoice_number || 'Draft'}? This can't be undone.`)) return;
+    try {
+      await api.delete(`/invoices/${inv.id}`);
+      toast('Invoice deleted');
+      load();
+    } catch (e) {
+      toast(e instanceof ApiError ? e.message : 'Failed to delete invoice', true);
+    }
+  }
 
   const filtered = useMemo(() => {
     if (!invoices) return [];
@@ -108,7 +129,12 @@ export default function Invoices() {
         </div>
       ) : (
         filtered.map((i) => (
-          <Link key={i.id} to={`/invoices/${i.id}`} className="invr" style={{ textDecoration: 'none', color: 'inherit' }}>
+          <div
+            key={i.id}
+            className="invr"
+            style={{ cursor: 'pointer' }}
+            onClick={() => navigate(`/invoices/${i.id}`)}
+          >
             <div style={{ flex: 1, minWidth: 0 }}>
               <div style={{ fontSize: 13, fontWeight: 500, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
                 {i.invoice_number || 'Draft'} <span style={{ color: 'var(--t2)', fontWeight: 400 }}>· {i.projects?.name || ''}</span>
@@ -120,8 +146,13 @@ export default function Invoices() {
             <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexShrink: 0 }}>
               <span style={{ fontSize: 14, fontWeight: 600 }}>{fmt(i.amount_due)}</span>
               <span className={`badge ${STATUS_BADGE[i.status] || 'bg-gray'}`}>{i.status}</span>
+              <InvoiceRowMenu
+                invoiceNumber={i.invoice_number}
+                onRename={(newNumber) => renameInvoice(i.id, newNumber)}
+                onDelete={() => deleteInvoice(i)}
+              />
             </div>
-          </Link>
+          </div>
         ))
       )}
 
