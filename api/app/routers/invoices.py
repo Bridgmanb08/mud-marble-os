@@ -1,9 +1,17 @@
+import io
 from datetime import date
 from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException
+from fastapi.responses import Response
+from reportlab.lib import colors
+from reportlab.lib.pagesizes import letter
+from reportlab.lib.units import inch
+from reportlab.platypus import HRFlowable, Paragraph, SimpleDocTemplate, Spacer, Table, TableStyle
 
+from .. import branding
 from ..deps import CurrentUser, get_current_user
+from ..pdf_export import NumberedCanvas, SIDE_MARGIN, breadcrumb_for, build_letterhead, build_styles, fmt_pdf_date, xml_escape
 from ..schemas.invoices import (
     InvoiceCreate,
     InvoiceLineItemBulkCreate,
@@ -283,3 +291,115 @@ async def delete_invoice_item(invoice_id: str, item_id: str, _: CurrentUser = De
     await db_delete("invoice_line_items", item_id)
     await _recalc_invoice_total(invoice_id)
     return {"ok": True}
+
+
+@router.get("/{invoice_id}/export/pdf")
+async def export_invoice_pdf(invoice_id: str, _: CurrentUser = Depends(get_current_user)):
+    rows = await db_get("invoices", f"?id=eq.{invoice_id}&select=*,projects(name,clients(first_name,last_name))")
+    if not rows:
+        raise HTTPException(status_code=404, detail="Invoice not found")
+    invoice = rows[0]
+    items = await db_get(
+        "invoice_line_items", f"?invoice_id=eq.{invoice_id}&order=sort_order.asc&select=*,cost_codes(code,name)"
+    )
+    project = invoice.get("projects") or {}
+    breadcrumb = breadcrumb_for(project)
+    project_name = (project.get("name") or "").split("|")[0].strip()
+
+    buf = io.BytesIO()
+    doc = SimpleDocTemplate(
+        buf, pagesize=letter, topMargin=0.5 * inch, bottomMargin=0.5 * inch, leftMargin=SIDE_MARGIN, rightMargin=SIDE_MARGIN
+    )
+    PAGE_WIDTH = letter[0] - 2 * SIDE_MARGIN
+    s = build_styles()
+
+    elements = build_letterhead(s, PAGE_WIDTH, breadcrumb)
+    elements.append(Paragraph(f"Invoice {xml_escape(invoice.get('invoice_number') or 'Draft')}", s["title"]))
+    elements.append(HRFlowable(width="100%", thickness=0.75, color=colors.lightgrey, spaceAfter=10))
+
+    # A 2x2 label/value grid -- type/status left, issued/due right -- same
+    # "quick facts up top" shape as the estimate PDF's breadcrumb row, just
+    # more of them since an invoice has more state worth showing at a glance.
+    info_table = Table(
+        [
+            [
+                Paragraph("TYPE", s["label"]), Paragraph("STATUS", s["label"]),
+                Paragraph("ISSUED", s["label"]), Paragraph("DUE", s["label"]),
+            ],
+            [
+                Paragraph(xml_escape((invoice.get("invoice_type") or "").title()), s["value"]),
+                Paragraph(xml_escape((invoice.get("status") or "").title()), s["value"]),
+                Paragraph(fmt_pdf_date(invoice.get("issued_at")), s["value"]),
+                Paragraph(fmt_pdf_date(invoice.get("due_date")), s["value"]),
+            ],
+        ],
+        colWidths=[PAGE_WIDTH * 0.25] * 4,
+    )
+    info_table.setStyle(TableStyle([
+        ("LEFTPADDING", (0, 0), (-1, -1), 0), ("RIGHTPADDING", (0, 0), (-1, -1), 0),
+        ("TOPPADDING", (0, 0), (-1, -1), 0), ("BOTTOMPADDING", (0, 0), (0, 0), 2),
+    ]))
+    elements.append(info_table)
+    elements.append(Spacer(1, 6))
+
+    if invoice.get("notes_external"):
+        elements.append(Paragraph(xml_escape(invoice["notes_external"]), s["body"]))
+        elements.append(Spacer(1, 10))
+
+    if items:
+        # Cost codes are internal categorization, same call as the estimate
+        # export -- not shown on a client-facing invoice.
+        item_col = PAGE_WIDTH * 0.30
+        desc_col = PAGE_WIDTH * 0.50
+        amount_col = PAGE_WIDTH - item_col - desc_col
+        table_data = [[Paragraph("Item", s["th"]), Paragraph("Description", s["th"]), Paragraph("Amount", s["th_right"])]]
+        for it in items:
+            table_data.append([
+                Paragraph(xml_escape(it.get("title") or ""), s["cell"]),
+                Paragraph(xml_escape(it.get("description") or ""), s["cell"]),
+                Paragraph(f"${(it.get('amount') or 0):,.2f}", s["cell_right"]),
+            ])
+        t = Table(table_data, colWidths=[item_col, desc_col, amount_col], repeatRows=1)
+        t.setStyle(TableStyle([
+            ("BACKGROUND", (0, 0), (-1, 0), branding.BRAND_CREAM),
+            ("LINEBELOW", (0, 0), (-1, 0), 0.75, branding.BRAND_BROWN),
+            ("LINEBELOW", (0, 1), (-1, -1), 0.25, colors.lightgrey),
+            ("ROWBACKGROUNDS", (0, 1), (-1, -1), [colors.white, colors.HexColor("#FAF8F3")]),
+            ("VALIGN", (0, 0), (-1, -1), "TOP"),
+            ("TOPPADDING", (0, 0), (-1, -1), 5), ("BOTTOMPADDING", (0, 0), (-1, -1), 5),
+            ("LEFTPADDING", (0, 0), (0, -1), 6), ("RIGHTPADDING", (-1, 0), (-1, -1), 6),
+        ]))
+        elements.append(t)
+        elements.append(Spacer(1, 12))
+
+    amount_due = invoice.get("amount_due") or 0
+    amount_paid = invoice.get("amount_paid") or 0
+    balance = amount_due - amount_paid
+    totals_rows = [["Amount due", f"${amount_due:,.2f}"]]
+    if amount_paid:
+        paid_line = f"Paid{' on ' + fmt_pdf_date(invoice['paid_date']) if invoice.get('paid_date') else ''}"
+        totals_rows.append([paid_line, f"-${amount_paid:,.2f}"])
+        totals_rows.append(["Balance", f"${balance:,.2f}"])
+    totals_table = Table(
+        [[Paragraph(xml_escape(label), s["body"]), Paragraph(value, s["cell_right"])] for label, value in totals_rows],
+        colWidths=[PAGE_WIDTH * 0.8, PAGE_WIDTH * 0.2],
+    )
+    totals_table.setStyle(TableStyle([
+        ("LEFTPADDING", (0, 0), (-1, -1), 0), ("RIGHTPADDING", (0, 0), (-1, -1), 0),
+        ("TOPPADDING", (0, 0), (-1, -1), 2), ("BOTTOMPADDING", (0, 0), (-1, -1), 2),
+        ("FONTNAME", (0, -1), (-1, -1), "Helvetica-Bold"), ("FONTSIZE", (0, -1), (-1, -1), 11),
+        ("LINEABOVE", (0, -1), (-1, -1), 0.75, branding.BRAND_BROWN),
+        ("TOPPADDING", (0, -1), (-1, -1), 6),
+    ]))
+    elements.append(totals_table)
+
+    doc.build(elements, canvasmaker=NumberedCanvas)
+    pdf_bytes = buf.getvalue()
+    buf.close()
+
+    filename = f"invoice-{invoice.get('invoice_number') or 'draft'}-{project_name or 'job'}.pdf".replace(" ", "-")
+    return Response(
+        content=pdf_bytes,
+        media_type="application/pdf",
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+    )

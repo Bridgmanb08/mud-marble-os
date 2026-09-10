@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { IconPlus, IconGitBranch, IconAlertTriangle } from '@tabler/icons-react';
+import { IconPlus, IconGitBranch, IconAlertTriangle, IconDownload } from '@tabler/icons-react';
 import { api, ApiError } from '../api/client';
 import { useToast } from '../components/ui/Toast';
 import { fmt } from '../lib/format';
@@ -152,7 +152,16 @@ export default function ChangeOrders() {
                   </span>
                 )}
               </div>
-              <span style={{ fontSize: 14, fontWeight: 600 }}>{fmt(co.owner_price)}</span>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                <span style={{ fontSize: 14, fontWeight: 600 }}>{fmt(co.owner_price)}</span>
+                <button
+                  className="btn btn-ghost btn-sm"
+                  title="Download PDF"
+                  onClick={() => window.open(`/api/change-orders/${co.id}/export/pdf`, '_blank')}
+                >
+                  <IconDownload size={14} />
+                </button>
+              </div>
             </div>
             {co.description && <div style={{ fontSize: 12, color: 'var(--t2)', marginTop: 6 }}>{co.description}</div>}
             {co.notes_internal && (

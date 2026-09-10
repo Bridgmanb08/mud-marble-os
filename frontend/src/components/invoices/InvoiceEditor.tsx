@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { IconFileDollar, IconPlus, IconTrash } from '@tabler/icons-react';
+import { IconDownload, IconFileDollar, IconPlus, IconTrash } from '@tabler/icons-react';
 import { api, ApiError } from '../../api/client';
 import { useToast } from '../ui/Toast';
 import { openDatePicker } from '../../lib/datePicker';
@@ -112,9 +112,14 @@ export function InvoiceEditor({ invoiceId, onInvoiceChanged }: { invoiceId: stri
           <h1>{invoice.invoice_number || 'Draft invoice'}</h1>
           <p>{invoice.projects?.name || ''}</p>
         </div>
-        <span className={`badge ${STATUS_BADGE[invoice.status] || 'bg-gray'}`} style={{ fontSize: 13 }}>
-          {invoice.status}
-        </span>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+          <button className="btn btn-sm" onClick={() => window.open(`/api/invoices/${invoiceId}/export/pdf`, '_blank')}>
+            <IconDownload size={14} /> PDF
+          </button>
+          <span className={`badge ${STATUS_BADGE[invoice.status] || 'bg-gray'}`} style={{ fontSize: 13 }}>
+            {invoice.status}
+          </span>
+        </div>
       </div>
 
       {financialSummary && (
