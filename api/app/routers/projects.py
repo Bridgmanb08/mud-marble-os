@@ -37,13 +37,24 @@ async def _get_invoicing_estimate(project_id: str, select: str) -> Optional[dict
     better to reference). Previously this always took the highest version
     number regardless of status, which meant an in-progress draft revision
     could silently shadow an already-approved contract for invoicing
-    purposes -- a real bug, not a deliberate design choice."""
+    purposes -- a real bug, not a deliberate design choice.
+
+    Excludes archived estimates -- archiving (added after this function was
+    written) is meant for hiding old/superseded drafts from the list, not
+    for removing an estimate from being the thing invoicing is measured
+    against. Without this filter, archiving whichever version happens to
+    be highest would silently make this function fall through to a stale
+    lower version instead, quietly changing the contract total everything
+    else here is validated against."""
     approved = await db_get(
-        "estimates", f"?project_id=eq.{project_id}&status=eq.approved&order=version.desc&limit=1&select={select}"
+        "estimates",
+        f"?project_id=eq.{project_id}&status=eq.approved&is_archived=eq.false&order=version.desc&limit=1&select={select}",
     )
     if approved:
         return approved[0]
-    latest = await db_get("estimates", f"?project_id=eq.{project_id}&order=version.desc&limit=1&select={select}")
+    latest = await db_get(
+        "estimates", f"?project_id=eq.{project_id}&is_archived=eq.false&order=version.desc&limit=1&select={select}"
+    )
     return latest[0] if latest else None
 
 

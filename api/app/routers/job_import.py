@@ -155,7 +155,11 @@ async def preview_estimate_sheet(
 
     project_rows, existing_estimates, cost_codes = await asyncio.gather(
         db_get("projects", f"?id=eq.{project_id}&select=name"),
-        db_get("estimates", f"?project_id=eq.{project_id}&order=version.desc&limit=1"),
+        # is_archived=eq.false -- an archived estimate is meant to be hidden
+        # from the list, not silently adopted as the draft an import appends
+        # into; without this, archiving whichever version happens to be
+        # highest would redirect an import into a stale, hidden estimate.
+        db_get("estimates", f"?project_id=eq.{project_id}&is_archived=eq.false&order=version.desc&limit=1"),
         db_get("cost_codes", "?is_active=eq.true&select=id,code"),
     )
     if not project_rows:
