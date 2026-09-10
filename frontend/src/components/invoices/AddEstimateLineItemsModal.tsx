@@ -121,7 +121,7 @@ export function AddEstimateLineItemsModal({ invoiceId, projectId, onClose, onAdd
   }
 
   return (
-    <Modal title="Add line items to invoice" onClose={onClose} xl>
+    <Modal title="Add line items to invoice" onClose={onClose} xl resizable>
       <div className="ibt" style={{ fontSize: 13, textTransform: 'none', letterSpacing: 0, border: 'none', padding: 0, marginBottom: 6 }}>
         Estimate line items
       </div>
