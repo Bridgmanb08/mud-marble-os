@@ -349,6 +349,7 @@ export interface Invoice {
   invoice_type: string;
   amount_due: number;
   amount_paid: number | null;
+  paid_date: string | null;
   due_date: string | null;
   notes_external: string | null;
   status: string;

@@ -13,7 +13,7 @@ from ..schemas.invoices import (
     InvoiceOut,
     InvoiceUpdate,
 )
-from ..supabase_client import db_delete, db_get, db_patch, db_post, db_post_many
+from ..supabase_client import db_delete, db_delete_query, db_get, db_patch, db_post, db_post_many
 
 # "Counts toward invoiced_to_date" -- the exact same status set financial-
 # summary already uses (projects.py) so this guard and that number never
@@ -147,11 +147,29 @@ async def get_invoice(invoice_id: str, _: CurrentUser = Depends(get_current_user
     return rows[0]
 
 
+async def _next_invoice_number(project_id: str) -> str:
+    """Highest existing plain-integer invoice_number for this project, plus
+    one -- not a count, so a deleted invoice never opens a gap that gets
+    silently reused (e.g. 01-04 existing, #02 deleted: count-based would
+    hand out "04" again; this hands out "05"). A non-numeric or missing
+    number (a renamed one, or an older invoice created before this existed)
+    is simply ignored rather than breaking the sequence."""
+    existing = await db_get("invoices", f"?project_id=eq.{project_id}&select=invoice_number")
+    highest = 0
+    for row in existing:
+        raw = row.get("invoice_number")
+        if raw and raw.strip().isdigit():
+            highest = max(highest, int(raw))
+    return str(highest + 1).zfill(2)
+
+
 @router.post("", response_model=InvoiceOut)
 async def create_invoice(body: InvoiceCreate, _: CurrentUser = Depends(get_current_user)):
     data = body.model_dump(exclude_none=True)
     data["status"] = "draft"
     data["issued_at"] = date.today().isoformat()
+    if not data.get("invoice_number"):
+        data["invoice_number"] = await _next_invoice_number(body.project_id)
     rows = await db_post("invoices", data)
     full = await db_get("invoices", f"?id=eq.{rows[0]['id']}&select=*,projects(name)")
     return full[0]
@@ -159,7 +177,7 @@ async def create_invoice(body: InvoiceCreate, _: CurrentUser = Depends(get_curre
 
 @router.patch("/{invoice_id}", response_model=InvoiceOut)
 async def update_invoice(invoice_id: str, body: InvoiceUpdate, _: CurrentUser = Depends(get_current_user)):
-    current = await db_get("invoices", f"?id=eq.{invoice_id}&select=project_id,status,amount_due")
+    current = await db_get("invoices", f"?id=eq.{invoice_id}&select=project_id,status,amount_due,paid_date")
     if not current:
         raise HTTPException(status_code=404, detail="Invoice not found")
     existing = current[0]
@@ -174,9 +192,34 @@ async def update_invoice(invoice_id: str, body: InvoiceUpdate, _: CurrentUser = 
         resulting_amount = updates.get("amount_due", existing["amount_due"]) or 0
         await _validate_invoice_total(existing["project_id"], invoice_id, resulting_amount)
 
+    # Newly marked paid and nobody already set a paid_date in this same
+    # request (or a prior one) -- default it to today rather than leaving
+    # the "when did the money actually come in" record blank. Still fully
+    # editable afterward if the real date was different.
+    if resulting_status == "paid" and existing["status"] != "paid" and "paid_date" not in updates and not existing.get("paid_date"):
+        updates["paid_date"] = date.today().isoformat()
+
     await db_patch("invoices", invoice_id, updates)
     full = await db_get("invoices", f"?id=eq.{invoice_id}&select=*,projects(name)")
     return full[0]
+
+
+@router.delete("/{invoice_id}")
+async def delete_invoice(invoice_id: str, _: CurrentUser = Depends(get_current_user)):
+    existing = await db_get("invoices", f"?id=eq.{invoice_id}&select=status,amount_paid")
+    if not existing:
+        raise HTTPException(status_code=404, detail="Invoice not found")
+    # A paid invoice (or one with any payment recorded against it) is real
+    # financial history, not draft clutter -- block the hard delete the same
+    # way estimates.py blocks deleting an already-invoiced estimate version.
+    if existing[0]["status"] == "paid" or (existing[0].get("amount_paid") or 0) > 0:
+        raise HTTPException(
+            status_code=400,
+            detail="Can't delete an invoice that's been paid -- change its status first if it was recorded in error.",
+        )
+    await db_delete_query("invoice_line_items", f"?invoice_id=eq.{invoice_id}")
+    await db_delete("invoices", invoice_id)
+    return {"ok": True}
 
 
 @router.get("/{invoice_id}/items", response_model=list[InvoiceLineItemOut])
