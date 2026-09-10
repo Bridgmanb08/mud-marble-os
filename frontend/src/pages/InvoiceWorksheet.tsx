@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { IconArrowLeft, IconFileDollar, IconPlus, IconTrash } from '@tabler/icons-react';
+import { IconArrowLeft, IconDownload, IconFileDollar, IconPlus, IconTrash } from '@tabler/icons-react';
 import { api, ApiError } from '../api/client';
 import { useToast } from '../components/ui/Toast';
 import { openDatePicker } from '../lib/datePicker';
@@ -111,9 +111,14 @@ export default function InvoiceWorksheet() {
           <h1>{invoice.invoice_number || 'Draft invoice'}</h1>
           <p>{invoice.projects?.name || ''}</p>
         </div>
-        <span className={`badge ${STATUS_BADGE[invoice.status] || 'bg-gray'}`} style={{ fontSize: 13 }}>
-          {invoice.status}
-        </span>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+          <button className="btn btn-sm" onClick={() => window.open(`/api/invoices/${id}/export/pdf`, '_blank')}>
+            <IconDownload size={14} /> PDF
+          </button>
+          <span className={`badge ${STATUS_BADGE[invoice.status] || 'bg-gray'}`} style={{ fontSize: 13 }}>
+            {invoice.status}
+          </span>
+        </div>
       </div>
 
       {financialSummary && (
