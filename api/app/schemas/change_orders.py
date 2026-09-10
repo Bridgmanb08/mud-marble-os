@@ -10,6 +10,7 @@ class ChangeOrderCreate(BaseModel):
     owner_price: float = 0
     builder_cost: float = 0
     description: Optional[str] = None
+    notes_internal: Optional[str] = None
     discovered_by: Optional[str] = None
 
 
@@ -21,6 +22,7 @@ class ChangeOrderUpdate(BaseModel):
     owner_price: Optional[float] = None
     builder_cost: Optional[float] = None
     description: Optional[str] = None
+    notes_internal: Optional[str] = None
     discovered_by: Optional[str] = None
 
 
@@ -37,6 +39,7 @@ class ChangeOrderOut(BaseModel):
     owner_price: float
     builder_cost: Optional[float] = None
     description: Optional[str] = None
+    notes_internal: Optional[str] = None
     discovered_by: Optional[str] = None
     status: str
     sent_at: Optional[str] = None

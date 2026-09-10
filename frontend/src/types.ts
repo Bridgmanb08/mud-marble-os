@@ -398,6 +398,7 @@ export interface ChangeOrder {
   owner_price: number;
   builder_cost: number | null;
   description: string | null;
+  notes_internal: string | null;
   discovered_by: string | null;
   status: string;
   sent_at: string | null;
