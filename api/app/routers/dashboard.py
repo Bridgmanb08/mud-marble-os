@@ -243,8 +243,14 @@ async def get_dashboard(_: CurrentUser = Depends(get_current_user)):
         ),
         db_get(
             "estimates",
+            # is_archived=eq.false -- this feeds "latest estimate per project"
+            # below (project profitability, win-rate/pipeline stats). Archiving
+            # is meant to hide old/superseded drafts from the list, not to
+            # change which estimate these numbers are computed against; without
+            # this filter, archiving whichever version happens to be highest
+            # would silently fall through to a stale lower version instead.
             "?select=project_id,version,status,grand_total_owner_price,construction_total_owner_price,"
-            "allowance_total,pm_fee_total&order=version.desc",
+            "allowance_total,pm_fee_total&is_archived=eq.false&order=version.desc",
         ),
         db_get(
             "leads",
