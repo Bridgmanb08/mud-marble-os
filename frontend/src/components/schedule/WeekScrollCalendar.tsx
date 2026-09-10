@@ -173,12 +173,26 @@ export function WeekScrollCalendar({
   }
 
   function scrollToToday() {
-    const rows = scrollRef.current?.querySelectorAll('[data-week-row]');
-    if (!rows) return;
+    const container = scrollRef.current;
+    const rows = container?.querySelectorAll<HTMLElement>('[data-week-row]');
+    if (!container || !rows) return;
     const todaySunday = dateKey(sundayOf(new Date()));
     for (const row of rows) {
       if (row.getAttribute('data-week-row') === todaySunday) {
-        row.scrollIntoView({ block: 'center' });
+        // Manual scrollTop math, confined to this calendar's own scroll
+        // container -- Element.scrollIntoView() walks up EVERY scrollable
+        // ancestor to satisfy its alignment request, which includes the
+        // whole page's scroll position when this calendar sits inside a
+        // long single-scroll page (Project Detail's Schedule tab). That
+        // was dragging the entire page down to the calendar the instant
+        // any project was opened, regardless of which tab was actually
+        // active (reported: "the default location ... is on the
+        // calendar"). Computing the delta via getBoundingClientRect and
+        // applying it to container.scrollTop only can never touch an
+        // ancestor's scroll position.
+        const rowRect = row.getBoundingClientRect();
+        const containerRect = container.getBoundingClientRect();
+        container.scrollTop += rowRect.top - containerRect.top - (container.clientHeight - row.clientHeight) / 2;
         return;
       }
     }
