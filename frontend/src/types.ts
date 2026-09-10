@@ -349,6 +349,7 @@ export interface Invoice {
   invoice_type: string;
   amount_due: number;
   amount_paid: number | null;
+  paid_date: string | null;
   due_date: string | null;
   notes_external: string | null;
   status: string;
@@ -397,6 +398,7 @@ export interface ChangeOrder {
   owner_price: number;
   builder_cost: number | null;
   description: string | null;
+  notes_internal: string | null;
   discovered_by: string | null;
   status: string;
   sent_at: string | null;

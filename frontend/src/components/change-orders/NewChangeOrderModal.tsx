@@ -17,6 +17,7 @@ export function NewChangeOrderModal({ onClose, onCreated, defaultProjectId }: Ne
   const [ownerPrice, setOwnerPrice] = useState('');
   const [builderCost, setBuilderCost] = useState('');
   const [description, setDescription] = useState('');
+  const [notesInternal, setNotesInternal] = useState('');
   const [discoveredBy, setDiscoveredBy] = useState('');
   const [error, setError] = useState('');
   const [saving, setSaving] = useState(false);
@@ -41,6 +42,7 @@ export function NewChangeOrderModal({ onClose, onCreated, defaultProjectId }: Ne
         owner_price: parseFloat(ownerPrice) || 0,
         builder_cost: parseFloat(builderCost) || 0,
         description: description.trim() || null,
+        notes_internal: notesInternal.trim() || null,
         discovered_by: discoveredBy || null,
       });
       onCreated();
@@ -52,7 +54,7 @@ export function NewChangeOrderModal({ onClose, onCreated, defaultProjectId }: Ne
   }
 
   return (
-    <Modal title="New change order" onClose={onClose} wide>
+    <Modal title="New change order" onClose={onClose} wide resizable>
       <form onSubmit={handleSubmit}>
         {error && <div className="merr">{error}</div>}
 
@@ -110,6 +112,11 @@ export function NewChangeOrderModal({ onClose, onCreated, defaultProjectId }: Ne
           <div className="fg">
             <label className="fl">Description</label>
             <textarea className="fi" value={description} onChange={(e) => setDescription(e.target.value)} />
+          </div>
+          <div className="fg">
+            <label className="fl">Internal notes</label>
+            <textarea className="fi" value={notesInternal} onChange={(e) => setNotesInternal(e.target.value)} />
+            <div className="m-sub">For the team only -- not shown to the client.</div>
           </div>
         </div>
 

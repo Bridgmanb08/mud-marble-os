@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { useParams, useNavigate, useSearchParams, Link } from 'react-router-dom';
 import { IconArrowLeft, IconPencil, IconPlus, IconCalendar, IconList } from '@tabler/icons-react';
-import { api } from '../api/client';
+import { api, ApiError } from '../api/client';
 import { useToast } from '../components/ui/Toast';
 import { fmt, fmtD } from '../lib/format';
 import { useReferenceData } from '../reference-data/ReferenceDataContext';
@@ -11,6 +11,8 @@ import { NewProjectModal } from '../components/projects/NewProjectModal';
 import { statusOptionsIncluding } from '../lib/projectStatuses';
 import { NewChangeOrderModal } from '../components/change-orders/NewChangeOrderModal';
 import { NewInvoiceModal } from '../components/invoices/NewInvoiceModal';
+import { InvoiceDetailModal } from '../components/invoices/InvoiceDetailModal';
+import { InvoiceRowMenu } from '../components/invoices/InvoiceRowMenu';
 import { NewTaskModal } from '../components/tasks/NewTaskModal';
 import { TaskDetailDrawer } from '../components/tasks/TaskDetailDrawer';
 import { KanbanBoard } from '../components/tasks/KanbanBoard';
@@ -64,6 +66,7 @@ export default function ProjectDetail() {
   const [showEditProject, setShowEditProject] = useState(false);
   const [showNewCO, setShowNewCO] = useState(false);
   const [showNewInvoice, setShowNewInvoice] = useState(false);
+  const [selectedInvoiceId, setSelectedInvoiceId] = useState<string | null>(null);
   const [showNewTask, setShowNewTask] = useState(false);
   const [newTaskStatus, setNewTaskStatus] = useState('upcoming');
   const [detailTask, setDetailTask] = useState<Task | undefined>(undefined);
@@ -125,6 +128,26 @@ export default function ProjectDetail() {
     // table isn't just a flat list with no way to sanity-check it against
     // what the project's actually worth.
     setFinancialSummary(await api.get<FinancialSummary>(`/projects/${id}/financial-summary`).catch(() => null));
+  }
+
+  async function renameInvoice(invoiceId: string, newNumber: string) {
+    try {
+      await api.patch(`/invoices/${invoiceId}`, { invoice_number: newNumber || null });
+      loadInvoices();
+    } catch (e) {
+      toast(e instanceof ApiError ? e.message : 'Failed to rename invoice', true);
+    }
+  }
+
+  async function deleteInvoice(inv: Invoice) {
+    if (!window.confirm(`Permanently delete invoice ${inv.invoice_number || 'Draft'}? This can't be undone.`)) return;
+    try {
+      await api.delete(`/invoices/${inv.id}`);
+      toast('Invoice deleted');
+      loadInvoices();
+    } catch (e) {
+      toast(e instanceof ApiError ? e.message : 'Failed to delete invoice', true);
+    }
   }
 
   async function loadTasks() {
@@ -620,17 +643,25 @@ export default function ProjectDetail() {
                     <th style={{ textAlign: 'right' }}>Paid</th>
                     <th>Due</th>
                     <th>Status</th>
+                    <th></th>
                   </tr>
                 </thead>
                 <tbody>
                   {invoices.map((inv) => (
-                    <tr key={inv.id}>
+                    <tr key={inv.id} style={{ cursor: 'pointer' }} onClick={() => setSelectedInvoiceId(inv.id)}>
                       <td className="sticky-col" style={{ fontWeight: 500 }}>{inv.invoice_number || 'Draft'}</td>
                       <td>{inv.invoice_type}</td>
                       <td style={{ textAlign: 'right' }}>{fmt(inv.amount_due)}</td>
                       <td style={{ textAlign: 'right' }}>{fmt(inv.amount_paid)}</td>
                       <td>{fmtD(inv.due_date)}</td>
                       <td><span className={`badge ${INVOICE_STATUS_BADGE[inv.status] || 'bg-gray'}`}>{inv.status}</span></td>
+                      <td style={{ textAlign: 'right' }}>
+                        <InvoiceRowMenu
+                          invoiceNumber={inv.invoice_number}
+                          onRename={(newNumber) => renameInvoice(inv.id, newNumber)}
+                          onDelete={() => deleteInvoice(inv)}
+                        />
+                      </td>
                     </tr>
                   ))}
                 </tbody>
@@ -777,13 +808,21 @@ export default function ProjectDetail() {
           onCreated={(invoice) => {
             setShowNewInvoice(false);
             toast('Invoice created');
-            // Straight into the worksheet, same as the global Invoices page --
+            loadInvoices();
+            // Straight into the popup editor, same tab you're already on --
             // that's where line items, "Add from Estimate", and the
             // contract-total cross-reference actually live, so there's no
-            // reason to leave someone stranded on a list they have to click
-            // back into.
-            navigate(`/invoices/${invoice.id}`);
+            // reason to navigate away from the project you're looking at.
+            setSelectedInvoiceId(invoice.id);
           }}
+        />
+      )}
+
+      {selectedInvoiceId && (
+        <InvoiceDetailModal
+          invoiceId={selectedInvoiceId}
+          onClose={() => setSelectedInvoiceId(null)}
+          onInvoiceChanged={() => loadInvoices()}
         />
       )}
 
