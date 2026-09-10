@@ -155,6 +155,11 @@ export default function ChangeOrders() {
               <span style={{ fontSize: 14, fontWeight: 600 }}>{fmt(co.owner_price)}</span>
             </div>
             {co.description && <div style={{ fontSize: 12, color: 'var(--t2)', marginTop: 6 }}>{co.description}</div>}
+            {co.notes_internal && (
+              <div style={{ fontSize: 11.5, color: 'var(--t3)', fontStyle: 'italic', marginTop: 4 }}>
+                Internal: {co.notes_internal}
+              </div>
+            )}
           </div>
         ))
       )}
