@@ -13,7 +13,7 @@ import { openDatePicker } from '../../lib/datePicker';
 import { useReferenceData } from '../../reference-data/ReferenceDataContext';
 import { colorForPerson, initialsForPerson } from '../../lib/personColor';
 import { markCommentsSeen } from '../../lib/commentSeen';
-import { PROJECT_PHASES, projectPhaseLabel } from '../../lib/projectPhases';
+import { mergeCustomPhases } from '../../lib/projectPhases';
 import type { Project, Task, TaskComment, TaskDependency, TaskSubtask, UserDirectoryEntry } from '../../types';
 
 // Small, fixed set -- iMessage-tapback style, not a full picker -- kept
@@ -198,6 +198,15 @@ export function TaskDetailDrawer({ task, allTasks, onClose, onSaved, onDeleted, 
   const [currentVersion, setCurrentVersion] = useState(task.version);
   const [phase, setPhase] = useState(task.phase || '');
   const [constructionPhase, setConstructionPhase] = useState(task.construction_phase || '');
+  // The selected project's own custom phases (if any -- see PhaseTracker's
+  // "insert a phase between two bubbles" feature) get folded into the Build
+  // phase dropdown below, in the right position, so tagging a task matches
+  // exactly what that project's own phase tracker shows.
+  const selectedProject = projects.find((p) => p.id === projectId);
+  const { keys: phaseKeys, labels: phaseLabels } = useMemo(
+    () => mergeCustomPhases(selectedProject?.custom_phases),
+    [selectedProject]
+  );
   const [status, setStatus] = useState(task.status);
   const [priority, setPriority] = useState(task.priority);
   const [scheduledStart, setScheduledStart] = useState(task.scheduled_start?.slice(0, 10) || '');
@@ -533,9 +542,9 @@ export function TaskDetailDrawer({ task, allTasks, onClose, onSaved, onDeleted, 
           <label className="fl">Build phase</label>
           <select className="fi" value={constructionPhase} onChange={(e) => setConstructionPhase(e.target.value)}>
             <option value="">— Not tagged —</option>
-            {PROJECT_PHASES.map((p) => (
+            {phaseKeys.map((p) => (
               <option key={p} value={p}>
-                {projectPhaseLabel(p)}
+                {phaseLabels[p]}
               </option>
             ))}
           </select>

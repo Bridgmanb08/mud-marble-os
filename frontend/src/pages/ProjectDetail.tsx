@@ -298,7 +298,9 @@ export default function ProjectDetail() {
             <PhaseTracker
               projectId={project.id}
               currentPhase={project.current_phase}
+              customPhases={project.custom_phases}
               onPhaseChange={(phase) => setProject((p) => (p ? { ...p, current_phase: phase } : p))}
+              onCustomPhasesChange={(customPhases) => setProject((p) => (p ? { ...p, custom_phases: customPhases } : p))}
             />
           </div>
 

@@ -467,6 +467,12 @@ export interface ClientProjectSummary {
   paid_total: number;
 }
 
+export interface CustomPhase {
+  key: string;
+  label: string;
+  after: string;
+}
+
 export interface Project {
   id: string;
   name: string;
@@ -501,6 +507,7 @@ export interface Project {
   dumpster_on_site: boolean;
   dumpster_size: string | null;
   dumpster_supplier: string | null;
+  custom_phases: CustomPhase[];
   created_at: string;
   clients: ClientBrief | null;
   sms_contacts: SmsContactBrief[];
