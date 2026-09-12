@@ -92,6 +92,14 @@ async def update_change_order(co_id: str, body: ChangeOrderUpdate, _: CurrentUse
     return _attach_breach(full[0])
 
 
+@router.get("/{co_id}", response_model=ChangeOrderOut)
+async def get_change_order(co_id: str, _: CurrentUser = Depends(get_current_user)):
+    rows = await db_get("change_orders", f"?id=eq.{co_id}&select=*,projects(name,address)")
+    if not rows:
+        raise HTTPException(status_code=404, detail="Change order not found")
+    return _attach_breach(rows[0])
+
+
 @router.get("/{co_id}/export/pdf")
 async def export_change_order_pdf(co_id: str, _: CurrentUser = Depends(get_current_user)):
     rows = await db_get("change_orders", f"?id=eq.{co_id}&select=*,projects(name,address,clients(first_name,last_name))")
