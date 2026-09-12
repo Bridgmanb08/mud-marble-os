@@ -71,9 +71,23 @@ class NumberedCanvas(Canvas):
         Canvas.save(self)
 
     def _draw_page_number(self, page_count):
-        self.setFont("Helvetica", 8)
+        # A thin brand rule + the company contact line, echoing the
+        # letterhead at the top -- without this every page just trails off
+        # into blank space with nothing to close it out, which reads as
+        # unfinished on a short document (an invoice or CO is often a
+        # single mostly-empty page). "Page N of M" keeps its original
+        # bottom-right spot alongside it.
+        # The rule sits below the document's own 0.5in bottom margin -- if it
+        # sat flush with the margin, a page whose content runs all the way
+        # down could collide with it instead of leaving clear air above the
+        # footer.
+        self.setStrokeColor(branding.BRAND_TAN)
+        self.setLineWidth(0.5)
+        self.line(SIDE_MARGIN, 0.42 * inch, letter[0] - SIDE_MARGIN, 0.42 * inch)
+        self.setFont("Helvetica", 7.5)
         self.setFillColor(colors.grey)
-        self.drawRightString(letter[0] - 0.5 * inch, 0.3 * inch, f"Page {self._pageNumber} of {page_count}")
+        self.drawString(SIDE_MARGIN, 0.3 * inch, branding.COMPANY_ADDRESS_LINE)
+        self.drawRightString(letter[0] - SIDE_MARGIN, 0.3 * inch, f"Page {self._pageNumber} of {page_count}")
 
 
 def build_styles() -> dict:
@@ -113,11 +127,15 @@ def build_letterhead(styles: dict, page_width: float, breadcrumb: str) -> list:
     """Centered logo + wordmark + company contact line, then a left/right
     row (who this is for / print date) -- the exact header every one of
     these client-facing PDFs opens with."""
-    print_date = datetime.now()
+    # "Sep 12, 2026" -- the same format fmt_pdf_date renders Issued/Due
+    # dates in elsewhere on these documents, so the header's own date
+    # doesn't read as a different, less-considered style than the rest
+    # of the page (it was a bare "9-12-2026" before).
+    print_date = datetime.now().strftime("%b %-d, %Y")
     header_row = Table(
         [[
             Paragraph(xml_escape(breadcrumb), styles["small"]),
-            Paragraph(f"Print Date: {print_date.month}-{print_date.day}-{print_date.year}", styles["small_right"]),
+            Paragraph(f"Print Date: {print_date}", styles["small_right"]),
         ]],
         colWidths=[page_width * 0.6, page_width * 0.4],
     )
@@ -132,7 +150,7 @@ def build_letterhead(styles: dict, page_width: float, breadcrumb: str) -> list:
         )
     )
     return [
-        Image(branding.LOGO_PATH, width=0.55 * inch, height=0.55 * inch, hAlign="CENTER"),
+        Image(branding.LOGO_PATH, width=0.65 * inch, height=0.65 * inch, hAlign="CENTER"),
         Paragraph("Mud &amp; Marble", styles["wordmark_h1"]),
         Paragraph(branding.COMPANY_ADDRESS_LINE, styles["company_line"]),
         header_row,

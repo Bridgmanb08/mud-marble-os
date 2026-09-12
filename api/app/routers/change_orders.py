@@ -155,8 +155,14 @@ async def export_change_order_pdf(co_id: str, _: CurrentUser = Depends(get_curre
 
     # A change order needs the client's sign-off to actually be approved --
     # unlike an invoice (just a bill), this is an agreement, so it gets the
-    # same signature block the estimate proposal PDF ends with.
-    elements.append(Spacer(1, 30))
+    # same signature block the estimate proposal PDF ends with. The one-line
+    # instruction above it is what the estimate's own "A signed copy
+    # authorizes work to begin" line already does -- without it, a client
+    # reaches three blank signature lines with no explanation of what
+    # signing means.
+    elements.append(Spacer(1, 20))
+    elements.append(Paragraph("Please sign below to approve this change order.", s["body"]))
+    elements.append(Spacer(1, 16))
     elements.append(Paragraph("Signature: _______________________________________", s["body"]))
     elements.append(Spacer(1, 10))
     elements.append(Paragraph("Date: _______________________________________", s["body"]))

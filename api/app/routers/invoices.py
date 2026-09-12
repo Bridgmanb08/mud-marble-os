@@ -390,6 +390,14 @@ async def export_invoice_pdf(invoice_id: str, _: CurrentUser = Depends(get_curre
         totals_rows = [("Amount due", f"${amount_due:,.2f}", True)]
     elements.append(build_totals_band(s, PAGE_WIDTH, totals_rows))
 
+    # A short closing line -- without it the document just stops right after
+    # the number, the same abrupt-ending gap the estimate PDF already avoids
+    # with its own closing_text. Only makes sense while a balance is still
+    # owed; a paid-in-full invoice doesn't need a payment reminder.
+    if balance > 0:
+        elements.append(Spacer(1, 14))
+        elements.append(Paragraph("Thank you for your business. Please remit payment by the due date above.", s["body"]))
+
     doc.build(elements, canvasmaker=NumberedCanvas)
     pdf_bytes = buf.getvalue()
     buf.close()
