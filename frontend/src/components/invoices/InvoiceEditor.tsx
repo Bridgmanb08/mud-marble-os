@@ -4,6 +4,7 @@ import { api, ApiError } from '../../api/client';
 import { useToast } from '../ui/Toast';
 import { openDatePicker } from '../../lib/datePicker';
 import { fmt } from '../../lib/format';
+import { pdfExportFilename, triggerDownload } from '../../lib/download';
 import { InvoiceLineItemModal } from './InvoiceLineItemModal';
 import { AddEstimateLineItemsModal } from './AddEstimateLineItemsModal';
 import type { FinancialSummary, Invoice, InvoiceLineItem } from '../../types';
@@ -113,7 +114,10 @@ export function InvoiceEditor({ invoiceId, onInvoiceChanged }: { invoiceId: stri
           <p>{invoice.projects?.name || ''}</p>
         </div>
         <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-          <button className="btn btn-sm" onClick={() => window.open(`/api/invoices/${invoiceId}/export/pdf`, '_blank')}>
+          <button
+            className="btn btn-sm"
+            onClick={() => triggerDownload(`/api/invoices/${invoiceId}/export/pdf`, pdfExportFilename(invoice.projects?.name, 'Invoice'))}
+          >
             <IconDownload size={14} /> PDF
           </button>
           <span className={`badge ${STATUS_BADGE[invoice.status] || 'bg-gray'}`} style={{ fontSize: 13 }}>

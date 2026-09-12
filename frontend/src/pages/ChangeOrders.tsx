@@ -3,6 +3,7 @@ import { IconPlus, IconGitBranch, IconAlertTriangle, IconDownload } from '@table
 import { api, ApiError } from '../api/client';
 import { useToast } from '../components/ui/Toast';
 import { fmt } from '../lib/format';
+import { pdfExportFilename, triggerDownload } from '../lib/download';
 import type { ChangeOrder } from '../types';
 import { NewChangeOrderModal } from '../components/change-orders/NewChangeOrderModal';
 
@@ -157,7 +158,7 @@ export default function ChangeOrders() {
                 <button
                   className="btn btn-ghost btn-sm"
                   title="Download PDF"
-                  onClick={() => window.open(`/api/change-orders/${co.id}/export/pdf`, '_blank')}
+                  onClick={() => triggerDownload(`/api/change-orders/${co.id}/export/pdf`, pdfExportFilename(co.projects?.name, 'CO'))}
                 >
                   <IconDownload size={14} />
                 </button>
