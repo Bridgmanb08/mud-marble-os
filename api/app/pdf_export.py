@@ -20,9 +20,32 @@ from . import branding
 # '<' followed by a letter with no matching '>' throws a paraparser syntax
 # error and 500s the whole export. Re-exported here so callers don't need
 # their own `from xml.sax.saxutils import escape`.
-__all__ = ["NumberedCanvas", "build_styles", "build_letterhead", "breadcrumb_for", "xml_escape", "SIDE_MARGIN"]
+__all__ = [
+    "NumberedCanvas",
+    "build_styles",
+    "build_letterhead",
+    "build_info_card",
+    "build_totals_band",
+    "breadcrumb_for",
+    "fmt_pdf_date",
+    "STATUS_COLORS",
+    "xml_escape",
+    "SIDE_MARGIN",
+]
 
 SIDE_MARGIN = 0.6 * inch
+
+# The exact text colors index.css's .bg-green/.bg-amber/.bg-red/.bg-blue/
+# .bg-gray badges use on screen -- reused here so a status value printed on
+# a PDF reads as the same color family as its on-screen badge instead of
+# an unrelated color choice invented just for print.
+STATUS_COLORS = {
+    "green": colors.HexColor("#0F6E56"),
+    "amber": colors.HexColor("#854F0B"),
+    "red": colors.HexColor("#A32D2D"),
+    "blue": colors.HexColor("#185FA5"),
+    "gray": colors.HexColor("#5F5E5A"),
+}
 
 
 class NumberedCanvas(Canvas):
@@ -73,9 +96,16 @@ def build_styles() -> dict:
         "small": small,
         "small_right": ParagraphStyle("small_right", parent=small, alignment=2),
         "title": ParagraphStyle("title", parent=styles["Normal"], fontSize=13, spaceBefore=6, spaceAfter=2, fontName="Helvetica-Bold"),
+        "address": ParagraphStyle("address", parent=styles["Normal"], fontSize=10.5, textColor=branding.BRAND_BROWN, spaceAfter=10),
         "total": ParagraphStyle("total", parent=styles["Normal"], fontSize=12, alignment=2),
-        "label": ParagraphStyle("label", parent=styles["Normal"], fontSize=7.5, textColor=colors.grey),
-        "value": ParagraphStyle("value", parent=styles["Normal"], fontSize=10, spaceAfter=8),
+        "label": ParagraphStyle("label", parent=styles["Normal"], fontSize=7.5, textColor=colors.grey, spaceAfter=2),
+        "value": ParagraphStyle("value", parent=styles["Normal"], fontSize=10.5, fontName="Helvetica-Bold"),
+        "totals_label": ParagraphStyle("totals_label", parent=styles["Normal"], fontSize=9.5, textColor=colors.grey),
+        "totals_value": ParagraphStyle("totals_value", parent=styles["Normal"], fontSize=9.5, alignment=2),
+        "grand_label": ParagraphStyle("grand_label", parent=styles["Normal"], fontSize=12.5, fontName="Helvetica-Bold"),
+        "grand_value": ParagraphStyle(
+            "grand_value", parent=styles["Normal"], fontSize=13.5, fontName="Helvetica-Bold", alignment=2, textColor=branding.BRAND_BROWN
+        ),
     }
 
 
@@ -107,6 +137,75 @@ def build_letterhead(styles: dict, page_width: float, breadcrumb: str) -> list:
         Paragraph(branding.COMPANY_ADDRESS_LINE, styles["company_line"]),
         header_row,
     ]
+
+
+def build_info_card(styles: dict, page_width: float, fields: list, columns: int = 3) -> Table:
+    """fields: (label, value, color_or_None) triples. A bordered, tinted
+    card summarizing a handful of key facts (type, status, dates, ...) --
+    replaces a bare row of label/value text with something that actually
+    reads as a designed document section, and gives every export
+    (estimate, invoice, change order) the same visual weight for this
+    kind of content instead of three different ad hoc treatments.
+    `color` lets one field's value stand out (a status, say) in the same
+    color family as its on-screen badge -- see STATUS_COLORS -- without a
+    full colored pill (reportlab tables don't do rounded/inline chips
+    cleanly)."""
+    col_width = page_width / columns
+    rows: list[list] = []
+    for i in range(0, len(fields), columns):
+        row_fields = fields[i : i + columns]
+        row = []
+        for label, value, color in row_fields:
+            value_style = styles["value"] if not color else ParagraphStyle(f"value_{label}_{id(color)}", parent=styles["value"], textColor=color)
+            row.append([Paragraph(label.upper(), styles["label"]), Paragraph(value, value_style)])
+        while len(row) < columns:
+            row.append("")
+        rows.append(row)
+    t = Table(rows, colWidths=[col_width] * columns)
+    t.setStyle(
+        TableStyle(
+            [
+                ("BACKGROUND", (0, 0), (-1, -1), branding.BRAND_CREAM),
+                ("BOX", (0, 0), (-1, -1), 0.75, branding.BRAND_TAN),
+                ("VALIGN", (0, 0), (-1, -1), "TOP"),
+                ("LEFTPADDING", (0, 0), (-1, -1), 12),
+                ("RIGHTPADDING", (0, 0), (-1, -1), 12),
+                ("TOPPADDING", (0, 0), (-1, -1), 10),
+                ("BOTTOMPADDING", (0, 0), (-1, -1), 10),
+            ]
+        )
+    )
+    return t
+
+
+def build_totals_band(styles: dict, page_width: float, rows: list) -> Table:
+    """rows: (label, value, is_grand_total) triples. A right-aligned totals
+    stack with a brand-brown rule above the whole block, extra visual
+    weight on whichever row(s) are flagged as the grand total -- shared
+    treatment for the estimate's Total Price, the invoice's Amount Due /
+    Paid / Balance, and the change order's Price, so all three read as
+    the same kind of "the number that matters" moment instead of three
+    different ad hoc styles."""
+    table_rows = []
+    for label, value, is_grand in rows:
+        label_style = styles["grand_label"] if is_grand else styles["totals_label"]
+        value_style = styles["grand_value"] if is_grand else styles["totals_value"]
+        table_rows.append([Paragraph(label, label_style), Paragraph(value, value_style)])
+    t = Table(table_rows, colWidths=[page_width * 0.75, page_width * 0.25])
+    style_commands = [
+        ("LEFTPADDING", (0, 0), (-1, -1), 0),
+        ("RIGHTPADDING", (0, 0), (-1, -1), 0),
+        ("TOPPADDING", (0, 0), (-1, -1), 3),
+        ("BOTTOMPADDING", (0, 0), (-1, -1), 3),
+        ("LINEABOVE", (0, 0), (-1, 0), 1, branding.BRAND_BROWN),
+    ]
+    # Extra breathing room above a grand-total row that isn't the very
+    # first one (e.g. an invoice's "Balance" following "Amount due"/"Paid").
+    for i, (_, _, is_grand) in enumerate(rows):
+        if is_grand and i > 0:
+            style_commands.append(("TOPPADDING", (0, i), (-1, i), 8))
+    t.setStyle(TableStyle(style_commands))
+    return t
 
 
 def fmt_pdf_date(raw) -> str:
