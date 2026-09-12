@@ -6,6 +6,7 @@ import { fmt } from '../lib/format';
 import { pdfExportFilename, triggerDownload } from '../lib/download';
 import type { ChangeOrder } from '../types';
 import { NewChangeOrderModal } from '../components/change-orders/NewChangeOrderModal';
+import { ChangeOrderDetailModal } from '../components/change-orders/ChangeOrderDetailModal';
 
 const TYPE_BADGE: Record<string, string> = { oversight: 'bg-amber', client_addition: 'bg-blue', unforeseen: 'bg-red' };
 const STATUS_BADGE: Record<string, string> = { pending: 'bg-gray', sent: 'bg-amber', approved: 'bg-green', rejected: 'bg-red' };
@@ -17,6 +18,7 @@ export default function ChangeOrders() {
   const [cos, setCos] = useState<ChangeOrder[] | null>(null);
   const [filter, setFilter] = useState('all');
   const [showNew, setShowNew] = useState(false);
+  const [selectedCoId, setSelectedCoId] = useState<string | null>(null);
   const toast = useToast();
 
   async function load() {
@@ -127,7 +129,7 @@ export default function ChangeOrders() {
         </div>
       ) : (
         filtered.map((co) => (
-          <div key={co.id} className="coc">
+          <div key={co.id} className="coc" style={{ cursor: 'pointer' }} onClick={() => setSelectedCoId(co.id)}>
             <div className="coh">
               <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
                 <span style={{ fontWeight: 600 }}>CO-{String(co.co_number ?? '?').padStart(3, '0')}</span>
@@ -158,9 +160,10 @@ export default function ChangeOrders() {
                 <button
                   className="btn btn-ghost btn-sm"
                   title="Download PDF"
-                  onClick={() =>
-                    triggerDownload(`/api/change-orders/${co.id}/export/pdf`, pdfExportFilename(co.projects?.address, co.projects?.name, 'CO'))
-                  }
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    triggerDownload(`/api/change-orders/${co.id}/export/pdf`, pdfExportFilename(co.projects?.address, co.projects?.name, 'CO'));
+                  }}
                 >
                   <IconDownload size={14} />
                 </button>
@@ -185,6 +188,10 @@ export default function ChangeOrders() {
             load();
           }}
         />
+      )}
+
+      {selectedCoId && (
+        <ChangeOrderDetailModal coId={selectedCoId} onClose={() => setSelectedCoId(null)} onChanged={load} />
       )}
     </>
   );
