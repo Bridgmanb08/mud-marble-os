@@ -11,7 +11,18 @@ from reportlab.platypus import HRFlowable, Paragraph, SimpleDocTemplate, Spacer,
 
 from .. import branding
 from ..deps import CurrentUser, get_current_user
-from ..pdf_export import NumberedCanvas, SIDE_MARGIN, breadcrumb_for, build_letterhead, build_styles, fmt_pdf_date, xml_escape
+from ..pdf_export import (
+    STATUS_COLORS,
+    NumberedCanvas,
+    SIDE_MARGIN,
+    breadcrumb_for,
+    build_info_card,
+    build_letterhead,
+    build_styles,
+    build_totals_band,
+    fmt_pdf_date,
+    xml_escape,
+)
 from ..schemas.invoices import (
     InvoiceCreate,
     InvoiceLineItemBulkCreate,
@@ -315,32 +326,25 @@ async def export_invoice_pdf(invoice_id: str, _: CurrentUser = Depends(get_curre
 
     elements = build_letterhead(s, PAGE_WIDTH, breadcrumb)
     elements.append(Paragraph(f"Invoice {xml_escape(invoice.get('invoice_number') or 'Draft')}", s["title"]))
-    elements.append(HRFlowable(width="100%", thickness=0.75, color=colors.lightgrey, spaceAfter=10))
+    address = (project.get("address") or "").strip() or project_name
+    if address:
+        elements.append(Paragraph(xml_escape(address), s["address"]))
+    elements.append(HRFlowable(width="100%", thickness=0.75, color=colors.lightgrey, spaceAfter=12))
 
-    # A 2x2 label/value grid -- type/status left, issued/due right -- same
-    # "quick facts up top" shape as the estimate PDF's breadcrumb row, just
-    # more of them since an invoice has more state worth showing at a glance.
-    info_table = Table(
-        [
-            [
-                Paragraph("TYPE", s["label"]), Paragraph("STATUS", s["label"]),
-                Paragraph("ISSUED", s["label"]), Paragraph("DUE", s["label"]),
-            ],
-            [
-                Paragraph(xml_escape((invoice.get("invoice_type") or "").title()), s["value"]),
-                Paragraph(xml_escape((invoice.get("status") or "").title()), s["value"]),
-                Paragraph(fmt_pdf_date(invoice.get("issued_at")), s["value"]),
-                Paragraph(fmt_pdf_date(invoice.get("due_date")), s["value"]),
-            ],
-        ],
-        colWidths=[PAGE_WIDTH * 0.25] * 4,
-    )
-    info_table.setStyle(TableStyle([
-        ("LEFTPADDING", (0, 0), (-1, -1), 0), ("RIGHTPADDING", (0, 0), (-1, -1), 0),
-        ("TOPPADDING", (0, 0), (-1, -1), 0), ("BOTTOMPADDING", (0, 0), (0, 0), 2),
-    ]))
-    elements.append(info_table)
-    elements.append(Spacer(1, 6))
+    # A bordered info card -- type/status/issued/due at a glance, the same
+    # visual weight the estimate PDF's group bands and this document's own
+    # totals band carry, instead of a bare row of unstyled text. Status is
+    # colored to match its on-screen badge (STATUS_BADGE in Invoices.tsx)
+    # so "paid" reads as unmistakably good news and "overdue" as a flag.
+    status_color_key = {"paid": "green", "overdue": "red", "sent": "amber", "draft": "gray", "void": "gray"}.get(invoice.get("status"))
+    info_fields = [
+        ("Type", xml_escape((invoice.get("invoice_type") or "").title()), None),
+        ("Status", xml_escape((invoice.get("status") or "").title()), STATUS_COLORS.get(status_color_key)),
+        ("Issued", fmt_pdf_date(invoice.get("issued_at")), None),
+        ("Due", fmt_pdf_date(invoice.get("due_date")), None),
+    ]
+    elements.append(build_info_card(s, PAGE_WIDTH, info_fields, columns=4))
+    elements.append(Spacer(1, 14))
 
     if invoice.get("notes_external"):
         elements.append(Paragraph(xml_escape(invoice["notes_external"]), s["body"]))
@@ -375,23 +379,16 @@ async def export_invoice_pdf(invoice_id: str, _: CurrentUser = Depends(get_curre
     amount_due = invoice.get("amount_due") or 0
     amount_paid = invoice.get("amount_paid") or 0
     balance = amount_due - amount_paid
-    totals_rows = [["Amount due", f"${amount_due:,.2f}"]]
     if amount_paid:
         paid_line = f"Paid{' on ' + fmt_pdf_date(invoice['paid_date']) if invoice.get('paid_date') else ''}"
-        totals_rows.append([paid_line, f"-${amount_paid:,.2f}"])
-        totals_rows.append(["Balance", f"${balance:,.2f}"])
-    totals_table = Table(
-        [[Paragraph(xml_escape(label), s["body"]), Paragraph(value, s["cell_right"])] for label, value in totals_rows],
-        colWidths=[PAGE_WIDTH * 0.8, PAGE_WIDTH * 0.2],
-    )
-    totals_table.setStyle(TableStyle([
-        ("LEFTPADDING", (0, 0), (-1, -1), 0), ("RIGHTPADDING", (0, 0), (-1, -1), 0),
-        ("TOPPADDING", (0, 0), (-1, -1), 2), ("BOTTOMPADDING", (0, 0), (-1, -1), 2),
-        ("FONTNAME", (0, -1), (-1, -1), "Helvetica-Bold"), ("FONTSIZE", (0, -1), (-1, -1), 11),
-        ("LINEABOVE", (0, -1), (-1, -1), 0.75, branding.BRAND_BROWN),
-        ("TOPPADDING", (0, -1), (-1, -1), 6),
-    ]))
-    elements.append(totals_table)
+        totals_rows = [
+            ("Amount due", f"${amount_due:,.2f}", False),
+            (paid_line, f"-${amount_paid:,.2f}", False),
+            ("Balance", f"${balance:,.2f}", True),
+        ]
+    else:
+        totals_rows = [("Amount due", f"${amount_due:,.2f}", True)]
+    elements.append(build_totals_band(s, PAGE_WIDTH, totals_rows))
 
     doc.build(elements, canvasmaker=NumberedCanvas)
     pdf_bytes = buf.getvalue()

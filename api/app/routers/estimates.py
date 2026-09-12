@@ -1,5 +1,4 @@
 import io
-from datetime import datetime
 from typing import Optional
 from xml.sax.saxutils import escape as _xml_escape
 
@@ -9,15 +8,15 @@ from openpyxl import Workbook
 from openpyxl.styles import Font
 from reportlab.lib import colors
 from reportlab.lib.pagesizes import letter
-from reportlab.lib.styles import ParagraphStyle, getSampleStyleSheet
+from reportlab.lib.styles import ParagraphStyle
 from reportlab.lib.units import inch
-from reportlab.pdfgen.canvas import Canvas
-from reportlab.platypus import HRFlowable, Image, Paragraph, SimpleDocTemplate, Spacer, Table, TableStyle
+from reportlab.platypus import HRFlowable, Paragraph, SimpleDocTemplate, Spacer, Table, TableStyle
 
 from .. import branding
 from ..deps import CurrentUser, get_current_user
 from ..estimate_defaults import DEFAULT_CLOSING_TEXT
 from ..estimate_text_defaults_store import get_or_create_estimate_text_defaults
+from ..pdf_export import SIDE_MARGIN, NumberedCanvas, breadcrumb_for, build_letterhead, build_styles, build_totals_band
 from ..rich_text import rich_text_to_pdf_markup
 from ..schemas.estimates import (
     EstimateCreate,
@@ -375,52 +374,12 @@ async def _gather_export_data(estimate_id: str):
     return estimate, groups
 
 
-class _NumberedCanvas(Canvas):
-    """Standard reportlab two-pass trick for "Page N of M" -- the total page
-    count isn't known until the whole document has been laid out, so each
-    page's canvas state is buffered via showPage() and only actually drawn
-    (with the number stamped on) once save() knows the final count."""
-
-    def __init__(self, *args, **kwargs):
-        Canvas.__init__(self, *args, **kwargs)
-        self._saved_page_states = []
-
-    def showPage(self):
-        self._saved_page_states.append(dict(self.__dict__))
-        self._startPage()
-
-    def save(self):
-        num_pages = len(self._saved_page_states)
-        for state in self._saved_page_states:
-            self.__dict__.update(state)
-            self._draw_page_number(num_pages)
-            Canvas.showPage(self)
-        Canvas.save(self)
-
-    def _draw_page_number(self, page_count):
-        self.setFont("Helvetica", 8)
-        self.setFillColor(colors.grey)
-        self.drawRightString(letter[0] - 0.5 * inch, 0.3 * inch, f"Page {self._pageNumber} of {page_count}")
-
-
 @router.get("/{estimate_id}/export/pdf")
 async def export_estimate_pdf(estimate_id: str, _: CurrentUser = Depends(get_current_user)):
     estimate, groups = await _gather_export_data(estimate_id)
     project = estimate.get("projects") or {}
-    client = (project.get("clients") or {}) if project else {}
-    client_name = f"{client.get('first_name') or ''} {client.get('last_name') or ''}".strip()
+    breadcrumb = breadcrumb_for(project)
     project_name = (project.get("name") or "").split("|")[0].strip()
-
-    who = client_name or project_name
-    breadcrumb = who + (f" | {project_name}" if project_name and project_name != who else "")
-    # Every free-text value below (client/project name, estimate title, group
-    # names, item titles/descriptions/units) is user-entered and now flows
-    # through reportlab's Paragraph(), which parses a small XML-like markup
-    # subset -- an unescaped '<' followed by a letter with no matching '>'
-    # (e.g. someone typing "a<b" or "<8ft" as a quantity note) throws a
-    # paraparser syntax error and 500s the whole export. Escaping & / < / >
-    # up front, before any Paragraph() call, closes that off entirely.
-    breadcrumb = _xml_escape(breadcrumb)
 
     buf = io.BytesIO()
     # Slightly tighter side margins than reportlab's 1in default (0.6in,
@@ -431,55 +390,25 @@ async def export_estimate_pdf(estimate_id: str, _: CurrentUser = Depends(get_cur
     # happened before this pass (the two-column breadcrumb/print-date row
     # summed to 7.2in against a 6.5in page -- overflowing the right margin --
     # while the line-item table summed to only 6.4in, leaving a stray gap).
-    side_margin = 0.6 * inch
-    doc = SimpleDocTemplate(buf, pagesize=letter, topMargin=0.5 * inch, bottomMargin=0.5 * inch, leftMargin=side_margin, rightMargin=side_margin)
-    PAGE_WIDTH = letter[0] - 2 * side_margin
-    styles = getSampleStyleSheet()
-    wordmark_h1 = ParagraphStyle("wordmark_h1", parent=styles["Heading1"], fontSize=14, alignment=1, spaceBefore=4, spaceAfter=1)
-    company_line = ParagraphStyle("company_line", parent=styles["Normal"], fontSize=8, alignment=1, textColor=colors.grey, spaceAfter=10)
-    group_header = ParagraphStyle("group_header", parent=styles["Normal"], fontSize=10, fontName="Helvetica-Bold", textColor=colors.white)
+    doc = SimpleDocTemplate(
+        buf, pagesize=letter, topMargin=0.5 * inch, bottomMargin=0.5 * inch, leftMargin=SIDE_MARGIN, rightMargin=SIDE_MARGIN
+    )
+    PAGE_WIDTH = letter[0] - 2 * SIDE_MARGIN
+    s = build_styles()
+    # Estimate-only extras -- the grouped-item bands (title left, subtotal
+    # right) aren't a shape any other export needs, so they stay local
+    # rather than joining the shared style dict every export pulls from.
+    group_header = ParagraphStyle("group_header", parent=s["body"], fontSize=10, fontName="Helvetica-Bold", textColor=colors.white)
     group_subtotal = ParagraphStyle("group_subtotal", parent=group_header, alignment=2)
-    body = ParagraphStyle("body", parent=styles["Normal"], fontSize=8.5, leading=12)
-    cell = ParagraphStyle("cell", parent=styles["Normal"], fontSize=8.2, leading=11)
-    cell_right = ParagraphStyle("cell_right", parent=cell, alignment=2)
-    th = ParagraphStyle("th", parent=cell, fontName="Helvetica-Bold", textColor=branding.BRAND_BROWN)
-    th_right = ParagraphStyle("th_right", parent=th, alignment=2)
-    small = ParagraphStyle("small", parent=styles["Normal"], fontSize=8, textColor=colors.grey)
-    small_right = ParagraphStyle("small_right", parent=small, alignment=2)
-    title_style = ParagraphStyle("title", parent=styles["Normal"], fontSize=13, spaceBefore=6, spaceAfter=2, fontName="Helvetica-Bold")
+    body, cell, cell_right, th, th_right = s["body"], s["cell"], s["cell_right"], s["th"], s["th_right"]
 
-    # Centered logo + wordmark + company contact line -- matches the
-    # BuilderTrend reference proposal's header layout.
-    elements = [
-        Image(branding.LOGO_PATH, width=0.55 * inch, height=0.55 * inch, hAlign="CENTER"),
-        Paragraph("Mud &amp; Marble", wordmark_h1),
-        Paragraph(branding.COMPANY_ADDRESS_LINE, company_line),
-    ]
-
-    # Left: who this proposal is for. Right: print date. Same row, small text --
-    # matches the reference's breadcrumb + print-date line above the title.
-    print_date = datetime.now()
-    header_row = Table(
-        [[
-            Paragraph(breadcrumb, small),
-            Paragraph(f"Print Date: {print_date.month}-{print_date.day}-{print_date.year}", small_right),
-        ]],
-        colWidths=[PAGE_WIDTH * 0.6, PAGE_WIDTH * 0.4],
-    )
-    header_row.setStyle(
-        TableStyle(
-            [
-                ("LEFTPADDING", (0, 0), (-1, -1), 0),
-                ("RIGHTPADDING", (0, 0), (-1, -1), 0),
-                ("TOPPADDING", (0, 0), (-1, -1), 0),
-                ("BOTTOMPADDING", (0, 0), (-1, -1), 0),
-            ]
-        )
-    )
-    elements.append(header_row)
-    title_text = _xml_escape(estimate.get("title")) if estimate.get("title") else f"Proposal for {breadcrumb}"
-    elements.append(Paragraph(title_text, title_style))
-    elements.append(HRFlowable(width="100%", thickness=0.75, color=colors.lightgrey, spaceAfter=8))
+    elements = build_letterhead(s, PAGE_WIDTH, breadcrumb)
+    title_text = _xml_escape(estimate.get("title")) if estimate.get("title") else f"Proposal for {_xml_escape(breadcrumb)}"
+    elements.append(Paragraph(title_text, s["title"]))
+    address = (project.get("address") or "").strip() or project_name
+    if address:
+        elements.append(Paragraph(_xml_escape(address), s["address"]))
+    elements.append(HRFlowable(width="100%", thickness=0.75, color=colors.lightgrey, spaceAfter=12))
 
     intro = estimate.get("introductory_text")
     if intro:
@@ -577,7 +506,7 @@ async def export_estimate_pdf(estimate_id: str, _: CurrentUser = Depends(get_cur
 
     total = estimate.get("grand_total_owner_price") or 0
     elements.append(Spacer(1, 4))
-    elements.append(Paragraph(f"<b>Total Price: ${total:,.2f}</b>", ParagraphStyle("total", parent=styles["Normal"], fontSize=12, alignment=2)))
+    elements.append(build_totals_band(s, PAGE_WIDTH, [("Total Price", f"${total:,.2f}", True)]))
     elements.append(Spacer(1, 16))
 
     closing = estimate.get("closing_text") or DEFAULT_CLOSING_TEXT
@@ -591,7 +520,7 @@ async def export_estimate_pdf(estimate_id: str, _: CurrentUser = Depends(get_cur
     elements.append(Spacer(1, 10))
     elements.append(Paragraph("Print Name: _______________________________________", body))
 
-    doc.build(elements, canvasmaker=_NumberedCanvas)
+    doc.build(elements, canvasmaker=NumberedCanvas)
     pdf_bytes = buf.getvalue()
     buf.close()
 

@@ -7,12 +7,21 @@ from fastapi.responses import Response
 from reportlab.lib import colors
 from reportlab.lib.pagesizes import letter
 from reportlab.lib.units import inch
-from reportlab.platypus import HRFlowable, Paragraph, SimpleDocTemplate, Spacer, Table, TableStyle
+from reportlab.platypus import HRFlowable, Paragraph, SimpleDocTemplate, Spacer
 
-from .. import branding
 from ..change_order_utils import compute_sop_breach
 from ..deps import CurrentUser, get_current_user
-from ..pdf_export import NumberedCanvas, SIDE_MARGIN, breadcrumb_for, build_letterhead, build_styles, xml_escape
+from ..pdf_export import (
+    STATUS_COLORS,
+    NumberedCanvas,
+    SIDE_MARGIN,
+    breadcrumb_for,
+    build_info_card,
+    build_letterhead,
+    build_styles,
+    build_totals_band,
+    xml_escape,
+)
 from ..schemas.change_orders import ChangeOrderCreate, ChangeOrderOut, ChangeOrderUpdate
 from ..supabase_client import db_get, db_patch, db_post
 
@@ -103,27 +112,24 @@ async def export_change_order_pdf(co_id: str, _: CurrentUser = Depends(get_curre
     elements = build_letterhead(s, PAGE_WIDTH, breadcrumb)
     co_number = f"CO-{str(co.get('co_number') or '?').zfill(3)}"
     elements.append(Paragraph(f"Change Order {co_number}: {xml_escape(co.get('title') or '')}", s["title"]))
-    elements.append(HRFlowable(width="100%", thickness=0.75, color=colors.lightgrey, spaceAfter=10))
+    address = (project.get("address") or "").strip() or project_name
+    if address:
+        elements.append(Paragraph(xml_escape(address), s["address"]))
+    elements.append(HRFlowable(width="100%", thickness=0.75, color=colors.lightgrey, spaceAfter=12))
 
+    # A bordered info card, same treatment as the invoice PDF -- status
+    # colored to match its on-screen badge (STATUS_BADGE in
+    # ChangeOrders.tsx) so "approved" reads as unmistakably good news.
     type_labels = {"client_addition": "Client Addition", "oversight": "Oversight", "unforeseen": "Unforeseen"}
     discovered_labels = {"brent": "Brent", "shannon": "Shannon", "client": "Client", "subcontractor": "Subcontractor"}
-    info_table = Table(
-        [
-            [Paragraph("TYPE", s["label"]), Paragraph("STATUS", s["label"]), Paragraph("DISCOVERED BY", s["label"])],
-            [
-                Paragraph(xml_escape(type_labels.get(co.get("co_type"), co.get("co_type") or "")), s["value"]),
-                Paragraph(xml_escape((co.get("status") or "").title()), s["value"]),
-                Paragraph(xml_escape(discovered_labels.get(co.get("discovered_by"), co.get("discovered_by") or "—")), s["value"]),
-            ],
-        ],
-        colWidths=[PAGE_WIDTH / 3] * 3,
-    )
-    info_table.setStyle(TableStyle([
-        ("LEFTPADDING", (0, 0), (-1, -1), 0), ("RIGHTPADDING", (0, 0), (-1, -1), 0),
-        ("TOPPADDING", (0, 0), (-1, -1), 0), ("BOTTOMPADDING", (0, 0), (0, 0), 2),
-    ]))
-    elements.append(info_table)
-    elements.append(Spacer(1, 6))
+    status_color_key = {"approved": "green", "rejected": "red", "sent": "amber", "pending": "gray"}.get(co.get("status"))
+    info_fields = [
+        ("Type", xml_escape(type_labels.get(co.get("co_type"), co.get("co_type") or "")), None),
+        ("Status", xml_escape((co.get("status") or "").title()), STATUS_COLORS.get(status_color_key)),
+        ("Discovered by", xml_escape(discovered_labels.get(co.get("discovered_by"), co.get("discovered_by") or "—")), None),
+    ]
+    elements.append(build_info_card(s, PAGE_WIDTH, info_fields, columns=3))
+    elements.append(Spacer(1, 14))
 
     # Client-facing scope description only -- notes_internal is exactly the
     # team-only field it's named for and must never reach a document a
@@ -135,20 +141,9 @@ async def export_change_order_pdf(co_id: str, _: CurrentUser = Depends(get_curre
 
     # Owner price only -- builder_cost is internal margin data, same rule
     # the estimate PDF already follows for its own owner-price/builder-cost
-    # split.
+    # split. Same totals-band treatment as the invoice PDF's Amount Due.
     owner_price = co.get("owner_price") or 0
-    price_table = Table(
-        [[Paragraph("Price", s["body"]), Paragraph(f"${owner_price:,.2f}", s["cell_right"])]],
-        colWidths=[PAGE_WIDTH * 0.8, PAGE_WIDTH * 0.2],
-    )
-    price_table.setStyle(TableStyle([
-        ("LEFTPADDING", (0, 0), (-1, -1), 0), ("RIGHTPADDING", (0, 0), (-1, -1), 0),
-        ("TOPPADDING", (0, 0), (-1, -1), 6), ("BOTTOMPADDING", (0, 0), (-1, -1), 6),
-        ("FONTNAME", (0, 0), (-1, -1), "Helvetica-Bold"), ("FONTSIZE", (0, 0), (-1, -1), 11),
-        ("LINEABOVE", (0, 0), (-1, -1), 0.75, branding.BRAND_BROWN),
-        ("LINEBELOW", (0, 0), (-1, -1), 0.75, branding.BRAND_BROWN),
-    ]))
-    elements.append(price_table)
+    elements.append(build_totals_band(s, PAGE_WIDTH, [("Price", f"${owner_price:,.2f}", True)]))
 
     # A change order needs the client's sign-off to actually be approved --
     # unlike an invoice (just a bill), this is an agreement, so it gets the
