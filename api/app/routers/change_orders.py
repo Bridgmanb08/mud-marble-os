@@ -26,7 +26,7 @@ def _attach_breach(co: dict) -> dict:
 
 @router.get("", response_model=list[ChangeOrderOut])
 async def list_change_orders(project_id: Optional[str] = None, _: CurrentUser = Depends(get_current_user)):
-    query = "?order=created_at.desc&select=*,projects(name)"
+    query = "?order=created_at.desc&select=*,projects(name,address)"
     if project_id:
         query += f"&project_id=eq.{project_id}"
     rows = await db_get("change_orders", query)
@@ -44,7 +44,7 @@ async def create_change_order(body: ChangeOrderCreate, _: CurrentUser = Depends(
     data["status"] = "pending"
     data["sent_at"] = datetime.now(timezone.utc).isoformat()
     rows = await db_post("change_orders", data)
-    full = await db_get("change_orders", f"?id=eq.{rows[0]['id']}&select=*,projects(name)")
+    full = await db_get("change_orders", f"?id=eq.{rows[0]['id']}&select=*,projects(name,address)")
     return _attach_breach(full[0])
 
 
@@ -79,13 +79,13 @@ async def update_change_order(co_id: str, body: ChangeOrderUpdate, _: CurrentUse
                 current = proj_rows[0].get("contract_value") or 0
                 await db_patch("projects", project_id, {"contract_value": round(current + delta, 2)})
 
-    full = await db_get("change_orders", f"?id=eq.{co_id}&select=*,projects(name)")
+    full = await db_get("change_orders", f"?id=eq.{co_id}&select=*,projects(name,address)")
     return _attach_breach(full[0])
 
 
 @router.get("/{co_id}/export/pdf")
 async def export_change_order_pdf(co_id: str, _: CurrentUser = Depends(get_current_user)):
-    rows = await db_get("change_orders", f"?id=eq.{co_id}&select=*,projects(name,clients(first_name,last_name))")
+    rows = await db_get("change_orders", f"?id=eq.{co_id}&select=*,projects(name,address,clients(first_name,last_name))")
     if not rows:
         raise HTTPException(status_code=404, detail="Change order not found")
     co = _attach_breach(rows[0])

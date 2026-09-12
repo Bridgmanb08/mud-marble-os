@@ -230,7 +230,7 @@ export default function EstimateWorksheet() {
   }
 
   function downloadPdf() {
-    triggerDownload(`/api/estimates/${id}/export/pdf`, pdfExportFilename(estimate?.projects?.name, 'Estimate'));
+    triggerDownload(`/api/estimates/${id}/export/pdf`, pdfExportFilename(estimate?.projects?.address, estimate?.projects?.name, 'Estimate'));
   }
   function downloadExcel() {
     window.open(`/api/estimates/${id}/export/excel`, '_blank');

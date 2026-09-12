@@ -25,6 +25,7 @@ class InvoiceUpdate(BaseModel):
 
 class ProjectBrief(BaseModel):
     name: str
+    address: Optional[str] = None
 
 
 class InvoiceOut(BaseModel):

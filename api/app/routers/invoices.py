@@ -141,7 +141,7 @@ async def _recalc_invoice_total(invoice_id: str) -> None:
 
 @router.get("", response_model=list[InvoiceOut])
 async def list_invoices(project_id: Optional[str] = None, _: CurrentUser = Depends(get_current_user)):
-    query = "?order=created_at.desc&select=*,projects(name)"
+    query = "?order=created_at.desc&select=*,projects(name,address)"
     if project_id:
         query += f"&project_id=eq.{project_id}"
     return await db_get("invoices", query)
@@ -149,7 +149,7 @@ async def list_invoices(project_id: Optional[str] = None, _: CurrentUser = Depen
 
 @router.get("/{invoice_id}", response_model=InvoiceOut)
 async def get_invoice(invoice_id: str, _: CurrentUser = Depends(get_current_user)):
-    rows = await db_get("invoices", f"?id=eq.{invoice_id}&select=*,projects(name)")
+    rows = await db_get("invoices", f"?id=eq.{invoice_id}&select=*,projects(name,address)")
     if not rows:
         raise HTTPException(status_code=404, detail="Invoice not found")
     return rows[0]
@@ -179,7 +179,7 @@ async def create_invoice(body: InvoiceCreate, _: CurrentUser = Depends(get_curre
     if not data.get("invoice_number"):
         data["invoice_number"] = await _next_invoice_number(body.project_id)
     rows = await db_post("invoices", data)
-    full = await db_get("invoices", f"?id=eq.{rows[0]['id']}&select=*,projects(name)")
+    full = await db_get("invoices", f"?id=eq.{rows[0]['id']}&select=*,projects(name,address)")
     return full[0]
 
 
@@ -208,7 +208,7 @@ async def update_invoice(invoice_id: str, body: InvoiceUpdate, _: CurrentUser = 
         updates["paid_date"] = date.today().isoformat()
 
     await db_patch("invoices", invoice_id, updates)
-    full = await db_get("invoices", f"?id=eq.{invoice_id}&select=*,projects(name)")
+    full = await db_get("invoices", f"?id=eq.{invoice_id}&select=*,projects(name,address)")
     return full[0]
 
 
@@ -295,7 +295,7 @@ async def delete_invoice_item(invoice_id: str, item_id: str, _: CurrentUser = De
 
 @router.get("/{invoice_id}/export/pdf")
 async def export_invoice_pdf(invoice_id: str, _: CurrentUser = Depends(get_current_user)):
-    rows = await db_get("invoices", f"?id=eq.{invoice_id}&select=*,projects(name,clients(first_name,last_name))")
+    rows = await db_get("invoices", f"?id=eq.{invoice_id}&select=*,projects(name,address,clients(first_name,last_name))")
     if not rows:
         raise HTTPException(status_code=404, detail="Invoice not found")
     invoice = rows[0]

@@ -116,7 +116,9 @@ export function InvoiceEditor({ invoiceId, onInvoiceChanged }: { invoiceId: stri
         <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
           <button
             className="btn btn-sm"
-            onClick={() => triggerDownload(`/api/invoices/${invoiceId}/export/pdf`, pdfExportFilename(invoice.projects?.name, 'Invoice'))}
+            onClick={() =>
+              triggerDownload(`/api/invoices/${invoiceId}/export/pdf`, pdfExportFilename(invoice.projects?.address, invoice.projects?.name, 'Invoice'))
+            }
           >
             <IconDownload size={14} /> PDF
           </button>
