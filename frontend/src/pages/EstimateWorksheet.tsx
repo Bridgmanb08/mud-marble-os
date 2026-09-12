@@ -19,6 +19,7 @@ import { api, ApiError } from '../api/client';
 import { useToast } from '../components/ui/Toast';
 import { openDatePicker } from '../lib/datePicker';
 import { fmt, fmtD } from '../lib/format';
+import { pdfExportFilename, triggerDownload } from '../lib/download';
 import { LineItemModal } from '../components/estimates/LineItemModal';
 import { EstimateCopilotPanel } from '../components/estimates/EstimateCopilotPanel';
 import { LineItemGroupCard } from '../components/estimates/LineItemGroupCard';
@@ -229,7 +230,7 @@ export default function EstimateWorksheet() {
   }
 
   function downloadPdf() {
-    window.open(`/api/estimates/${id}/export/pdf`, '_blank');
+    triggerDownload(`/api/estimates/${id}/export/pdf`, pdfExportFilename(estimate?.projects?.name, 'Estimate'));
   }
   function downloadExcel() {
     window.open(`/api/estimates/${id}/export/excel`, '_blank');
