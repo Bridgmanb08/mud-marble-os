@@ -7,6 +7,7 @@ from ..schema_validators import forbid_null
 
 class ProjectBrief(BaseModel):
     name: str
+    address: Optional[str] = None
     status: Optional[str] = None
 
 

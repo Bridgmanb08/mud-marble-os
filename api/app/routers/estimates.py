@@ -86,7 +86,7 @@ async def list_estimates(project_id: Optional[str] = None, _: CurrentUser = Depe
     # can group estimates by where their project actually is in the
     # pipeline (active / pre construction / closed / etc.) instead of only
     # showing the estimate's own draft/sent/approved status.
-    query = "?order=created_at.desc&select=*,projects(name,status)"
+    query = "?order=created_at.desc&select=*,projects(name,address,status)"
     if project_id:
         query += f"&project_id=eq.{project_id}"
     return await db_get("estimates", query)
@@ -140,7 +140,7 @@ async def search_line_items(
 
 @router.get("/{estimate_id}", response_model=EstimateOut)
 async def get_estimate(estimate_id: str, _: CurrentUser = Depends(get_current_user)):
-    rows = await db_get("estimates", f"?id=eq.{estimate_id}&select=*,projects(name)")
+    rows = await db_get("estimates", f"?id=eq.{estimate_id}&select=*,projects(name,address)")
     if not rows:
         raise HTTPException(status_code=404, detail="Estimate not found")
     return rows[0]
@@ -174,7 +174,7 @@ async def create_estimate(body: EstimateCreate, _: CurrentUser = Depends(get_cur
             },
         )
         await _recalc_estimate_totals(estimate["id"])
-        full = await db_get("estimates", f"?id=eq.{estimate['id']}&select=*,projects(name)")
+        full = await db_get("estimates", f"?id=eq.{estimate['id']}&select=*,projects(name,address)")
         return full[0]
     return estimate
 
@@ -191,7 +191,7 @@ async def update_estimate(estimate_id: str, body: EstimateUpdate, _: CurrentUser
     # and that null has to reach the database instead of being silently
     # dropped. Same fix already made for clients/projects/invoices/etc.
     await db_patch("estimates", estimate_id, body.model_dump(exclude_unset=True))
-    full = await db_get("estimates", f"?id=eq.{estimate_id}&select=*,projects(name)")
+    full = await db_get("estimates", f"?id=eq.{estimate_id}&select=*,projects(name,address)")
     if not full:
         raise HTTPException(status_code=404, detail="Estimate not found")
     estimate = full[0]
@@ -299,7 +299,7 @@ async def duplicate_estimate(estimate_id: str, _: CurrentUser = Depends(get_curr
             ],
         )
     await _recalc_estimate_totals(new_estimate["id"])
-    full = await db_get("estimates", f"?id=eq.{new_estimate['id']}&select=*,projects(name)")
+    full = await db_get("estimates", f"?id=eq.{new_estimate['id']}&select=*,projects(name,address)")
     return full[0]
 
 

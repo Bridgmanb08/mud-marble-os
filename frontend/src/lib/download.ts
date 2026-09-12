@@ -13,15 +13,23 @@ export function triggerDownload(url: string, filename: string) {
   a.remove();
 }
 
-// "<job>-<export date>-<Estimate|Invoice|CO>.pdf" -- the job's project name
-// already reads as its address in this app's own convention (see every
-// "224 N Summit"/"5756 Norwaldo Ave"-style name), so a "| Client Name"
-// suffix (the same one stripped everywhere else project names are shown,
-// e.g. ProjectPicker) is the only cleanup needed. Date is filesystem-safe
-// ISO (YYYY-MM-DD), not the app's usual "Sep 12, 2026" display format.
-export function pdfExportFilename(projectName: string | null | undefined, kind: 'Estimate' | 'Invoice' | 'CO'): string {
-  const address = (projectName || 'Job').split('|')[0].trim();
-  const safeAddress = address.replace(/[\\/:*?"<>|]/g, '').replace(/\s+/g, '-');
+// "<address>-<export date>-<Estimate|Invoice|CO>.pdf". Real address always
+// leads, per Brent's explicit correction -- a project's name is often just
+// the address too (see every "224 N Summit"-style name), but some real
+// jobs are named after the client instead ("Will and Grace Block" has a
+// real address of "4506 N Pennsylvania" that shares nothing with its
+// name), so this must use the project's actual address field, not a
+// name-cleanup heuristic. Falls back to the (client-suffix-stripped)
+// project name only when a project genuinely has no address on file.
+// Date is filesystem-safe ISO (YYYY-MM-DD), not the app's usual "Sep 12,
+// 2026" display format.
+export function pdfExportFilename(
+  address: string | null | undefined,
+  projectName: string | null | undefined,
+  kind: 'Estimate' | 'Invoice' | 'CO'
+): string {
+  const raw = (address && address.trim()) || (projectName || 'Job').split('|')[0].trim();
+  const safeAddress = raw.replace(/[\\/:*?"<>|]/g, '').replace(/\s+/g, '-');
   const today = new Date();
   const date = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`;
   return `${safeAddress}-${date}-${kind}.pdf`;

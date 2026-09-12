@@ -158,7 +158,9 @@ export default function ChangeOrders() {
                 <button
                   className="btn btn-ghost btn-sm"
                   title="Download PDF"
-                  onClick={() => triggerDownload(`/api/change-orders/${co.id}/export/pdf`, pdfExportFilename(co.projects?.name, 'CO'))}
+                  onClick={() =>
+                    triggerDownload(`/api/change-orders/${co.id}/export/pdf`, pdfExportFilename(co.projects?.address, co.projects?.name, 'CO'))
+                  }
                 >
                   <IconDownload size={14} />
                 </button>

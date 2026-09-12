@@ -28,6 +28,7 @@ class ChangeOrderUpdate(BaseModel):
 
 class ProjectBrief(BaseModel):
     name: str
+    address: Optional[str] = None
 
 
 class ChangeOrderOut(BaseModel):

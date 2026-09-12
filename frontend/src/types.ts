@@ -27,6 +27,7 @@ export interface LeadStage {
 
 export interface ProjectBrief {
   name: string;
+  address?: string | null;
   status?: string | null;
 }
 
