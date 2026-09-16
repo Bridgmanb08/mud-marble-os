@@ -27,7 +27,10 @@ export function AddPersonModal({
 
   async function handleSubmit() {
     const trimmedName = name.trim();
-    if (!trimmedName) return;
+    // Also guards against a double-submit from mashing Enter -- the "Add to
+    // web" button already disables on `saving`, but the Enter-key path
+    // below bypasses that.
+    if (!trimmedName || saving) return;
     setSaving(true);
     try {
       const person = await api.post<NetworkPerson>('/network/people', {
@@ -55,7 +58,24 @@ export function AddPersonModal({
     >
       <div className="fg">
         <label className="fl">Name</label>
-        <input className="fi" autoFocus value={name} onChange={(e) => setName(e.target.value)} placeholder="Full name" />
+        <input
+          className="fi"
+          autoFocus
+          value={name}
+          onChange={(e) => setName(e.target.value)}
+          onKeyDown={(e) => {
+            // Enter submits right from the name field -- the other fields
+            // are optional extras, so typing just a name and hitting Enter
+            // is the fast path this is for. Shift+Enter is left alone in
+            // case a name ever needs a literal newline (it won't, but this
+            // costs nothing and matches how Enter is handled elsewhere).
+            if (e.key === 'Enter' && !e.shiftKey) {
+              e.preventDefault();
+              handleSubmit();
+            }
+          }}
+          placeholder="Full name"
+        />
       </div>
       <div className="fr">
         <div className="fg">

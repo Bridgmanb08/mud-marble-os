@@ -78,6 +78,12 @@ export function PersonDetailModal({
             value={name}
             onChange={(e) => setName(e.target.value)}
             onBlur={(e) => e.target.value.trim() && saveField('name', e.target.value.trim())}
+            // Enter blurs the field to trigger the same onBlur save, rather
+            // than duplicating the save logic here -- consistent with
+            // AddPersonModal's name field also submitting on Enter.
+            onKeyDown={(e) => {
+              if (e.key === 'Enter' && !e.shiftKey) e.currentTarget.blur();
+            }}
           />
         </div>
       )}
