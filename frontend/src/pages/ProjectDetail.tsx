@@ -480,7 +480,9 @@ export default function ProjectDetail() {
           </div>
           <div style={{ fontSize: 12, color: 'var(--t2)', marginBottom: 14 }}>
             Budgeted comes from the estimate; actual comes from real expense transactions tagged to this job.
-            Approved change orders aren't broken out by cost code here — see the Change Orders tab for those.
+            Paid traces invoices back to the estimate line items they were built from — a quick way to see what
+            still needs to be invoiced. Approved change orders aren't broken out by cost code here — see the
+            Change Orders tab for those.
           </div>
           {!variance || variance.rows.length === 0 ? (
             <div className="empty-s">
@@ -499,6 +501,7 @@ export default function ProjectDetail() {
                       <th style={{ textAlign: 'right' }}>Actual</th>
                       <th style={{ textAlign: 'right' }}>Variance</th>
                       <th style={{ textAlign: 'right' }}>% of budget</th>
+                      <th style={{ textAlign: 'right' }}>Paid</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -522,6 +525,9 @@ export default function ProjectDetail() {
                         <td style={{ textAlign: 'right', color: 'var(--t2)' }}>
                           {r.variance_pct === null ? '—' : `${r.variance_pct > 0 ? '+' : ''}${r.variance_pct}%`}
                         </td>
+                        <td style={{ textAlign: 'right', color: r.paid > 0 ? 'var(--green)' : 'var(--t3)' }}>
+                          {r.paid > 0 ? fmt(r.paid) : '—'}
+                        </td>
                       </tr>
                     ))}
                   </tbody>
@@ -540,6 +546,7 @@ export default function ProjectDetail() {
                         {fmt(variance.total_variance)}
                       </td>
                       <td></td>
+                      <td style={{ textAlign: 'right' }}>{fmt(variance.total_paid)}</td>
                     </tr>
                   </tfoot>
                 </table>

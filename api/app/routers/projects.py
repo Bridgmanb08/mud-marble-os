@@ -323,22 +323,26 @@ async def get_estimate_items_for_invoice(project_id: str, _: CurrentUser = Depen
 
 @router.get("/{project_id}/cost-code-variance", response_model=CostCodeVarianceOut)
 async def get_cost_code_variance(project_id: str, _: CurrentUser = Depends(get_current_user)):
-    """Budget vs. actual, broken down by cost code -- the whole-project total
-    already exists in financial-summary, but that alone can't answer "why did
-    this job run over": drywall could be way under budget while electrical
-    eats the difference, and a single project total hides that entirely.
-    Budgeted comes from the same authoritative estimate financial-summary
-    uses (see _get_invoicing_estimate); actual comes from real expense
-    transactions tagged to this project, the same abs(amount)-for-expenses
-    convention already used in dashboard.py's cash-position math."""
+    """Budget vs. actual vs. paid, broken down by cost code -- the whole-
+    project total already exists in financial-summary, but that alone can't
+    answer "why did this job run over" (drywall could be way under budget
+    while electrical eats the difference, and a single project total hides
+    that entirely) or "what's left to invoice" (paid, per cost code, is
+    what actually answers that). Budgeted comes from the same authoritative
+    estimate financial-summary uses (see _get_invoicing_estimate); actual
+    comes from real expense transactions tagged to this project, the same
+    abs(amount)-for-expenses convention already used in dashboard.py's
+    cash-position math; paid traces invoice_line_items back to the
+    estimate line item each was built from."""
     estimate = await _get_invoicing_estimate(project_id, select="id")
 
     budgeted_by_code: dict[Optional[str], float] = {}
     code_labels: dict[Optional[str], tuple[str, str]] = {}
+    line_items: list[dict] = []
     if estimate:
         line_items = await db_get(
             "estimate_line_items",
-            f"?estimate_id=eq.{estimate['id']}&select=cost_code_id,builder_cost,cost_codes(code,name)",
+            f"?estimate_id=eq.{estimate['id']}&select=id,cost_code_id,builder_cost,cost_codes(code,name)",
         )
         for item in line_items:
             cc_id = item.get("cost_code_id")
@@ -358,8 +362,38 @@ async def get_cost_code_variance(project_id: str, _: CurrentUser = Depends(get_c
             cc = t.get("cost_codes")
             code_labels[cc_id] = (cc["code"], cc["name"]) if cc else ("—", "No cost code")
 
+    # Paid: proportionally attribute each invoice's amount_paid across its
+    # own line items -- not just invoices whose status literally says
+    # "paid". A partially-paid invoice already represents real money
+    # received, and its status might not have been flipped to "paid" yet,
+    # so gating on status alone would under-count. Roll each line item's
+    # share up to whichever cost code its SOURCE estimate line item
+    # belongs to; a manually-typed invoice line with no source_line_item_id
+    # can't be attributed to any cost code and is simply excluded here.
+    paid_by_code: dict[Optional[str], float] = {}
+    if line_items:
+        line_item_to_code = {item["id"]: item.get("cost_code_id") for item in line_items}
+        invoices = await db_get("invoices", f"?project_id=eq.{project_id}&select=id,amount_due,amount_paid")
+        if invoices:
+            paid_fraction_by_invoice = {
+                inv["id"]: min((inv.get("amount_paid") or 0) / inv["amount_due"], 1) if inv.get("amount_due") else 0
+                for inv in invoices
+            }
+            invoice_ids = ",".join(inv["id"] for inv in invoices)
+            inv_items = await db_get(
+                "invoice_line_items",
+                f"?invoice_id=in.({invoice_ids})&select=invoice_id,source_line_item_id,amount",
+            )
+            for it in inv_items:
+                source_id = it.get("source_line_item_id")
+                if not source_id or source_id not in line_item_to_code:
+                    continue
+                cc_id = line_item_to_code[source_id]
+                fraction = paid_fraction_by_invoice.get(it["invoice_id"], 0)
+                paid_by_code[cc_id] = paid_by_code.get(cc_id, 0) + (it.get("amount") or 0) * fraction
+
     rows: list[CostCodeVarianceRow] = []
-    for cc_id in set(budgeted_by_code) | set(actual_by_code):
+    for cc_id in set(budgeted_by_code) | set(actual_by_code) | set(paid_by_code):
         budgeted = round(budgeted_by_code.get(cc_id, 0), 2)
         actual = round(actual_by_code.get(cc_id, 0), 2)
         code, name = code_labels.get(cc_id, ("—", "No cost code"))
@@ -372,6 +406,7 @@ async def get_cost_code_variance(project_id: str, _: CurrentUser = Depends(get_c
                 actual=actual,
                 variance=round(actual - budgeted, 2),
                 variance_pct=round(((actual - budgeted) / budgeted) * 100, 1) if budgeted else None,
+                paid=round(paid_by_code.get(cc_id, 0), 2),
             )
         )
     # Worst overage first -- the whole point of this report is "what's
@@ -384,6 +419,7 @@ async def get_cost_code_variance(project_id: str, _: CurrentUser = Depends(get_c
         total_budgeted=round(sum(r.budgeted for r in rows), 2),
         total_actual=round(sum(r.actual for r in rows), 2),
         total_variance=round(sum(r.variance for r in rows), 2),
+        total_paid=round(sum(r.paid for r in rows), 2),
     )
 
 

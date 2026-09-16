@@ -152,6 +152,13 @@ class CostCodeVarianceRow(BaseModel):
     actual: float = 0
     variance: float = 0  # actual - budgeted; positive = over budget
     variance_pct: Optional[float] = None  # None when budgeted is 0 -- percent-over is meaningless with no budget
+    # Client-facing $ actually received against this cost code's estimate
+    # line item(s) so far -- proportionally attributed from each invoice's
+    # amount_paid, not gated on invoice status literally being "paid". Not
+    # directly comparable to budgeted/actual (those are internal builder
+    # cost; this is what the client owes/has paid, markup included) -- it
+    # answers a different question: what's left to invoice on this line.
+    paid: float = 0
 
 
 class CostCodeVarianceOut(BaseModel):
@@ -160,6 +167,7 @@ class CostCodeVarianceOut(BaseModel):
     total_budgeted: float = 0
     total_actual: float = 0
     total_variance: float = 0
+    total_paid: float = 0
 
 
 class ProjectNoteCreate(BaseModel):

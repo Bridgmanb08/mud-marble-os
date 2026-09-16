@@ -559,6 +559,7 @@ export interface CostCodeVarianceRow {
   actual: number;
   variance: number;
   variance_pct: number | null;
+  paid: number;
 }
 
 export interface CostCodeVariance {
@@ -567,6 +568,7 @@ export interface CostCodeVariance {
   total_budgeted: number;
   total_actual: number;
   total_variance: number;
+  total_paid: number;
 }
 
 export interface ProjectSubItem {
