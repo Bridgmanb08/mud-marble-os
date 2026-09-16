@@ -328,25 +328,33 @@ async def get_cost_code_variance(project_id: str, _: CurrentUser = Depends(get_c
     answer "why did this job run over" (drywall could be way under budget
     while electrical eats the difference, and a single project total hides
     that entirely) or "what's left to invoice" (paid, per cost code, is
-    what actually answers that). Budgeted comes from the same authoritative
-    estimate financial-summary uses (see _get_invoicing_estimate); actual
-    comes from real expense transactions tagged to this project, the same
-    abs(amount)-for-expenses convention already used in dashboard.py's
-    cash-position math; paid traces invoice_line_items back to the
-    estimate line item each was built from."""
+    what actually answers that). Budgeted and client_price come from the
+    same line items (builder_cost and owner_price respectively) fetched
+    from the same authoritative estimate financial-summary uses (see
+    _get_invoicing_estimate) -- one internal cost, one what the client
+    owes. Actual comes from real expense transactions tagged to this
+    project, the same abs(amount)-for-expenses convention already used in
+    dashboard.py's cash-position math; paid traces invoice_line_items back
+    to the estimate line item each was built from."""
     estimate = await _get_invoicing_estimate(project_id, select="id")
 
     budgeted_by_code: dict[Optional[str], float] = {}
+    # client_price is the same line items' owner_price (what the client
+    # owes, markup included) instead of builder_cost -- shown alongside
+    # in-house/budgeted so the two "what does this cost" figures sit next
+    # to each other, rather than only the internal one being visible here.
+    client_price_by_code: dict[Optional[str], float] = {}
     code_labels: dict[Optional[str], tuple[str, str]] = {}
     line_items: list[dict] = []
     if estimate:
         line_items = await db_get(
             "estimate_line_items",
-            f"?estimate_id=eq.{estimate['id']}&select=id,cost_code_id,builder_cost,cost_codes(code,name)",
+            f"?estimate_id=eq.{estimate['id']}&select=id,cost_code_id,builder_cost,owner_price,cost_codes(code,name)",
         )
         for item in line_items:
             cc_id = item.get("cost_code_id")
             budgeted_by_code[cc_id] = budgeted_by_code.get(cc_id, 0) + (item.get("builder_cost") or 0)
+            client_price_by_code[cc_id] = client_price_by_code.get(cc_id, 0) + (item.get("owner_price") or 0)
             cc = item.get("cost_codes")
             code_labels[cc_id] = (cc["code"], cc["name"]) if cc else ("—", "No cost code")
 
@@ -403,6 +411,7 @@ async def get_cost_code_variance(project_id: str, _: CurrentUser = Depends(get_c
                 code=code,
                 name=name,
                 budgeted=budgeted,
+                client_price=round(client_price_by_code.get(cc_id, 0), 2),
                 actual=actual,
                 variance=round(actual - budgeted, 2),
                 variance_pct=round(((actual - budgeted) / budgeted) * 100, 1) if budgeted else None,
@@ -417,6 +426,7 @@ async def get_cost_code_variance(project_id: str, _: CurrentUser = Depends(get_c
         estimate_id=estimate["id"] if estimate else None,
         rows=rows,
         total_budgeted=round(sum(r.budgeted for r in rows), 2),
+        total_client_price=round(sum(r.client_price for r in rows), 2),
         total_actual=round(sum(r.actual for r in rows), 2),
         total_variance=round(sum(r.variance for r in rows), 2),
         total_paid=round(sum(r.paid for r in rows), 2),

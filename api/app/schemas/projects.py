@@ -148,7 +148,12 @@ class CostCodeVarianceRow(BaseModel):
     cost_code_id: Optional[str] = None
     code: str
     name: str
-    budgeted: float = 0
+    budgeted: float = 0  # internal builder cost -- shown to the team as "In-House Number"
+    # Same line item(s), owner_price instead of builder_cost -- what the
+    # client owes (markup included), sitting right next to the in-house
+    # figure so the two read together instead of client price only living
+    # on the estimate itself.
+    client_price: float = 0
     actual: float = 0
     variance: float = 0  # actual - budgeted; positive = over budget
     variance_pct: Optional[float] = None  # None when budgeted is 0 -- percent-over is meaningless with no budget
@@ -165,6 +170,7 @@ class CostCodeVarianceOut(BaseModel):
     estimate_id: Optional[str] = None
     rows: list[CostCodeVarianceRow] = []
     total_budgeted: float = 0
+    total_client_price: float = 0
     total_actual: float = 0
     total_variance: float = 0
     total_paid: float = 0
