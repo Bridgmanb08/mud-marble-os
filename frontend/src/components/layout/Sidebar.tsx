@@ -18,6 +18,8 @@ import {
   IconMessages,
   IconHome2,
   IconClipboardList,
+  IconAffiliate,
+  IconQuote,
 } from '@tabler/icons-react';
 import { useAuth } from '../../auth/AuthContext';
 
@@ -74,9 +76,16 @@ interface SidebarProps {
   onClose: () => void;
 }
 
+// Brent's own personal sandbox -- a relationship map and a saved-quotes
+// list, neither of which is a team-wide feature -- so it's gated to his
+// account specifically rather than the broader is_admin flag the Admin
+// section below uses (Shannon/Faith could also be admins one day without
+// that meaning they should see Brent's personal network).
+const BRENT_EMAIL = 'brent@mudmarble.com';
+
 export function Sidebar({ isOpen, onClose }: SidebarProps) {
   const { user } = useAuth();
-  const sections = user?.is_admin
+  let sections = user?.is_admin
     ? [
         ...navSections,
         {
@@ -89,6 +98,19 @@ export function Sidebar({ isOpen, onClose }: SidebarProps) {
         },
       ]
     : navSections;
+
+  if (user?.email === BRENT_EMAIL) {
+    sections = [
+      ...sections,
+      {
+        label: "Brent's Zone",
+        items: [
+          { to: '/networking', label: 'Networking', icon: IconAffiliate },
+          { to: '/quotes', label: 'Quotes', icon: IconQuote },
+        ],
+      },
+    ];
+  }
 
   return (
     <div className={`sidebar${isOpen ? ' open' : ''}`}>

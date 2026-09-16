@@ -7,6 +7,7 @@ import { ScrollToTop } from './components/layout/ScrollToTop';
 import { ProtectedRoute } from './components/layout/ProtectedRoute';
 import { ReferenceDataProvider } from './reference-data/ReferenceDataContext';
 import { AdminRoute } from './components/layout/AdminRoute';
+import { BrentRoute } from './components/layout/BrentRoute';
 
 const Login = lazy(() => import('./pages/Login'));
 const Dashboard = lazy(() => import('./pages/Dashboard'));
@@ -37,6 +38,8 @@ const JobImportWizard = lazy(() => import('./pages/JobImportWizard'));
 const RentalProperties = lazy(() => import('./pages/RentalProperties'));
 const RentalPropertyDetail = lazy(() => import('./pages/RentalPropertyDetail'));
 const RentalWorkOrders = lazy(() => import('./pages/RentalWorkOrders'));
+const Networking = lazy(() => import('./pages/Networking'));
+const Quotes = lazy(() => import('./pages/Quotes'));
 
 function PageLoader() {
   return (
@@ -111,6 +114,22 @@ export default function App() {
                   <AdminRoute>
                     <Messages />
                   </AdminRoute>
+                }
+              />
+              <Route
+                path="networking"
+                element={
+                  <BrentRoute>
+                    <Networking />
+                  </BrentRoute>
+                }
+              />
+              <Route
+                path="quotes"
+                element={
+                  <BrentRoute>
+                    <Quotes />
+                  </BrentRoute>
                 }
               />
             </Route>
