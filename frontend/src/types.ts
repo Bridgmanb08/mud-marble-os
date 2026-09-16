@@ -556,6 +556,7 @@ export interface CostCodeVarianceRow {
   code: string;
   name: string;
   budgeted: number;
+  client_price: number;
   actual: number;
   variance: number;
   variance_pct: number | null;
@@ -566,6 +567,7 @@ export interface CostCodeVariance {
   estimate_id: string | null;
   rows: CostCodeVarianceRow[];
   total_budgeted: number;
+  total_client_price: number;
   total_actual: number;
   total_variance: number;
   total_paid: number;

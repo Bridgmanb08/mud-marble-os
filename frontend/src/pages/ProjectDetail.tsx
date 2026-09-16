@@ -479,9 +479,10 @@ export default function ProjectDetail() {
             Budget vs. actual by cost code
           </div>
           <div style={{ fontSize: 12, color: 'var(--t2)', marginBottom: 14 }}>
-            Budgeted comes from the estimate; actual comes from real expense transactions tagged to this job.
-            Paid traces invoices back to the estimate line items they were built from — a quick way to see what
-            still needs to be invoiced. Approved change orders aren't broken out by cost code here — see the
+            In-House Number and Client Price both come from the estimate — internal cost vs. what the client owes.
+            Actual comes from real expense transactions tagged to this job. Paid traces invoices back to the
+            estimate line items they were built from — a quick way to see what still needs to be invoiced.
+            Approved change orders aren't broken out by cost code here — see the
             Change Orders tab for those.
           </div>
           {!variance || variance.rows.length === 0 ? (
@@ -497,7 +498,8 @@ export default function ProjectDetail() {
                   <thead>
                     <tr>
                       <th className="sticky-col">Cost code</th>
-                      <th style={{ textAlign: 'right' }}>Budgeted</th>
+                      <th style={{ textAlign: 'right' }}>In-House Number</th>
+                      <th style={{ textAlign: 'right' }}>Client Price</th>
                       <th style={{ textAlign: 'right' }}>Actual</th>
                       <th style={{ textAlign: 'right' }}>Variance</th>
                       <th style={{ textAlign: 'right' }}>% of budget</th>
@@ -511,6 +513,7 @@ export default function ProjectDetail() {
                           {r.code !== '—' ? `${r.code} — ${r.name}` : r.name}
                         </td>
                         <td style={{ textAlign: 'right' }}>{fmt(r.budgeted)}</td>
+                        <td style={{ textAlign: 'right' }}>{fmt(r.client_price)}</td>
                         <td style={{ textAlign: 'right' }}>{fmt(r.actual)}</td>
                         <td
                           style={{
@@ -535,6 +538,7 @@ export default function ProjectDetail() {
                     <tr style={{ fontWeight: 600 }}>
                       <td className="sticky-col">Total</td>
                       <td style={{ textAlign: 'right' }}>{fmt(variance.total_budgeted)}</td>
+                      <td style={{ textAlign: 'right' }}>{fmt(variance.total_client_price)}</td>
                       <td style={{ textAlign: 'right' }}>{fmt(variance.total_actual)}</td>
                       <td
                         style={{
