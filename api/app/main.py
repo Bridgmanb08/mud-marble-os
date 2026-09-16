@@ -19,6 +19,7 @@ from .routers import (
     lead_stages,
     leads,
     messages,
+    network,
     notification_settings,
     notifications,
     person_tags,
@@ -26,6 +27,7 @@ from .routers import (
     projects,
     pulse,
     quick_reminders,
+    quotes,
     rental_files,
     rental_leases,
     rental_properties,
@@ -84,6 +86,8 @@ app.include_router(subcontractor_files.router, prefix="/api")
 app.include_router(sub_intelligence.router, prefix="/api")
 app.include_router(notifications.router, prefix="/api")
 app.include_router(messages.router, prefix="/api")
+app.include_router(network.router, prefix="/api")
+app.include_router(quotes.router, prefix="/api")
 app.include_router(reports.router, prefix="/api")
 app.include_router(quick_reminders.router, prefix="/api")
 app.include_router(twilio_sms.router, prefix="/api")

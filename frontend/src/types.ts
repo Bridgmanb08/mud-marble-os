@@ -1466,3 +1466,35 @@ export interface ChangeOrderScanRow {
 export interface ChangeOrderScanPreview {
   row: ChangeOrderScanRow;
 }
+
+export interface NetworkPerson {
+  id: string;
+  name: string;
+  notes: string | null;
+  phone: string | null;
+  email: string | null;
+  company: string | null;
+  title: string | null;
+  is_root: boolean;
+  created_at: string;
+}
+
+export interface NetworkConnection {
+  id: string;
+  from_person_id: string;
+  to_person_id: string;
+  created_at: string;
+}
+
+export interface NetworkGraph {
+  people: NetworkPerson[];
+  connections: NetworkConnection[];
+}
+
+export interface Quote {
+  id: string;
+  text: string;
+  author: string | null;
+  source: string | null;
+  created_at: string;
+}
