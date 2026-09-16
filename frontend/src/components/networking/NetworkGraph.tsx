@@ -40,10 +40,42 @@ export function NetworkGraph({ people, connections, onNodeClick, onAddClick }: P
   const nodesRef = useRef<GraphNode[]>([]);
   const [, setTick] = useState(0);
   const [pan, setPan] = useState({ x: 0, y: 0 });
-  const [zoom, setZoom] = useState(0.6);
+  const [zoom, setZoom] = useState(1);
   const [hoverId, setHoverId] = useState<string | null>(null);
   const dragRef = useRef<{ node: GraphNode; moved: boolean } | null>(null);
   const panRef = useRef<{ startX: number; startY: number; panX: number; panY: number } | null>(null);
+  const hasAutoFittedRef = useRef(false);
+
+  // Frames the view around whatever's actually in the web right now --
+  // used both for the very first render (once the initial layout settles)
+  // and for "Reset view", so "reset" keeps meaning "show me everything"
+  // instead of snapping back to an arbitrary fixed zoom that stops making
+  // sense once the web has grown past a couple of people.
+  function fitToContent() {
+    const liveNodes = nodesRef.current;
+    let minX = Infinity;
+    let maxX = -Infinity;
+    let minY = Infinity;
+    let maxY = -Infinity;
+    for (const n of liveNodes) {
+      if (typeof n.x !== 'number' || typeof n.y !== 'number') continue;
+      const pad = nodeRadius(n.person) + 40; // room for the "+" button and name label
+      minX = Math.min(minX, n.x - pad);
+      maxX = Math.max(maxX, n.x + pad);
+      minY = Math.min(minY, n.y - pad);
+      maxY = Math.max(maxY, n.y + pad);
+    }
+    if (!isFinite(minX)) return;
+    const boxW = Math.max(maxX - minX, 1);
+    const boxH = Math.max(maxY - minY, 1);
+    const scale = clamp(Math.min(SPACE_W / boxW, SPACE_H / boxH), 0.25, 2.2);
+    const cx = SPACE_W / 2;
+    const cy = SPACE_H / 2;
+    const boxCx = (minX + maxX) / 2;
+    const boxCy = (minY + maxY) / 2;
+    setZoom(scale);
+    setPan({ x: -scale * (boxCx - cx), y: -scale * (boxCy - cy) });
+  }
 
   // Rebuild the simulation's node/link arrays whenever the underlying data
   // changes, but carry over x/y/vx/vy from whatever node object already
@@ -94,7 +126,18 @@ export function NetworkGraph({ people, connections, onNodeClick, onAddClick }: P
         .force('charge', forceManyBody().strength(-320))
         .force('collide', forceCollide<GraphNode>().radius((d) => nodeRadius(d.person) + 26))
         .alphaDecay(0.025)
-        .on('tick', () => setTick((t) => t + 1));
+        .on('tick', () => setTick((t) => t + 1))
+        .on('end', () => {
+          // Fires every time the sim cools down (including after adding
+          // someone later), but only the very first settle -- right after
+          // initial load -- should auto-frame the view; refitting on every
+          // later edit would yank the view out from under someone who'd
+          // deliberately panned/zoomed elsewhere.
+          if (!hasAutoFittedRef.current) {
+            hasAutoFittedRef.current = true;
+            fitToContent();
+          }
+        });
     } else {
       simulationRef.current.nodes(nodes);
     }
@@ -171,11 +214,32 @@ export function NetworkGraph({ people, connections, onNodeClick, onAddClick }: P
     panRef.current = { startX: e.clientX, startY: e.clientY, panX: pan.x, panY: pan.y };
   }
 
-  function onWheel(e: React.WheelEvent) {
-    e.preventDefault();
-    const delta = -e.deltaY * 0.0012;
-    setZoom((z) => clamp(z * (1 + delta), 0.25, 2.2));
-  }
+  // A trackpad pinch is reported to the browser as a wheel event with
+  // ctrlKey set (that's how Chrome/Firefox/Edge represent it -- there's no
+  // separate "pinch" event outside Safari's own non-standard gesture API).
+  // Registered as a native, non-passive listener below rather than React's
+  // onWheel: React's synthetic wheel handler doesn't reliably let
+  // preventDefault() block the browser's OWN page-zoom on a pinch in every
+  // browser, which is exactly the bug this is fixing -- pinching over the
+  // graph was zooming the whole page instead of just the web.
+  useEffect(() => {
+    const svg = svgRef.current;
+    if (!svg) return;
+    function handleWheel(e: WheelEvent) {
+      e.preventDefault();
+      // Exponential, not linear -- a linear `zoom * (1 + delta)` can swing
+      // delta past -1 on a single large-deltaY event (a real trackpad pinch
+      // can report a deltaY in the hundreds) and flip zoom negative before
+      // it's even clamped. exp() stays positive and smooth no matter how
+      // big deltaY gets. Pinch (ctrlKey) uses a steeper rate since its
+      // deltas tend to run smaller per-event than a mouse wheel notch.
+      const rate = e.ctrlKey ? 0.008 : 0.0015;
+      const factor = Math.exp(-e.deltaY * rate);
+      setZoom((z) => clamp(z * factor, 0.25, 2.2));
+    }
+    svg.addEventListener('wheel', handleWheel, { passive: false });
+    return () => svg.removeEventListener('wheel', handleWheel);
+  }, []);
 
   const nodes = nodesRef.current;
   // Deliberately NOT memoized on [nodes] -- the simulation mutates node.x/y
@@ -194,13 +258,7 @@ export function NetworkGraph({ people, connections, onNodeClick, onAddClick }: P
         <button className="btn btn-sm" onClick={() => setZoom((z) => clamp(z / 1.2, 0.25, 2.2))}>
           −
         </button>
-        <button
-          className="btn btn-sm"
-          onClick={() => {
-            setZoom(0.6);
-            setPan({ x: 0, y: 0 });
-          }}
-        >
+        <button className="btn btn-sm" onClick={fitToContent}>
           Reset view
         </button>
       </div>
@@ -211,7 +269,6 @@ export function NetworkGraph({ people, connections, onNodeClick, onAddClick }: P
         onPointerMove={onSvgPointerMove}
         onPointerUp={onSvgPointerUp}
         onPointerDown={onBackgroundPointerDown}
-        onWheel={onWheel}
       >
         {/* Zoom is anchored at the space's center, not the SVG origin --
             baked directly into the matrix (SVG's `transform` attribute, as
