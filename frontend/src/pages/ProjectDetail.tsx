@@ -10,6 +10,8 @@ import { NewNoteModal } from '../components/projects/NewNoteModal';
 import { NewProjectModal } from '../components/projects/NewProjectModal';
 import { statusOptionsIncluding } from '../lib/projectStatuses';
 import { NewChangeOrderModal } from '../components/change-orders/NewChangeOrderModal';
+import { ChangeOrderDetailModal } from '../components/change-orders/ChangeOrderDetailModal';
+import { ChangeOrderRowMenu } from '../components/change-orders/ChangeOrderRowMenu';
 import { NewInvoiceModal } from '../components/invoices/NewInvoiceModal';
 import { InvoiceDetailModal } from '../components/invoices/InvoiceDetailModal';
 import { InvoiceRowMenu } from '../components/invoices/InvoiceRowMenu';
@@ -66,6 +68,7 @@ export default function ProjectDetail() {
   const [showNewNote, setShowNewNote] = useState(false);
   const [showEditProject, setShowEditProject] = useState(false);
   const [showNewCO, setShowNewCO] = useState(false);
+  const [selectedCoId, setSelectedCoId] = useState<string | null>(null);
   const [showNewInvoice, setShowNewInvoice] = useState(false);
   const [showImportEstimate, setShowImportEstimate] = useState(false);
   const [selectedInvoiceId, setSelectedInvoiceId] = useState<string | null>(null);
@@ -120,6 +123,17 @@ export default function ProjectDetail() {
       loadInvoices();
     } catch (e) {
       toast(e instanceof Error ? e.message : 'Failed to update status', true);
+    }
+  }
+
+  async function deleteChangeOrder(co: ChangeOrder) {
+    if (!window.confirm(`Permanently delete CO-${String(co.co_number ?? '?').padStart(3, '0')}? This can't be undone.`)) return;
+    try {
+      await api.delete(`/change-orders/${co.id}`);
+      toast('Change order deleted');
+      loadChangeOrders();
+    } catch (e) {
+      toast(e instanceof ApiError ? e.message : 'Failed to delete change order', true);
     }
   }
 
@@ -597,11 +611,12 @@ export default function ProjectDetail() {
                     <th>Type</th>
                     <th style={{ textAlign: 'right' }}>Owner price</th>
                     <th>Status</th>
+                    <th></th>
                   </tr>
                 </thead>
                 <tbody>
                   {changeOrders.map((co) => (
-                    <tr key={co.id}>
+                    <tr key={co.id} style={{ cursor: 'pointer' }} onClick={() => setSelectedCoId(co.id)}>
                       <td>{co.co_number ?? '—'}</td>
                       <td className="sticky-col" style={{ fontWeight: 500 }}>{co.title}</td>
                       <td><span className={`badge ${CO_TYPE_BADGE[co.co_type] || 'bg-gray'}`}>{co.co_type.replace('_', ' ')}</span></td>
@@ -611,6 +626,8 @@ export default function ProjectDetail() {
                           className={`badge ${CO_STATUS_BADGE[co.status] || 'bg-gray'}`}
                           style={{ border: 'none', cursor: 'pointer', fontSize: 11, padding: '2px 6px' }}
                           value={co.status}
+                          onClick={(e) => e.stopPropagation()}
+                          onMouseDown={(e) => e.stopPropagation()}
                           onChange={(e) => changeCoStatus(co, e.target.value)}
                         >
                           {CO_STATUS_OPTIONS.map((s) => (
@@ -620,6 +637,9 @@ export default function ProjectDetail() {
                           ))}
                         </select>
                         {co.sop_breach && <span className="badge bg-red" style={{ marginLeft: 6 }}>SOP breach</span>}
+                      </td>
+                      <td>
+                        <ChangeOrderRowMenu onEdit={() => setSelectedCoId(co.id)} onDelete={() => deleteChangeOrder(co)} />
                       </td>
                     </tr>
                   ))}
@@ -824,6 +844,17 @@ export default function ProjectDetail() {
             setShowNewCO(false);
             toast('Change order created');
             loadChangeOrders();
+          }}
+        />
+      )}
+
+      {selectedCoId && (
+        <ChangeOrderDetailModal
+          coId={selectedCoId}
+          onClose={() => setSelectedCoId(null)}
+          onChanged={() => {
+            loadChangeOrders();
+            api.get<Project>(`/projects/${id}`).then(setProject).catch(() => {});
           }}
         />
       )}
