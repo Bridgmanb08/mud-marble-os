@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { api, ApiError } from '../../api/client';
 import { Modal } from '../ui/Modal';
 import { useToast } from '../ui/Toast';
-import { fmt } from '../../lib/format';
+import { fmtCents } from '../../lib/format';
 import { AnimatedBar } from '../rentals/RentalVisuals';
 import type { EstimateItemForInvoice } from '../../types';
 
@@ -69,7 +69,7 @@ export function AddEstimateLineItemsModal({ invoiceId, projectId, onClose, onAdd
     if (!item) return;
     const clamped = Math.min(Math.max(rawAmount, 0), item.remaining_amount);
     if (rawAmount > item.remaining_amount + 0.01) {
-      toast(`Capped at ${fmt(item.remaining_amount)} — that's all that's left to invoice on "${item.title}".`);
+      toast(`Capped at ${fmtCents(item.remaining_amount)} — that's all that's left to invoice on "${item.title}".`);
     }
     const pct = item.owner_price > 0 ? round2((clamped / item.owner_price) * 100) : 0;
     setRows((prev) => ({ ...prev, [id]: { ...prev[id], pct: String(pct), amount: clamped.toFixed(2) } }));
@@ -186,11 +186,11 @@ export function AddEstimateLineItemsModal({ invoiceId, projectId, onClose, onAdd
                     <td>{item.title}</td>
                     <td>{item.cost_codes ? `${item.cost_codes.code} - ${item.cost_codes.name}` : '—'}</td>
                     <td style={{ textTransform: 'capitalize' }}>{item.cost_type === 'none' ? 'None' : item.cost_type}</td>
-                    <td>{fmt(item.owner_price)}</td>
+                    <td>{fmtCents(item.owner_price)}</td>
                     <td>
                       <AnimatedBar pct={item.invoiced_pct} color="var(--brand-brown)" height={7} />
                       <div style={{ fontSize: 10.5, color: 'var(--t3)', marginTop: 3 }}>
-                        {item.invoiced_pct}% invoiced · {fmt(item.remaining_amount)} left
+                        {item.invoiced_pct}% invoiced · {fmtCents(item.remaining_amount)} left
                       </div>
                     </td>
                     <td>
@@ -226,7 +226,7 @@ export function AddEstimateLineItemsModal({ invoiceId, projectId, onClose, onAdd
 
       <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 24, padding: '14px 0', fontSize: 15 }}>
         <span style={{ color: 'var(--t2)' }}>Invoice subtotal</span>
-        <strong>{fmt(subtotal)}</strong>
+        <strong>{fmtCents(subtotal)}</strong>
       </div>
 
       <div className="ma">

@@ -13,7 +13,7 @@ export default function InvoiceWorksheet() {
       <button className="btn btn-sm" style={{ marginBottom: 12 }} onClick={() => navigate('/invoices')}>
         <IconArrowLeft size={14} /> Back to Invoices
       </button>
-      <InvoiceEditor invoiceId={id} />
+      <InvoiceEditor invoiceId={id} onClose={() => navigate('/invoices')} />
     </>
   );
 }

@@ -3,7 +3,7 @@ import { IconDownload, IconFileDollar, IconPlus, IconTrash } from '@tabler/icons
 import { api, ApiError } from '../../api/client';
 import { useToast } from '../ui/Toast';
 import { openDatePicker } from '../../lib/datePicker';
-import { fmt } from '../../lib/format';
+import { fmtCents } from '../../lib/format';
 import { pdfExportFilename, triggerDownload } from '../../lib/download';
 import { InvoiceLineItemModal } from './InvoiceLineItemModal';
 import { AddEstimateLineItemsModal } from './AddEstimateLineItemsModal';
@@ -23,7 +23,20 @@ const STATUS_BADGE: Record<string, string> = {
 // inside a modal too (Project Detail's Invoices tab opens one of these in a
 // popup instead of navigating away, per Brent's request -- same content
 // either way, just a different wrapper around it).
-export function InvoiceEditor({ invoiceId, onInvoiceChanged }: { invoiceId: string; onInvoiceChanged?: (invoice: Invoice) => void }) {
+export function InvoiceEditor({
+  invoiceId,
+  onInvoiceChanged,
+  onClose,
+}: {
+  invoiceId: string;
+  onInvoiceChanged?: (invoice: Invoice) => void;
+  // Every field here already autosaves on blur -- there's no separate
+  // "save" step to perform. "Save & Close" just gives Shannon/Brent an
+  // explicit way to say "I'm done" instead of relying on a browser back
+  // button or clicking the modal's backdrop, in whichever context this is
+  // rendered (a modal popup or the standalone /invoices/:id page).
+  onClose?: () => void;
+}) {
   const toast = useToast();
 
   const [invoice, setInvoice] = useState<Invoice | null>(null);
@@ -132,16 +145,16 @@ export function InvoiceEditor({ invoiceId, onInvoiceChanged }: { invoiceId: stri
         <div className="card" style={{ padding: '14px 20px', marginBottom: 16, display: 'flex', flexWrap: 'wrap', gap: 24 }}>
           <div>
             <div style={{ fontSize: 11, color: 'var(--t2)', textTransform: 'uppercase' }}>Contract total</div>
-            <div style={{ fontSize: 16, fontWeight: 600 }}>{fmt(financialSummary.owner_price)}</div>
+            <div style={{ fontSize: 16, fontWeight: 600 }}>{fmtCents(financialSummary.owner_price)}</div>
           </div>
           <div>
             <div style={{ fontSize: 11, color: 'var(--t2)', textTransform: 'uppercase' }}>Invoiced to date</div>
-            <div style={{ fontSize: 16, fontWeight: 600 }}>{fmt(financialSummary.invoiced_to_date)}</div>
+            <div style={{ fontSize: 16, fontWeight: 600 }}>{fmtCents(financialSummary.invoiced_to_date)}</div>
           </div>
           <div>
             <div style={{ fontSize: 11, color: 'var(--t2)', textTransform: 'uppercase' }}>Remaining to invoice</div>
             <div style={{ fontSize: 16, fontWeight: 600, color: financialSummary.remaining_to_invoice < 0 ? 'var(--red)' : undefined }}>
-              {fmt(financialSummary.remaining_to_invoice)}
+              {fmtCents(financialSummary.remaining_to_invoice)}
             </div>
           </div>
           {invoice.status === 'draft' && (
@@ -301,7 +314,7 @@ export function InvoiceEditor({ invoiceId, onInvoiceChanged }: { invoiceId: stri
                       <td className="sticky-col">{it.title}</td>
                       <td>{it.cost_codes ? `${it.cost_codes.code} - ${it.cost_codes.name}` : '—'}</td>
                       <td style={{ color: 'var(--t2)' }}>{it.description || '—'}</td>
-                      <td>{fmt(it.amount)}</td>
+                      <td>{fmtCents(it.amount)}</td>
                       <td>
                         <button
                           type="button"
@@ -331,13 +344,13 @@ export function InvoiceEditor({ invoiceId, onInvoiceChanged }: { invoiceId: stri
               }}
             >
               <span style={{ color: 'var(--t2)' }}>Invoice total</span>
-              <strong>{fmt(invoice.amount_due)}</strong>
+              <strong>{fmtCents(invoice.amount_due)}</strong>
             </div>
           </>
         ) : (
           <div style={{ padding: '20px' }}>
             <div style={{ fontSize: 13, color: 'var(--t2)', marginBottom: 12 }}>
-              No line items yet — this invoice is a flat amount of {fmt(invoice.amount_due)}. Add a line item (manually
+              No line items yet — this invoice is a flat amount of {fmtCents(invoice.amount_due)}. Add a line item (manually
               or from the estimate) to break it down.
             </div>
           </div>
@@ -367,6 +380,19 @@ export function InvoiceEditor({ invoiceId, onInvoiceChanged }: { invoiceId: stri
             load();
           }}
         />
+      )}
+      {onClose && (
+        // Extra right padding here specifically -- inside a modal this bar
+        // is well clear of anything (the modal box itself has margin from
+        // the viewport edge), but on the standalone /invoices/:id page this
+        // sticky bar spans the actual page width, landing right under the
+        // floating "Ask AI" button fixed in that same bottom-right corner
+        // (55px wide, ~78px from the true edge) and stealing its clicks.
+        <div className="ma" style={{ paddingRight: 90 }}>
+          <button className="btn btn-p btn-sm" onClick={onClose}>
+            Save &amp; Close
+          </button>
+        </div>
       )}
     </>
   );

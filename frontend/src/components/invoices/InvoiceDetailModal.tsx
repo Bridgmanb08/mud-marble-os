@@ -17,7 +17,7 @@ export function InvoiceDetailModal({
 }) {
   return (
     <Modal title="Invoice" onClose={onClose} xl resizable>
-      <InvoiceEditor invoiceId={invoiceId} onInvoiceChanged={onInvoiceChanged} />
+      <InvoiceEditor invoiceId={invoiceId} onInvoiceChanged={onInvoiceChanged} onClose={onClose} />
     </Modal>
   );
 }
