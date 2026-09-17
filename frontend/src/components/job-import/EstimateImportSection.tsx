@@ -7,7 +7,17 @@ import type { Estimate, EstimateSheetPreview, EstimateSheetRow } from '../../typ
 
 type RowAction = 'add' | 'skip' | 'update';
 
-export function EstimateImportSection({ projectId }: { projectId: string }) {
+export function EstimateImportSection({
+  projectId,
+  onImported,
+}: {
+  projectId: string;
+  // Lets a caller that already has its own estimates list (Project
+  // Detail's Estimate tab) refresh it after an import, instead of only
+  // the standalone Job Import wizard page ever finding out an import
+  // happened.
+  onImported?: () => void;
+}) {
   const toast = useToast();
   const [file, setFile] = useState<File | null>(null);
   const [preview, setPreview] = useState<EstimateSheetPreview | null>(null);
@@ -22,10 +32,15 @@ export function EstimateImportSection({ projectId }: { projectId: string }) {
     setPreview(null);
     setError('');
     setImportedCount(null);
+    // Auto-preview the moment a file is chosen -- no separate manual
+    // "Preview" click needed. Passed directly rather than relying on the
+    // `file` state (which wouldn't be updated yet in this same tick).
+    if (selected) handlePreview(selected);
   }
 
-  async function handlePreview() {
-    if (!file) {
+  async function handlePreview(fileToPreview?: File) {
+    const target = fileToPreview ?? file;
+    if (!target) {
       setError('Choose a file first.');
       return;
     }
@@ -33,7 +48,7 @@ export function EstimateImportSection({ projectId }: { projectId: string }) {
     setError('');
     try {
       const formData = new FormData();
-      formData.append('file', file);
+      formData.append('file', target);
       const result = await api.postForm<EstimateSheetPreview>(`/job-import/${projectId}/estimate-sheet/preview`, formData);
       setPreview(result);
       // Conflicting rows default to "skip" (keep the existing record) -- Shannon
@@ -100,6 +115,7 @@ export function EstimateImportSection({ projectId }: { projectId: string }) {
       if (addedCount) parts.push(`added ${addedCount}`);
       if (updatedCount) parts.push(`updated ${updatedCount}`);
       toast(parts.length ? `Imported: ${parts.join(', ')} line item(s)` : 'Nothing to import');
+      onImported?.();
     } catch (err) {
       setError(err instanceof ApiError ? err.message : 'Failed to import estimate');
     } finally {
@@ -120,9 +136,15 @@ export function EstimateImportSection({ projectId }: { projectId: string }) {
             label="Drag and drop your Estimate sheet (Excel, PDF, or photo) here, or click to browse"
           />
           <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginTop: 10 }}>
-            <button className="btn btn-sm" onClick={handlePreview} disabled={!file || loadingPreview}>
-              {loadingPreview ? 'Reading…' : 'Preview'}
-            </button>
+            {loadingPreview && <span style={{ fontSize: 12, color: 'var(--t2)' }}>Reading…</span>}
+            {/* Only shown after an auto-preview attempt actually failed --
+                the file is still chosen, just needs another attempt (a
+                network hiccup, say) without picking it again. */}
+            {!loadingPreview && error && file && (
+              <button className="btn btn-sm" onClick={() => handlePreview()}>
+                Try again
+              </button>
+            )}
             {importedCount !== null && (
               <span style={{ fontSize: 12, color: 'var(--green)' }}>Imported {importedCount} line item(s).</span>
             )}
