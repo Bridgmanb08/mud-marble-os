@@ -87,6 +87,12 @@ export function ChangeOrderEditor({ coId, onChanged }: { coId: string; onChanged
           >
             <IconDownload size={14} /> PDF
           </button>
+          {/* Plain window.open, same as EstimateWorksheet's own Excel button --
+              unlike PDF, there's no client-side filename override trick applied
+              here; the server's own Content-Disposition filename is used as-is. */}
+          <button className="btn btn-sm" onClick={() => window.open(`/api/change-orders/${coId}/export/excel`, '_blank')}>
+            <IconDownload size={14} /> Excel
+          </button>
           <span className={`badge ${STATUS_BADGE[co.status] || 'bg-gray'}`} style={{ fontSize: 13 }}>
             {co.status}
           </span>
