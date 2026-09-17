@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { useParams, useNavigate, useSearchParams, Link } from 'react-router-dom';
-import { IconArrowLeft, IconPencil, IconPlus, IconCalendar, IconList } from '@tabler/icons-react';
+import { IconArrowLeft, IconPencil, IconPlus, IconCalendar, IconList, IconUpload } from '@tabler/icons-react';
 import { api, ApiError } from '../api/client';
 import { useToast } from '../components/ui/Toast';
 import { fmt, fmtD } from '../lib/format';
@@ -17,6 +17,7 @@ import { NewTaskModal } from '../components/tasks/NewTaskModal';
 import { TaskDetailDrawer } from '../components/tasks/TaskDetailDrawer';
 import { KanbanBoard } from '../components/tasks/KanbanBoard';
 import { FilesTab } from '../components/projects/FilesTab';
+import { EstimateImportSection } from '../components/job-import/EstimateImportSection';
 import { WeekScrollCalendar } from '../components/schedule/WeekScrollCalendar';
 import { FathomImportWidget } from '../components/projects/FathomImportWidget';
 import { PhaseTracker } from '../components/projects/PhaseTracker';
@@ -66,6 +67,7 @@ export default function ProjectDetail() {
   const [showEditProject, setShowEditProject] = useState(false);
   const [showNewCO, setShowNewCO] = useState(false);
   const [showNewInvoice, setShowNewInvoice] = useState(false);
+  const [showImportEstimate, setShowImportEstimate] = useState(false);
   const [selectedInvoiceId, setSelectedInvoiceId] = useState<string | null>(null);
   const [showNewTask, setShowNewTask] = useState(false);
   const [newTaskStatus, setNewTaskStatus] = useState('upcoming');
@@ -435,10 +437,24 @@ export default function ProjectDetail() {
           </div>
           <div className="sh">
             <div className="st">{estimates.length} version{estimates.length === 1 ? '' : 's'}</div>
-            <button className="btn btn-p btn-sm" onClick={startEstimate} disabled={startingEstimate}>
-              <IconPlus size={14} /> {startingEstimate ? 'Starting…' : 'New estimate'}
-            </button>
+            <div style={{ display: 'flex', gap: 8 }}>
+              <button className="btn btn-sm" onClick={() => setShowImportEstimate((v) => !v)}>
+                <IconUpload size={14} /> Import
+              </button>
+              <button className="btn btn-p btn-sm" onClick={startEstimate} disabled={startingEstimate}>
+                <IconPlus size={14} /> {startingEstimate ? 'Starting…' : 'New estimate'}
+              </button>
+            </div>
           </div>
+          {showImportEstimate && id && (
+            // Same import path as the standalone Job Import wizard page
+            // (Excel, PDF, or a photo of a paper estimate) -- just reachable
+            // right from the project it belongs to, instead of only from a
+            // separate portal linked off the dashboard.
+            <div style={{ padding: 14, border: '1px solid var(--border)', borderRadius: 'var(--r)', marginBottom: 14 }}>
+              <EstimateImportSection projectId={id} onImported={loadEstimates} />
+            </div>
+          )}
           {estimates.length === 0 ? (
             <div className="empty">
               <div className="empty-t">No estimate yet</div>
