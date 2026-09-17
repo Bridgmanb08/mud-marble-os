@@ -4,6 +4,8 @@ from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException
 from fastapi.responses import Response
+from openpyxl import Workbook
+from openpyxl.styles import Font
 from reportlab.lib import colors
 from reportlab.lib.pagesizes import letter
 from reportlab.lib.units import inch
@@ -26,6 +28,12 @@ from ..schemas.change_orders import ChangeOrderCreate, ChangeOrderOut, ChangeOrd
 from ..supabase_client import db_delete, db_get, db_patch, db_post
 
 router = APIRouter(prefix="/change-orders", tags=["change_orders"])
+
+# Shared between the PDF and Excel exports below (and previously duplicated
+# inline in just the PDF export) -- one place to add a new co_type/
+# discovered_by option's display label instead of two.
+TYPE_LABELS = {"client_addition": "Client Addition", "oversight": "Oversight", "unforeseen": "Unforeseen"}
+DISCOVERED_LABELS = {"brent": "Brent", "shannon": "Shannon", "client": "Client", "subcontractor": "Subcontractor"}
 
 
 def _attach_breach(co: dict) -> dict:
@@ -147,13 +155,11 @@ async def export_change_order_pdf(co_id: str, _: CurrentUser = Depends(get_curre
     # A bordered info card, same treatment as the invoice PDF -- status
     # colored to match its on-screen badge (STATUS_BADGE in
     # ChangeOrders.tsx) so "approved" reads as unmistakably good news.
-    type_labels = {"client_addition": "Client Addition", "oversight": "Oversight", "unforeseen": "Unforeseen"}
-    discovered_labels = {"brent": "Brent", "shannon": "Shannon", "client": "Client", "subcontractor": "Subcontractor"}
     status_color_key = {"approved": "green", "rejected": "red", "sent": "amber", "pending": "gray"}.get(co.get("status"))
     info_fields = [
-        ("Type", xml_escape(type_labels.get(co.get("co_type"), co.get("co_type") or "")), None),
+        ("Type", xml_escape(TYPE_LABELS.get(co.get("co_type"), co.get("co_type") or "")), None),
         ("Status", xml_escape((co.get("status") or "").title()), STATUS_COLORS.get(status_color_key)),
-        ("Discovered by", xml_escape(discovered_labels.get(co.get("discovered_by"), co.get("discovered_by") or "—")), None),
+        ("Discovered by", xml_escape(DISCOVERED_LABELS.get(co.get("discovered_by"), co.get("discovered_by") or "—")), None),
     ]
     elements.append(build_info_card(s, PAGE_WIDTH, info_fields, columns=3))
     elements.append(Spacer(1, 14))
@@ -196,5 +202,67 @@ async def export_change_order_pdf(co_id: str, _: CurrentUser = Depends(get_curre
     return Response(
         content=pdf_bytes,
         media_type="application/pdf",
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+    )
+
+
+@router.get("/{co_id}/export/excel")
+async def export_change_order_excel(co_id: str, _: CurrentUser = Depends(get_current_user)):
+    rows = await db_get("change_orders", f"?id=eq.{co_id}&select=*,projects(name,address)")
+    if not rows:
+        raise HTTPException(status_code=404, detail="Change order not found")
+    co = _attach_breach(rows[0])
+    project = co.get("projects") or {}
+    project_name = (project.get("name") or "").split("|")[0].strip()
+    co_number = f"CO-{str(co.get('co_number') or '?').zfill(3)}"
+
+    wb = Workbook()
+    ws = wb.active
+    ws.title = "Change Order"
+    header_font = Font(bold=True)
+
+    ws.append([f"Change Order {co_number}: {co.get('title') or ''}"])
+    ws["A1"].font = Font(bold=True, size=14)
+    address = (project.get("address") or "").strip() or project_name
+    if address:
+        ws.append([address])
+    ws.append([])
+
+    ws.append(["Type", "Status", "Discovered by"])
+    for cell in ws[ws.max_row]:
+        cell.font = header_font
+    ws.append(
+        [
+            TYPE_LABELS.get(co.get("co_type"), co.get("co_type") or ""),
+            (co.get("status") or "").title(),
+            DISCOVERED_LABELS.get(co.get("discovered_by"), co.get("discovered_by") or "—"),
+        ]
+    )
+    ws.append([])
+
+    # Client-facing scope description only -- notes_internal never belongs
+    # in anything a client could receive, same rule the PDF export follows.
+    if co.get("description"):
+        ws.append(["Description"])
+        ws.cell(row=ws.max_row, column=1).font = header_font
+        ws.append([co["description"]])
+        ws.append([])
+
+    ws.append(["", "Price", co.get("owner_price") or 0])
+    ws.cell(row=ws.max_row, column=2).font = header_font
+    ws.cell(row=ws.max_row, column=3).font = header_font
+
+    for col, width in zip("ABC", [22, 24, 18]):
+        ws.column_dimensions[col].width = width
+
+    buf = io.BytesIO()
+    wb.save(buf)
+    excel_bytes = buf.getvalue()
+    buf.close()
+
+    filename = f"{co_number}-{project_name or 'change-order'}.xlsx".replace(" ", "-")
+    return Response(
+        content=excel_bytes,
+        media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
         headers={"Content-Disposition": f'attachment; filename="{filename}"'},
     )
