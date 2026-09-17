@@ -408,6 +408,27 @@ export interface ChangeOrder {
   sop_breach: boolean;
 }
 
+export interface ChangeOrderLineItem {
+  id: string;
+  change_order_id: string;
+  cost_code_id: string | null;
+  title: string;
+  description: string | null;
+  quantity: number;
+  unit: string | null;
+  unit_cost: number;
+  cost_type: string;
+  builder_cost: number;
+  markup_type: string;
+  markup_value: number;
+  owner_price: number;
+  notes_internal: string | null;
+  notes_external: string | null;
+  sort_order: number;
+  cost_codes: { code: string; name: string } | null;
+  created_at: string;
+}
+
 export interface Transaction {
   id: string;
   project_id: string;
