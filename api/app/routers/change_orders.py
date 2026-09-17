@@ -23,7 +23,7 @@ from ..pdf_export import (
     xml_escape,
 )
 from ..schemas.change_orders import ChangeOrderCreate, ChangeOrderOut, ChangeOrderUpdate
-from ..supabase_client import db_get, db_patch, db_post
+from ..supabase_client import db_delete, db_get, db_patch, db_post
 
 router = APIRouter(prefix="/change-orders", tags=["change_orders"])
 
@@ -90,6 +90,25 @@ async def update_change_order(co_id: str, body: ChangeOrderUpdate, _: CurrentUse
 
     full = await db_get("change_orders", f"?id=eq.{co_id}&select=*,projects(name,address)")
     return _attach_breach(full[0])
+
+
+@router.delete("/{co_id}")
+async def delete_change_order(co_id: str, _: CurrentUser = Depends(get_current_user)):
+    existing = await db_get("change_orders", f"?id=eq.{co_id}&select=status")
+    if not existing:
+        raise HTTPException(status_code=404, detail="Change order not found")
+    # An approved CO already grew the project's contract_value (see
+    # update_change_order above) -- the same "don't let a hard delete
+    # destroy real agreed-upon financial history" guard invoices.py applies
+    # to a paid invoice, here applied to an approved change order instead
+    # of trying to reverse that contract_value math on delete.
+    if existing[0]["status"] == "approved":
+        raise HTTPException(
+            status_code=400,
+            detail="Can't delete an approved change order -- change its status first if it was approved in error.",
+        )
+    await db_delete("change_orders", co_id)
+    return {"ok": True}
 
 
 @router.get("/{co_id}", response_model=ChangeOrderOut)
