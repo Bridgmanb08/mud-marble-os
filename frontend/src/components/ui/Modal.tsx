@@ -7,6 +7,12 @@ interface ModalProps {
   children: ReactNode;
   wide?: boolean;
   xl?: boolean;
+  // ~30% wider than xl -- for the one modal (Add line items to invoice)
+  // whose line-item table genuinely needs the extra room to show every
+  // column without a horizontal scrollbar, without also widening the
+  // other three modals that already use xl (Task detail, Invoice,
+  // Change Order).
+  xxl?: boolean;
   // Adds a drag handle in the bottom-right corner for dense/table-heavy
   // modals (a long line-item review list, a worksheet) where the default
   // width/height genuinely cramps the content. Dragging grows the box on
@@ -21,7 +27,7 @@ const MIN_WIDTH = 360;
 const MIN_HEIGHT = 240;
 const VIEWPORT_MARGIN = 64; // leaves breathing room so a max-drag resize never touches the screen edge
 
-export function Modal({ title, onClose, children, wide, xl, resizable }: ModalProps) {
+export function Modal({ title, onClose, children, wide, xl, xxl, resizable }: ModalProps) {
   const [size, setSize] = useState<{ width: number; height: number } | null>(null);
   const boxRef = useRef<HTMLDivElement>(null);
   const dragStart = useRef<{ x: number; y: number; width: number; height: number } | null>(null);
@@ -61,7 +67,7 @@ export function Modal({ title, onClose, children, wide, xl, resizable }: ModalPr
     >
       <div
         ref={boxRef}
-        className={`mb${xl ? ' xl' : wide ? ' wide' : ''}${resizable ? ' mb-resizable' : ''}`}
+        className={`mb${xxl ? ' xxl' : xl ? ' xl' : wide ? ' wide' : ''}${resizable ? ' mb-resizable' : ''}`}
         style={size ? { width: size.width, height: size.height, maxHeight: size.height } : undefined}
       >
         <div className="mt">{title}</div>
