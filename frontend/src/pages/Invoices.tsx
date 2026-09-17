@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { IconPlus, IconReceipt } from '@tabler/icons-react';
 import { api, ApiError } from '../api/client';
 import { useToast } from '../components/ui/Toast';
-import { fmt, fmtD } from '../lib/format';
+import { fmtCents, fmtD } from '../lib/format';
 import type { Invoice } from '../types';
 import { NewInvoiceModal } from '../components/invoices/NewInvoiceModal';
 import { InvoiceRowMenu } from '../components/invoices/InvoiceRowMenu';
@@ -102,7 +102,7 @@ export default function Invoices() {
         <div className="metric">
           <div className="m-label">Outstanding</div>
           <div className="m-val" style={{ fontSize: 17, color: outstanding > 0 ? 'var(--atx)' : undefined }}>
-            {fmt(outstanding)}
+            {fmtCents(outstanding)}
           </div>
         </div>
       </div>
@@ -144,7 +144,7 @@ export default function Invoices() {
               </div>
             </div>
             <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexShrink: 0 }}>
-              <span style={{ fontSize: 14, fontWeight: 600 }}>{fmt(i.amount_due)}</span>
+              <span style={{ fontSize: 14, fontWeight: 600 }}>{fmtCents(i.amount_due)}</span>
               <span className={`badge ${STATUS_BADGE[i.status] || 'bg-gray'}`}>{i.status}</span>
               <InvoiceRowMenu
                 invoiceNumber={i.invoice_number}

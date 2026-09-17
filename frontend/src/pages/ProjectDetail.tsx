@@ -3,7 +3,7 @@ import { useParams, useNavigate, useSearchParams, Link } from 'react-router-dom'
 import { IconArrowLeft, IconPencil, IconPlus, IconCalendar, IconList, IconUpload } from '@tabler/icons-react';
 import { api, ApiError } from '../api/client';
 import { useToast } from '../components/ui/Toast';
-import { fmt, fmtD } from '../lib/format';
+import { fmt, fmtCents, fmtD } from '../lib/format';
 import { useReferenceData } from '../reference-data/ReferenceDataContext';
 import type { ChangeOrder, CostCodeVariance, Estimate, FinancialSummary, Invoice, Project, ProjectNote, Task } from '../types';
 import { NewNoteModal } from '../components/projects/NewNoteModal';
@@ -643,16 +643,16 @@ export default function ProjectDetail() {
             <div style={{ display: 'flex', flexWrap: 'wrap', gap: 20, marginBottom: 14, fontSize: 12.5 }}>
               <div>
                 <span style={{ color: 'var(--t2)' }}>Contract total: </span>
-                <strong>{fmt(financialSummary.owner_price)}</strong>
+                <strong>{fmtCents(financialSummary.owner_price)}</strong>
               </div>
               <div>
                 <span style={{ color: 'var(--t2)' }}>Invoiced to date: </span>
-                <strong>{fmt(financialSummary.invoiced_to_date)}</strong>
+                <strong>{fmtCents(financialSummary.invoiced_to_date)}</strong>
               </div>
               <div>
                 <span style={{ color: 'var(--t2)' }}>Remaining to invoice: </span>
                 <strong style={{ color: financialSummary.remaining_to_invoice < 0 ? 'var(--red)' : undefined }}>
-                  {fmt(financialSummary.remaining_to_invoice)}
+                  {fmtCents(financialSummary.remaining_to_invoice)}
                 </strong>
               </div>
             </div>
@@ -678,8 +678,8 @@ export default function ProjectDetail() {
                     <tr key={inv.id} style={{ cursor: 'pointer' }} onClick={() => setSelectedInvoiceId(inv.id)}>
                       <td className="sticky-col" style={{ fontWeight: 500 }}>{inv.invoice_number || 'Draft'}</td>
                       <td>{inv.invoice_type}</td>
-                      <td style={{ textAlign: 'right' }}>{fmt(inv.amount_due)}</td>
-                      <td style={{ textAlign: 'right' }}>{fmt(inv.amount_paid)}</td>
+                      <td style={{ textAlign: 'right' }}>{fmtCents(inv.amount_due)}</td>
+                      <td style={{ textAlign: 'right' }}>{fmtCents(inv.amount_paid)}</td>
                       <td>{fmtD(inv.due_date)}</td>
                       <td><span className={`badge ${INVOICE_STATUS_BADGE[inv.status] || 'bg-gray'}`}>{inv.status}</span></td>
                       <td style={{ textAlign: 'right' }}>
