@@ -24,7 +24,15 @@ from ..pdf_export import (
     build_totals_band,
     xml_escape,
 )
-from ..schemas.change_orders import ChangeOrderCreate, ChangeOrderOut, ChangeOrderUpdate
+from ..routers.estimates import _compute_costs
+from ..schemas.change_orders import (
+    ChangeOrderCreate,
+    ChangeOrderLineItemCreate,
+    ChangeOrderLineItemOut,
+    ChangeOrderLineItemUpdate,
+    ChangeOrderOut,
+    ChangeOrderUpdate,
+)
 from ..supabase_client import db_delete, db_get, db_patch, db_post
 
 router = APIRouter(prefix="/change-orders", tags=["change_orders"])
@@ -39,6 +47,45 @@ DISCOVERED_LABELS = {"brent": "Brent", "shannon": "Shannon", "client": "Client",
 def _attach_breach(co: dict) -> dict:
     now = datetime.now(timezone.utc)
     return {**co, "sop_breach": compute_sop_breach(co.get("status"), co.get("sent_at"), now)}
+
+
+async def _recalc_co_totals(co_id: str) -> None:
+    """Once a change order has real line items, its owner_price/builder_cost
+    stop being something typed directly onto the CO and become the sum of
+    those items instead -- the same "the parent's totals are always
+    recomputed from its line items, never independently trusted" rule
+    estimates.py's own _recalc_estimate_totals already follows. Only ever
+    called from the three line-item endpoints below (create/update/delete),
+    never from anywhere that would touch a CO that's never had a line item
+    added -- so the original flat-entry flow (manually typed owner price,
+    no line items at all) is never affected by this running. Deliberately
+    always persists the sum, including 0 once the last item is removed,
+    rather than leaving a stale nonzero total behind."""
+    items = await db_get("change_order_line_items", f"?change_order_id=eq.{co_id}&select=builder_cost,owner_price")
+    total_builder_cost = round(sum(i.get("builder_cost") or 0 for i in items), 2)
+    total_owner_price = round(sum(i.get("owner_price") or 0 for i in items), 2)
+
+    co_rows = await db_get("change_orders", f"?id=eq.{co_id}&select=status,project_id,owner_price")
+    if not co_rows:
+        return
+    old_owner_price = co_rows[0].get("owner_price") or 0
+    project_id = co_rows[0]["project_id"]
+    status = co_rows[0]["status"]
+
+    await db_patch("change_orders", co_id, {"builder_cost": total_builder_cost, "owner_price": total_owner_price})
+
+    # An already-approved CO's owner_price is already baked into the
+    # project's contract_value (see update_change_order's status-transition
+    # handling) -- a line-item edit that changes the total while status
+    # stays "approved" throughout has to adjust contract_value by the
+    # delta too, or an approved CO's price could silently drift away from
+    # what the project's own contract total shows.
+    if status == "approved" and total_owner_price != old_owner_price:
+        delta = total_owner_price - old_owner_price
+        proj_rows = await db_get("projects", f"?id=eq.{project_id}&select=contract_value")
+        if proj_rows:
+            current = proj_rows[0].get("contract_value") or 0
+            await db_patch("projects", project_id, {"contract_value": round(current + delta, 2)})
 
 
 @router.get("", response_model=list[ChangeOrderOut])
@@ -125,6 +172,63 @@ async def get_change_order(co_id: str, _: CurrentUser = Depends(get_current_user
     if not rows:
         raise HTTPException(status_code=404, detail="Change order not found")
     return _attach_breach(rows[0])
+
+
+@router.get("/{co_id}/items", response_model=list[ChangeOrderLineItemOut])
+async def list_co_items(co_id: str, _: CurrentUser = Depends(get_current_user)):
+    return await db_get(
+        "change_order_line_items", f"?change_order_id=eq.{co_id}&order=sort_order.asc&select=*,cost_codes(code,name)"
+    )
+
+
+@router.post("/{co_id}/items", response_model=ChangeOrderLineItemOut)
+async def create_co_item(co_id: str, body: ChangeOrderLineItemCreate, _: CurrentUser = Depends(get_current_user)):
+    existing = await db_get("change_orders", f"?id=eq.{co_id}&select=id")
+    if not existing:
+        raise HTTPException(status_code=404, detail="Change order not found")
+    builder_cost, owner_price = _compute_costs(body.quantity, body.unit_cost, body.markup_type, body.markup_value)
+    data = body.model_dump(exclude_none=True)
+    data["change_order_id"] = co_id
+    data["builder_cost"] = builder_cost
+    data["owner_price"] = owner_price
+    rows = await db_post("change_order_line_items", data)
+    await _recalc_co_totals(co_id)
+    full = await db_get("change_order_line_items", f"?id=eq.{rows[0]['id']}&select=*,cost_codes(code,name)")
+    return full[0]
+
+
+@router.patch("/{co_id}/items/{item_id}", response_model=ChangeOrderLineItemOut)
+async def update_co_item(
+    co_id: str, item_id: str, body: ChangeOrderLineItemUpdate, _: CurrentUser = Depends(get_current_user)
+):
+    existing = await db_get(
+        "change_order_line_items", f"?id=eq.{item_id}&select=quantity,unit_cost,markup_type,markup_value"
+    )
+    if not existing:
+        raise HTTPException(status_code=404, detail="Line item not found")
+    current = existing[0]
+    # exclude_unset (not exclude_none) -- an explicit null (e.g. clearing a
+    # cost code) has to reach the database, same convention every other
+    # PATCH endpoint in this app follows.
+    updates = body.model_dump(exclude_unset=True)
+    quantity = updates.get("quantity", current["quantity"])
+    unit_cost = updates.get("unit_cost", current["unit_cost"])
+    markup_type = updates.get("markup_type", current["markup_type"])
+    markup_value = updates.get("markup_value", current["markup_value"])
+    builder_cost, owner_price = _compute_costs(quantity, unit_cost, markup_type, markup_value)
+    updates["builder_cost"] = builder_cost
+    updates["owner_price"] = owner_price
+    await db_patch("change_order_line_items", item_id, updates)
+    await _recalc_co_totals(co_id)
+    full = await db_get("change_order_line_items", f"?id=eq.{item_id}&select=*,cost_codes(code,name)")
+    return full[0]
+
+
+@router.delete("/{co_id}/items/{item_id}")
+async def delete_co_item(co_id: str, item_id: str, _: CurrentUser = Depends(get_current_user)):
+    await db_delete("change_order_line_items", item_id)
+    await _recalc_co_totals(co_id)
+    return {"ok": True}
 
 
 @router.get("/{co_id}/export/pdf")
