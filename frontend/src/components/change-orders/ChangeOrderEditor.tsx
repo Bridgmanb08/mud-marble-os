@@ -1,10 +1,11 @@
 import { useEffect, useState } from 'react';
-import { IconDownload } from '@tabler/icons-react';
+import { IconDownload, IconPlus } from '@tabler/icons-react';
 import { api, ApiError } from '../../api/client';
 import { useToast } from '../ui/Toast';
 import { fmt } from '../../lib/format';
 import { pdfExportFilename, triggerDownload } from '../../lib/download';
-import type { ChangeOrder } from '../../types';
+import { ChangeOrderLineItemModal } from './ChangeOrderLineItemModal';
+import type { ChangeOrder, ChangeOrderLineItem } from '../../types';
 
 const STATUS_OPTIONS = ['pending', 'sent', 'approved', 'rejected'];
 const STATUS_BADGE: Record<string, string> = {
@@ -22,6 +23,7 @@ export function ChangeOrderEditor({ coId, onChanged }: { coId: string; onChanged
   const toast = useToast();
 
   const [co, setCo] = useState<ChangeOrder | null>(null);
+  const [items, setItems] = useState<ChangeOrderLineItem[]>([]);
   const [title, setTitle] = useState('');
   const [coType, setCoType] = useState('client_addition');
   const [discoveredBy, setDiscoveredBy] = useState('');
@@ -29,6 +31,8 @@ export function ChangeOrderEditor({ coId, onChanged }: { coId: string; onChanged
   const [builderCost, setBuilderCost] = useState('');
   const [description, setDescription] = useState('');
   const [notesInternal, setNotesInternal] = useState('');
+  const [showItemModal, setShowItemModal] = useState(false);
+  const [editingItem, setEditingItem] = useState<ChangeOrderLineItem | undefined>(undefined);
 
   function load() {
     if (!coId) return;
@@ -48,8 +52,14 @@ export function ChangeOrderEditor({ coId, onChanged }: { coId: string; onChanged
       .catch(() => toast('Failed to load change order', true));
   }
 
+  function loadItems() {
+    if (!coId) return;
+    api.get<ChangeOrderLineItem[]>(`/change-orders/${coId}/items`).catch(() => []).then((rows) => setItems(rows || []));
+  }
+
   useEffect(() => {
     load();
+    loadItems();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [coId]);
 
@@ -86,6 +96,12 @@ export function ChangeOrderEditor({ coId, onChanged }: { coId: string; onChanged
             onClick={() => triggerDownload(`/api/change-orders/${coId}/export/pdf`, pdfExportFilename(co.projects?.address, co.projects?.name, 'CO'))}
           >
             <IconDownload size={14} /> PDF
+          </button>
+          {/* Plain window.open, same as EstimateWorksheet's own Excel button --
+              unlike PDF, there's no client-side filename override trick applied
+              here; the server's own Content-Disposition filename is used as-is. */}
+          <button className="btn btn-sm" onClick={() => window.open(`/api/change-orders/${coId}/export/excel`, '_blank')}>
+            <IconDownload size={14} /> Excel
           </button>
           <span className={`badge ${STATUS_BADGE[co.status] || 'bg-gray'}`} style={{ fontSize: 13 }}>
             {co.status}
@@ -154,31 +170,107 @@ export function ChangeOrderEditor({ coId, onChanged }: { coId: string; onChanged
       </div>
 
       <div className="card" style={{ padding: 20, marginBottom: 16 }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 14 }}>
+          <div className="ibt" style={{ fontSize: 13, textTransform: 'none', letterSpacing: 0, border: 'none', padding: 0, margin: 0 }}>
+            Line items
+          </div>
+          <button
+            className="btn btn-sm"
+            onClick={() => {
+              setEditingItem(undefined);
+              setShowItemModal(true);
+            }}
+          >
+            <IconPlus size={14} /> Add line item
+          </button>
+        </div>
+        {items.length === 0 ? (
+          <div className="m-sub">
+            No line items yet -- this change order is a flat amount typed in below. Add a line item to break it down by cost code instead, the
+            same way estimates work.
+          </div>
+        ) : (
+          <div className="tbl-scroll">
+            <table className="tbl tbl-zebra">
+              <thead>
+                <tr>
+                  <th>Item</th>
+                  <th>Cost code</th>
+                  <th style={{ textAlign: 'right' }}>Qty</th>
+                  <th style={{ textAlign: 'right' }}>Unit cost</th>
+                  <th style={{ textAlign: 'right' }}>Price</th>
+                </tr>
+              </thead>
+              <tbody>
+                {items.map((it) => (
+                  <tr
+                    key={it.id}
+                    style={{ cursor: 'pointer' }}
+                    onClick={() => {
+                      setEditingItem(it);
+                      setShowItemModal(true);
+                    }}
+                  >
+                    <td style={{ fontWeight: 500 }}>{it.title}</td>
+                    <td>{it.cost_codes ? `${it.cost_codes.code} - ${it.cost_codes.name}` : '—'}</td>
+                    <td style={{ textAlign: 'right' }}>
+                      {it.quantity}
+                      {it.unit ? ` ${it.unit}` : ''}
+                    </td>
+                    <td style={{ textAlign: 'right' }}>{fmt(it.unit_cost)}</td>
+                    <td style={{ textAlign: 'right' }}>{fmt(it.owner_price)}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </div>
+
+      <div className="card" style={{ padding: 20, marginBottom: 16 }}>
         <div className="ibt" style={{ fontSize: 13, textTransform: 'none', letterSpacing: 0, border: 'none', padding: 0, marginBottom: 14 }}>
           Financials
         </div>
-        <div className="fr">
-          <div className="fg">
-            <label className="fl">Owner price ($)</label>
-            <input
-              className="fi"
-              type="number"
-              value={ownerPrice}
-              onChange={(e) => setOwnerPrice(e.target.value)}
-              onBlur={(e) => saveField('owner_price', parseFloat(e.target.value) || 0)}
-            />
+        {items.length > 0 ? (
+          // Once real line items exist, owner_price/builder_cost are always
+          // the sum of those items (recomputed server-side after every
+          // add/edit/delete) -- shown read-only here instead of editable
+          // inputs a save would just get silently overwritten on, the same
+          // way an estimate's grand total isn't a free-typed field either.
+          <div className="fr" style={{ marginBottom: 14 }}>
+            <div>
+              <label className="fl">Builder cost</label>
+              <div style={{ fontSize: 15, fontWeight: 600 }}>{fmt(co.builder_cost)}</div>
+            </div>
+            <div>
+              <label className="fl">Owner price</label>
+              <div style={{ fontSize: 15, fontWeight: 600 }}>{fmt(co.owner_price)}</div>
+            </div>
           </div>
-          <div className="fg">
-            <label className="fl">Builder cost ($)</label>
-            <input
-              className="fi"
-              type="number"
-              value={builderCost}
-              onChange={(e) => setBuilderCost(e.target.value)}
-              onBlur={(e) => saveField('builder_cost', e.target.value.trim() === '' ? null : parseFloat(e.target.value))}
-            />
+        ) : (
+          <div className="fr">
+            <div className="fg">
+              <label className="fl">Owner price ($)</label>
+              <input
+                className="fi"
+                type="number"
+                value={ownerPrice}
+                onChange={(e) => setOwnerPrice(e.target.value)}
+                onBlur={(e) => saveField('owner_price', parseFloat(e.target.value) || 0)}
+              />
+            </div>
+            <div className="fg">
+              <label className="fl">Builder cost ($)</label>
+              <input
+                className="fi"
+                type="number"
+                value={builderCost}
+                onChange={(e) => setBuilderCost(e.target.value)}
+                onBlur={(e) => saveField('builder_cost', e.target.value.trim() === '' ? null : parseFloat(e.target.value))}
+              />
+            </div>
           </div>
-        </div>
+        )}
         <div className="fg">
           <label className="fl">Description</label>
           <textarea
@@ -204,6 +296,25 @@ export function ChangeOrderEditor({ coId, onChanged }: { coId: string; onChanged
         <span style={{ color: 'var(--t2)', fontSize: 13 }}>Owner price</span>
         <strong style={{ fontSize: 16 }}>{fmt(co.owner_price)}</strong>
       </div>
+
+      {showItemModal && (
+        <ChangeOrderLineItemModal
+          coId={coId}
+          item={editingItem}
+          onClose={() => setShowItemModal(false)}
+          onSaved={() => {
+            setShowItemModal(false);
+            loadItems();
+            load();
+          }}
+          onDeleted={() => {
+            setShowItemModal(false);
+            toast('Line item removed');
+            loadItems();
+            load();
+          }}
+        />
+      )}
     </>
   );
 }

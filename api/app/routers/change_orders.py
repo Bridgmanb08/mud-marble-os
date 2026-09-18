@@ -4,11 +4,14 @@ from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException
 from fastapi.responses import Response
+from openpyxl import Workbook
+from openpyxl.styles import Font
 from reportlab.lib import colors
 from reportlab.lib.pagesizes import letter
 from reportlab.lib.units import inch
-from reportlab.platypus import HRFlowable, Paragraph, SimpleDocTemplate, Spacer
+from reportlab.platypus import HRFlowable, Paragraph, SimpleDocTemplate, Spacer, Table, TableStyle
 
+from .. import branding
 from ..change_order_utils import compute_sop_breach
 from ..deps import CurrentUser, get_current_user
 from ..pdf_export import (
@@ -22,15 +25,68 @@ from ..pdf_export import (
     build_totals_band,
     xml_escape,
 )
-from ..schemas.change_orders import ChangeOrderCreate, ChangeOrderOut, ChangeOrderUpdate
+from ..routers.estimates import _compute_costs
+from ..schemas.change_orders import (
+    ChangeOrderCreate,
+    ChangeOrderLineItemCreate,
+    ChangeOrderLineItemOut,
+    ChangeOrderLineItemUpdate,
+    ChangeOrderOut,
+    ChangeOrderUpdate,
+)
 from ..supabase_client import db_delete, db_get, db_patch, db_post
 
 router = APIRouter(prefix="/change-orders", tags=["change_orders"])
+
+# Shared between the PDF and Excel exports below (and previously duplicated
+# inline in just the PDF export) -- one place to add a new co_type/
+# discovered_by option's display label instead of two.
+TYPE_LABELS = {"client_addition": "Client Addition", "oversight": "Oversight", "unforeseen": "Unforeseen"}
+DISCOVERED_LABELS = {"brent": "Brent", "shannon": "Shannon", "client": "Client", "subcontractor": "Subcontractor"}
 
 
 def _attach_breach(co: dict) -> dict:
     now = datetime.now(timezone.utc)
     return {**co, "sop_breach": compute_sop_breach(co.get("status"), co.get("sent_at"), now)}
+
+
+async def _recalc_co_totals(co_id: str) -> None:
+    """Once a change order has real line items, its owner_price/builder_cost
+    stop being something typed directly onto the CO and become the sum of
+    those items instead -- the same "the parent's totals are always
+    recomputed from its line items, never independently trusted" rule
+    estimates.py's own _recalc_estimate_totals already follows. Only ever
+    called from the three line-item endpoints below (create/update/delete),
+    never from anywhere that would touch a CO that's never had a line item
+    added -- so the original flat-entry flow (manually typed owner price,
+    no line items at all) is never affected by this running. Deliberately
+    always persists the sum, including 0 once the last item is removed,
+    rather than leaving a stale nonzero total behind."""
+    items = await db_get("change_order_line_items", f"?change_order_id=eq.{co_id}&select=builder_cost,owner_price")
+    total_builder_cost = round(sum(i.get("builder_cost") or 0 for i in items), 2)
+    total_owner_price = round(sum(i.get("owner_price") or 0 for i in items), 2)
+
+    co_rows = await db_get("change_orders", f"?id=eq.{co_id}&select=status,project_id,owner_price")
+    if not co_rows:
+        return
+    old_owner_price = co_rows[0].get("owner_price") or 0
+    project_id = co_rows[0]["project_id"]
+    status = co_rows[0]["status"]
+
+    await db_patch("change_orders", co_id, {"builder_cost": total_builder_cost, "owner_price": total_owner_price})
+
+    # An already-approved CO's owner_price is already baked into the
+    # project's contract_value (see update_change_order's status-transition
+    # handling) -- a line-item edit that changes the total while status
+    # stays "approved" throughout has to adjust contract_value by the
+    # delta too, or an approved CO's price could silently drift away from
+    # what the project's own contract total shows.
+    if status == "approved" and total_owner_price != old_owner_price:
+        delta = total_owner_price - old_owner_price
+        proj_rows = await db_get("projects", f"?id=eq.{project_id}&select=contract_value")
+        if proj_rows:
+            current = proj_rows[0].get("contract_value") or 0
+            await db_patch("projects", project_id, {"contract_value": round(current + delta, 2)})
 
 
 @router.get("", response_model=list[ChangeOrderOut])
@@ -119,6 +175,63 @@ async def get_change_order(co_id: str, _: CurrentUser = Depends(get_current_user
     return _attach_breach(rows[0])
 
 
+@router.get("/{co_id}/items", response_model=list[ChangeOrderLineItemOut])
+async def list_co_items(co_id: str, _: CurrentUser = Depends(get_current_user)):
+    return await db_get(
+        "change_order_line_items", f"?change_order_id=eq.{co_id}&order=sort_order.asc&select=*,cost_codes(code,name)"
+    )
+
+
+@router.post("/{co_id}/items", response_model=ChangeOrderLineItemOut)
+async def create_co_item(co_id: str, body: ChangeOrderLineItemCreate, _: CurrentUser = Depends(get_current_user)):
+    existing = await db_get("change_orders", f"?id=eq.{co_id}&select=id")
+    if not existing:
+        raise HTTPException(status_code=404, detail="Change order not found")
+    builder_cost, owner_price = _compute_costs(body.quantity, body.unit_cost, body.markup_type, body.markup_value)
+    data = body.model_dump(exclude_none=True)
+    data["change_order_id"] = co_id
+    data["builder_cost"] = builder_cost
+    data["owner_price"] = owner_price
+    rows = await db_post("change_order_line_items", data)
+    await _recalc_co_totals(co_id)
+    full = await db_get("change_order_line_items", f"?id=eq.{rows[0]['id']}&select=*,cost_codes(code,name)")
+    return full[0]
+
+
+@router.patch("/{co_id}/items/{item_id}", response_model=ChangeOrderLineItemOut)
+async def update_co_item(
+    co_id: str, item_id: str, body: ChangeOrderLineItemUpdate, _: CurrentUser = Depends(get_current_user)
+):
+    existing = await db_get(
+        "change_order_line_items", f"?id=eq.{item_id}&select=quantity,unit_cost,markup_type,markup_value"
+    )
+    if not existing:
+        raise HTTPException(status_code=404, detail="Line item not found")
+    current = existing[0]
+    # exclude_unset (not exclude_none) -- an explicit null (e.g. clearing a
+    # cost code) has to reach the database, same convention every other
+    # PATCH endpoint in this app follows.
+    updates = body.model_dump(exclude_unset=True)
+    quantity = updates.get("quantity", current["quantity"])
+    unit_cost = updates.get("unit_cost", current["unit_cost"])
+    markup_type = updates.get("markup_type", current["markup_type"])
+    markup_value = updates.get("markup_value", current["markup_value"])
+    builder_cost, owner_price = _compute_costs(quantity, unit_cost, markup_type, markup_value)
+    updates["builder_cost"] = builder_cost
+    updates["owner_price"] = owner_price
+    await db_patch("change_order_line_items", item_id, updates)
+    await _recalc_co_totals(co_id)
+    full = await db_get("change_order_line_items", f"?id=eq.{item_id}&select=*,cost_codes(code,name)")
+    return full[0]
+
+
+@router.delete("/{co_id}/items/{item_id}")
+async def delete_co_item(co_id: str, item_id: str, _: CurrentUser = Depends(get_current_user)):
+    await db_delete("change_order_line_items", item_id)
+    await _recalc_co_totals(co_id)
+    return {"ok": True}
+
+
 @router.get("/{co_id}/export/pdf")
 async def export_change_order_pdf(co_id: str, _: CurrentUser = Depends(get_current_user)):
     rows = await db_get("change_orders", f"?id=eq.{co_id}&select=*,projects(name,address,clients(first_name,last_name))")
@@ -128,6 +241,7 @@ async def export_change_order_pdf(co_id: str, _: CurrentUser = Depends(get_curre
     project = co.get("projects") or {}
     breadcrumb = breadcrumb_for(project)
     project_name = (project.get("name") or "").split("|")[0].strip()
+    items = await db_get("change_order_line_items", f"?change_order_id=eq.{co_id}&order=sort_order.asc&select=title,description,owner_price")
 
     buf = io.BytesIO()
     doc = SimpleDocTemplate(
@@ -147,13 +261,11 @@ async def export_change_order_pdf(co_id: str, _: CurrentUser = Depends(get_curre
     # A bordered info card, same treatment as the invoice PDF -- status
     # colored to match its on-screen badge (STATUS_BADGE in
     # ChangeOrders.tsx) so "approved" reads as unmistakably good news.
-    type_labels = {"client_addition": "Client Addition", "oversight": "Oversight", "unforeseen": "Unforeseen"}
-    discovered_labels = {"brent": "Brent", "shannon": "Shannon", "client": "Client", "subcontractor": "Subcontractor"}
     status_color_key = {"approved": "green", "rejected": "red", "sent": "amber", "pending": "gray"}.get(co.get("status"))
     info_fields = [
-        ("Type", xml_escape(type_labels.get(co.get("co_type"), co.get("co_type") or "")), None),
+        ("Type", xml_escape(TYPE_LABELS.get(co.get("co_type"), co.get("co_type") or "")), None),
         ("Status", xml_escape((co.get("status") or "").title()), STATUS_COLORS.get(status_color_key)),
-        ("Discovered by", xml_escape(discovered_labels.get(co.get("discovered_by"), co.get("discovered_by") or "—")), None),
+        ("Discovered by", xml_escape(DISCOVERED_LABELS.get(co.get("discovered_by"), co.get("discovered_by") or "—")), None),
     ]
     elements.append(build_info_card(s, PAGE_WIDTH, info_fields, columns=3))
     elements.append(Spacer(1, 14))
@@ -165,6 +277,37 @@ async def export_change_order_pdf(co_id: str, _: CurrentUser = Depends(get_curre
     if co.get("description"):
         elements.append(Paragraph(xml_escape(co["description"]), s["body"]))
         elements.append(Spacer(1, 10))
+
+    # Once a change order has real line items, the flat description above is
+    # no longer where the scope detail lives -- without this table the PDF
+    # only ever showed a single lump "Price" line, which is exactly what
+    # made a line-itemized CO read as vague. Mirrors the Item/Description/
+    # Amount table the invoice PDF already builds; cost codes and
+    # builder_cost stay off this client-facing table, same rule the
+    # estimate/invoice exports follow.
+    if items:
+        item_col = PAGE_WIDTH * 0.30
+        desc_col = PAGE_WIDTH * 0.50
+        amount_col = PAGE_WIDTH - item_col - desc_col
+        table_data = [[Paragraph("Item", s["th"]), Paragraph("Description", s["th"]), Paragraph("Amount", s["th_right"])]]
+        for it in items:
+            table_data.append([
+                Paragraph(xml_escape(it.get("title") or ""), s["cell"]),
+                Paragraph(xml_escape(it.get("description") or ""), s["cell"]),
+                Paragraph(f"${(it.get('owner_price') or 0):,.2f}", s["cell_right"]),
+            ])
+        t = Table(table_data, colWidths=[item_col, desc_col, amount_col], repeatRows=1)
+        t.setStyle(TableStyle([
+            ("BACKGROUND", (0, 0), (-1, 0), branding.BRAND_CREAM),
+            ("LINEBELOW", (0, 0), (-1, 0), 0.75, branding.BRAND_BROWN),
+            ("LINEBELOW", (0, 1), (-1, -1), 0.25, colors.lightgrey),
+            ("ROWBACKGROUNDS", (0, 1), (-1, -1), [colors.white, colors.HexColor("#FAF8F3")]),
+            ("VALIGN", (0, 0), (-1, -1), "TOP"),
+            ("TOPPADDING", (0, 0), (-1, -1), 5), ("BOTTOMPADDING", (0, 0), (-1, -1), 5),
+            ("LEFTPADDING", (0, 0), (0, -1), 6), ("RIGHTPADDING", (-1, 0), (-1, -1), 6),
+        ]))
+        elements.append(t)
+        elements.append(Spacer(1, 12))
 
     # Owner price only -- builder_cost is internal margin data, same rule
     # the estimate PDF already follows for its own owner-price/builder-cost
@@ -196,5 +339,79 @@ async def export_change_order_pdf(co_id: str, _: CurrentUser = Depends(get_curre
     return Response(
         content=pdf_bytes,
         media_type="application/pdf",
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+    )
+
+
+@router.get("/{co_id}/export/excel")
+async def export_change_order_excel(co_id: str, _: CurrentUser = Depends(get_current_user)):
+    rows = await db_get("change_orders", f"?id=eq.{co_id}&select=*,projects(name,address)")
+    if not rows:
+        raise HTTPException(status_code=404, detail="Change order not found")
+    co = _attach_breach(rows[0])
+    project = co.get("projects") or {}
+    project_name = (project.get("name") or "").split("|")[0].strip()
+    co_number = f"CO-{str(co.get('co_number') or '?').zfill(3)}"
+    items = await db_get("change_order_line_items", f"?change_order_id=eq.{co_id}&order=sort_order.asc&select=title,description,owner_price")
+
+    wb = Workbook()
+    ws = wb.active
+    ws.title = "Change Order"
+    header_font = Font(bold=True)
+
+    ws.append([f"Change Order {co_number}: {co.get('title') or ''}"])
+    ws["A1"].font = Font(bold=True, size=14)
+    address = (project.get("address") or "").strip() or project_name
+    if address:
+        ws.append([address])
+    ws.append([])
+
+    ws.append(["Type", "Status", "Discovered by"])
+    for cell in ws[ws.max_row]:
+        cell.font = header_font
+    ws.append(
+        [
+            TYPE_LABELS.get(co.get("co_type"), co.get("co_type") or ""),
+            (co.get("status") or "").title(),
+            DISCOVERED_LABELS.get(co.get("discovered_by"), co.get("discovered_by") or "—"),
+        ]
+    )
+    ws.append([])
+
+    # Client-facing scope description only -- notes_internal never belongs
+    # in anything a client could receive, same rule the PDF export follows.
+    if co.get("description"):
+        ws.append(["Description"])
+        ws.cell(row=ws.max_row, column=1).font = header_font
+        ws.append([co["description"]])
+        ws.append([])
+
+    # Once a change order has real line items, list them the same way the
+    # estimate Excel export lists its own -- otherwise this sheet has the
+    # exact same "flat lump price, no scope detail" gap the PDF export had.
+    if items:
+        ws.append(["Item", "Description", "Amount"])
+        for cell in ws[ws.max_row]:
+            cell.font = header_font
+        for it in items:
+            ws.append([it.get("title"), it.get("description"), it.get("owner_price") or 0])
+        ws.append([])
+
+    ws.append(["", "Price", co.get("owner_price") or 0])
+    ws.cell(row=ws.max_row, column=2).font = header_font
+    ws.cell(row=ws.max_row, column=3).font = header_font
+
+    for col, width in zip("ABC", [28, 44, 18]):
+        ws.column_dimensions[col].width = width
+
+    buf = io.BytesIO()
+    wb.save(buf)
+    excel_bytes = buf.getvalue()
+    buf.close()
+
+    filename = f"{co_number}-{project_name or 'change-order'}.xlsx".replace(" ", "-")
+    return Response(
+        content=excel_bytes,
+        media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
         headers={"Content-Disposition": f'attachment; filename="{filename}"'},
     )
