@@ -41,6 +41,7 @@ export function InvoiceEditor({
 
   const [invoice, setInvoice] = useState<Invoice | null>(null);
   const [items, setItems] = useState<InvoiceLineItem[]>([]);
+  const [title, setTitle] = useState('');
   const [invoiceNumber, setInvoiceNumber] = useState('');
   const [invoiceType, setInvoiceType] = useState('progress');
   const [dueDate, setDueDate] = useState('');
@@ -58,6 +59,7 @@ export function InvoiceEditor({
       .then(([inv, itemRows]) => {
         setInvoice(inv);
         setItems(itemRows);
+        setTitle(inv.title || '');
         setInvoiceNumber(inv.invoice_number || '');
         setInvoiceType(inv.invoice_type);
         setDueDate(inv.due_date?.slice(0, 10) || '');
@@ -123,8 +125,11 @@ export function InvoiceEditor({
     <>
       <div className="ph">
         <div>
-          <h1>{invoice.invoice_number || 'Draft invoice'}</h1>
-          <p>{invoice.projects?.name || ''}</p>
+          <h1>{invoice.title || invoice.invoice_number || 'Draft invoice'}</h1>
+          <p>
+            {invoice.title && invoice.invoice_number ? `${invoice.invoice_number} · ` : ''}
+            {invoice.projects?.name || ''}
+          </p>
         </div>
         <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
           <button
@@ -168,6 +173,17 @@ export function InvoiceEditor({
       <div className="card" style={{ padding: 20, marginBottom: 16 }}>
         <div className="ibt" style={{ fontSize: 13, textTransform: 'none', letterSpacing: 0, border: 'none', padding: 0, marginBottom: 14 }}>
           Invoice information
+        </div>
+        <div className="fg">
+          <label className="fl">Title</label>
+          <input
+            className="fi"
+            placeholder="e.g. Window Allowance Invoice"
+            value={title}
+            onChange={(e) => setTitle(e.target.value)}
+            onBlur={(e) => saveField('title', e.target.value.trim() || null)}
+          />
+          <div className="m-sub">Optional -- shown instead of the invoice number wherever this invoice is listed.</div>
         </div>
         <div className="fr3">
           <div className="fg">

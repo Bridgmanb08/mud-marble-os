@@ -137,9 +137,10 @@ export default function Invoices() {
           >
             <div style={{ flex: 1, minWidth: 0 }}>
               <div style={{ fontSize: 13, fontWeight: 500, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                {i.invoice_number || 'Draft'} <span style={{ color: 'var(--t2)', fontWeight: 400 }}>· {i.projects?.name || ''}</span>
+                {i.title || i.invoice_number || 'Draft'} <span style={{ color: 'var(--t2)', fontWeight: 400 }}>· {i.projects?.name || ''}</span>
               </div>
               <div style={{ fontSize: 11, color: 'var(--t3)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                {i.title && i.invoice_number ? `${i.invoice_number} · ` : ''}
                 {i.invoice_type} · Due {fmtD(i.due_date)}
               </div>
             </div>

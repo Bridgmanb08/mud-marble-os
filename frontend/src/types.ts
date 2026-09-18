@@ -346,6 +346,7 @@ export interface LineItemReference {
 export interface Invoice {
   id: string;
   project_id: string;
+  title: string | null;
   invoice_number: string | null;
   invoice_type: string;
   amount_due: number;

@@ -696,7 +696,10 @@ export default function ProjectDetail() {
                 <tbody>
                   {invoices.map((inv) => (
                     <tr key={inv.id} style={{ cursor: 'pointer' }} onClick={() => setSelectedInvoiceId(inv.id)}>
-                      <td className="sticky-col" style={{ fontWeight: 500 }}>{inv.invoice_number || 'Draft'}</td>
+                      <td className="sticky-col" style={{ fontWeight: 500 }}>
+                        {inv.title || inv.invoice_number || 'Draft'}
+                        {inv.title && inv.invoice_number && <span style={{ color: 'var(--t3)', fontWeight: 400 }}> ({inv.invoice_number})</span>}
+                      </td>
                       <td>{inv.invoice_type}</td>
                       <td style={{ textAlign: 'right' }}>{fmtCents(inv.amount_due)}</td>
                       <td style={{ textAlign: 'right' }}>{fmtCents(inv.amount_paid)}</td>

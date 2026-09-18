@@ -325,7 +325,13 @@ async def export_invoice_pdf(invoice_id: str, _: CurrentUser = Depends(get_curre
     s = build_styles()
 
     elements = build_letterhead(s, PAGE_WIDTH, breadcrumb)
-    elements.append(Paragraph(f"Invoice {xml_escape(invoice.get('invoice_number') or 'Draft')}", s["title"]))
+    # A custom title (e.g. "Window Allowance Invoice") reads as more useful
+    # to a client than a bare number -- shown alongside the number rather
+    # than replacing it, so the number stays available for reference.
+    if invoice.get("title"):
+        elements.append(Paragraph(f"{xml_escape(invoice['title'])} ({xml_escape(invoice.get('invoice_number') or 'Draft')})", s["title"]))
+    else:
+        elements.append(Paragraph(f"Invoice {xml_escape(invoice.get('invoice_number') or 'Draft')}", s["title"]))
     address = (project.get("address") or "").strip() or project_name
     if address:
         elements.append(Paragraph(xml_escape(address), s["address"]))
