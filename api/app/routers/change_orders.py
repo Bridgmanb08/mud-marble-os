@@ -9,8 +9,9 @@ from openpyxl.styles import Font
 from reportlab.lib import colors
 from reportlab.lib.pagesizes import letter
 from reportlab.lib.units import inch
-from reportlab.platypus import HRFlowable, Paragraph, SimpleDocTemplate, Spacer
+from reportlab.platypus import HRFlowable, Paragraph, SimpleDocTemplate, Spacer, Table, TableStyle
 
+from .. import branding
 from ..change_order_utils import compute_sop_breach
 from ..deps import CurrentUser, get_current_user
 from ..pdf_export import (
@@ -240,6 +241,7 @@ async def export_change_order_pdf(co_id: str, _: CurrentUser = Depends(get_curre
     project = co.get("projects") or {}
     breadcrumb = breadcrumb_for(project)
     project_name = (project.get("name") or "").split("|")[0].strip()
+    items = await db_get("change_order_line_items", f"?change_order_id=eq.{co_id}&order=sort_order.asc&select=title,description,owner_price")
 
     buf = io.BytesIO()
     doc = SimpleDocTemplate(
@@ -275,6 +277,37 @@ async def export_change_order_pdf(co_id: str, _: CurrentUser = Depends(get_curre
     if co.get("description"):
         elements.append(Paragraph(xml_escape(co["description"]), s["body"]))
         elements.append(Spacer(1, 10))
+
+    # Once a change order has real line items, the flat description above is
+    # no longer where the scope detail lives -- without this table the PDF
+    # only ever showed a single lump "Price" line, which is exactly what
+    # made a line-itemized CO read as vague. Mirrors the Item/Description/
+    # Amount table the invoice PDF already builds; cost codes and
+    # builder_cost stay off this client-facing table, same rule the
+    # estimate/invoice exports follow.
+    if items:
+        item_col = PAGE_WIDTH * 0.30
+        desc_col = PAGE_WIDTH * 0.50
+        amount_col = PAGE_WIDTH - item_col - desc_col
+        table_data = [[Paragraph("Item", s["th"]), Paragraph("Description", s["th"]), Paragraph("Amount", s["th_right"])]]
+        for it in items:
+            table_data.append([
+                Paragraph(xml_escape(it.get("title") or ""), s["cell"]),
+                Paragraph(xml_escape(it.get("description") or ""), s["cell"]),
+                Paragraph(f"${(it.get('owner_price') or 0):,.2f}", s["cell_right"]),
+            ])
+        t = Table(table_data, colWidths=[item_col, desc_col, amount_col], repeatRows=1)
+        t.setStyle(TableStyle([
+            ("BACKGROUND", (0, 0), (-1, 0), branding.BRAND_CREAM),
+            ("LINEBELOW", (0, 0), (-1, 0), 0.75, branding.BRAND_BROWN),
+            ("LINEBELOW", (0, 1), (-1, -1), 0.25, colors.lightgrey),
+            ("ROWBACKGROUNDS", (0, 1), (-1, -1), [colors.white, colors.HexColor("#FAF8F3")]),
+            ("VALIGN", (0, 0), (-1, -1), "TOP"),
+            ("TOPPADDING", (0, 0), (-1, -1), 5), ("BOTTOMPADDING", (0, 0), (-1, -1), 5),
+            ("LEFTPADDING", (0, 0), (0, -1), 6), ("RIGHTPADDING", (-1, 0), (-1, -1), 6),
+        ]))
+        elements.append(t)
+        elements.append(Spacer(1, 12))
 
     # Owner price only -- builder_cost is internal margin data, same rule
     # the estimate PDF already follows for its own owner-price/builder-cost
@@ -319,6 +352,7 @@ async def export_change_order_excel(co_id: str, _: CurrentUser = Depends(get_cur
     project = co.get("projects") or {}
     project_name = (project.get("name") or "").split("|")[0].strip()
     co_number = f"CO-{str(co.get('co_number') or '?').zfill(3)}"
+    items = await db_get("change_order_line_items", f"?change_order_id=eq.{co_id}&order=sort_order.asc&select=title,description,owner_price")
 
     wb = Workbook()
     ws = wb.active
@@ -352,11 +386,22 @@ async def export_change_order_excel(co_id: str, _: CurrentUser = Depends(get_cur
         ws.append([co["description"]])
         ws.append([])
 
+    # Once a change order has real line items, list them the same way the
+    # estimate Excel export lists its own -- otherwise this sheet has the
+    # exact same "flat lump price, no scope detail" gap the PDF export had.
+    if items:
+        ws.append(["Item", "Description", "Amount"])
+        for cell in ws[ws.max_row]:
+            cell.font = header_font
+        for it in items:
+            ws.append([it.get("title"), it.get("description"), it.get("owner_price") or 0])
+        ws.append([])
+
     ws.append(["", "Price", co.get("owner_price") or 0])
     ws.cell(row=ws.max_row, column=2).font = header_font
     ws.cell(row=ws.max_row, column=3).font = header_font
 
-    for col, width in zip("ABC", [22, 24, 18]):
+    for col, width in zip("ABC", [28, 44, 18]):
         ws.column_dimensions[col].width = width
 
     buf = io.BytesIO()
