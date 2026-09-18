@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { IconDownload, IconFileDollar, IconPlus, IconTrash } from '@tabler/icons-react';
+import { IconDownload, IconFileDollar, IconGitBranch, IconPlus, IconTrash } from '@tabler/icons-react';
 import { api, ApiError } from '../../api/client';
 import { useToast } from '../ui/Toast';
 import { openDatePicker } from '../../lib/datePicker';
@@ -7,6 +7,7 @@ import { fmtCents } from '../../lib/format';
 import { pdfExportFilename, triggerDownload } from '../../lib/download';
 import { InvoiceLineItemModal } from './InvoiceLineItemModal';
 import { AddEstimateLineItemsModal } from './AddEstimateLineItemsModal';
+import { AddChangeOrderLineItemsModal } from './AddChangeOrderLineItemsModal';
 import type { FinancialSummary, Invoice, InvoiceLineItem } from '../../types';
 
 const STATUS_OPTIONS = ['draft', 'sent', 'paid', 'overdue', 'void'];
@@ -51,6 +52,7 @@ export function InvoiceEditor({
   const [showItemModal, setShowItemModal] = useState(false);
   const [editingItem, setEditingItem] = useState<InvoiceLineItem | undefined>(undefined);
   const [showFromEstimate, setShowFromEstimate] = useState(false);
+  const [showFromChangeOrder, setShowFromChangeOrder] = useState(false);
   const [financialSummary, setFinancialSummary] = useState<FinancialSummary | null>(null);
 
   function load() {
@@ -292,6 +294,9 @@ export function InvoiceEditor({
             <button className="btn btn-sm" onClick={() => setShowFromEstimate(true)}>
               <IconFileDollar size={14} /> Add from Estimate
             </button>
+            <button className="btn btn-sm" onClick={() => setShowFromChangeOrder(true)}>
+              <IconGitBranch size={14} /> Add from Change Order
+            </button>
             <button
               className="btn btn-sm"
               onClick={() => {
@@ -366,8 +371,8 @@ export function InvoiceEditor({
         ) : (
           <div style={{ padding: '20px' }}>
             <div style={{ fontSize: 13, color: 'var(--t2)', marginBottom: 12 }}>
-              No line items yet — this invoice is a flat amount of {fmtCents(invoice.amount_due)}. Add a line item (manually
-              or from the estimate) to break it down.
+              No line items yet — this invoice is a flat amount of {fmtCents(invoice.amount_due)}. Add a line item
+              (manually, from the estimate, or from a change order) to break it down.
             </div>
           </div>
         )}
@@ -392,6 +397,18 @@ export function InvoiceEditor({
           onClose={() => setShowFromEstimate(false)}
           onAdded={() => {
             setShowFromEstimate(false);
+            toast('Line items added to invoice');
+            load();
+          }}
+        />
+      )}
+      {showFromChangeOrder && invoice && (
+        <AddChangeOrderLineItemsModal
+          invoiceId={invoiceId}
+          projectId={invoice.project_id}
+          onClose={() => setShowFromChangeOrder(false)}
+          onAdded={() => {
+            setShowFromChangeOrder(false);
             toast('Line items added to invoice');
             load();
           }}

@@ -364,6 +364,7 @@ export interface InvoiceLineItem {
   id: string;
   invoice_id: string;
   source_line_item_id: string | null;
+  source_co_item_id: string | null;
   cost_code_id: string | null;
   title: string;
   description: string | null;
@@ -380,6 +381,28 @@ export interface InvoiceLineItem {
 // being built), so the picker can show a progress bar and cap what's left.
 export interface EstimateItemForInvoice {
   id: string;
+  title: string;
+  cost_code_id: string | null;
+  cost_codes: { code: string; name: string } | null;
+  cost_type: string;
+  owner_price: number;
+  notes_external: string | null;
+  invoiced_amount: number;
+  invoiced_pct: number;
+  remaining_amount: number;
+}
+
+// The "Add from Change Order" picker's row shape -- the same idea as
+// EstimateItemForInvoice above, but one row per line item across every
+// APPROVED change order on the project (only approved ones are actually
+// part of what the client owes). co_number/co_title identify which change
+// order a row came from, since this picker spans several change orders
+// at once instead of a single estimate.
+export interface ChangeOrderItemForInvoice {
+  id: string;
+  change_order_id: string;
+  co_number: number | null;
+  co_title: string;
   title: string;
   cost_code_id: string | null;
   cost_codes: { code: string; name: string } | null;

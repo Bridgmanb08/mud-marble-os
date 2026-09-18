@@ -54,6 +54,7 @@ class CostCodeBrief(BaseModel):
 
 class InvoiceLineItemCreate(BaseModel):
     source_line_item_id: Optional[str] = None
+    source_co_item_id: Optional[str] = None
     cost_code_id: Optional[str] = None
     title: str
     description: Optional[str] = None
@@ -79,6 +80,7 @@ class InvoiceLineItemOut(BaseModel):
     id: str
     invoice_id: str
     source_line_item_id: Optional[str] = None
+    source_co_item_id: Optional[str] = None
     cost_code_id: Optional[str] = None
     title: str
     description: Optional[str] = None
@@ -98,6 +100,28 @@ class InvoiceLineItemOut(BaseModel):
 # equity, is_late, etc.).
 class EstimateItemForInvoiceOut(BaseModel):
     id: str
+    title: str
+    cost_code_id: Optional[str] = None
+    cost_codes: Optional[CostCodeBrief] = None
+    cost_type: str
+    owner_price: float
+    notes_external: Optional[str] = None
+    invoiced_amount: float
+    invoiced_pct: float
+    remaining_amount: float
+
+
+# The same shape as EstimateItemForInvoiceOut above, for the "Add from
+# Change Order" invoice picker -- one row per line item on an APPROVED
+# change order (only approved ones are actually part of what the client
+# owes). co_number/co_title identify which change order a row came from,
+# since this picker spans every approved CO on the project at once, unlike
+# the estimate picker which only ever has one estimate to pull from.
+class ChangeOrderItemForInvoiceOut(BaseModel):
+    id: str
+    change_order_id: str
+    co_number: Optional[int] = None
+    co_title: str
     title: str
     cost_code_id: Optional[str] = None
     cost_codes: Optional[CostCodeBrief] = None
