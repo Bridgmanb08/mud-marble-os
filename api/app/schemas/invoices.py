@@ -5,6 +5,7 @@ from pydantic import BaseModel
 
 class InvoiceCreate(BaseModel):
     project_id: str
+    title: Optional[str] = None
     invoice_number: Optional[str] = None
     invoice_type: str = "progress"
     amount_due: float = 0
@@ -16,6 +17,7 @@ class InvoiceUpdate(BaseModel):
     status: Optional[str] = None
     amount_paid: Optional[float] = None
     paid_date: Optional[str] = None
+    title: Optional[str] = None
     invoice_number: Optional[str] = None
     invoice_type: Optional[str] = None
     amount_due: Optional[float] = None
@@ -31,6 +33,7 @@ class ProjectBrief(BaseModel):
 class InvoiceOut(BaseModel):
     id: str
     project_id: str
+    title: Optional[str] = None
     invoice_number: Optional[str] = None
     invoice_type: str
     amount_due: float
