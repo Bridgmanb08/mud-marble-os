@@ -7,7 +7,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from ..deps import CurrentUser, get_current_user
 from ..mentions import create_mention_notifications
 from ..project_phases import merge_custom_phases
-from ..schemas.invoices import EstimateItemForInvoiceOut
+from ..schemas.invoices import ChangeOrderItemForInvoiceOut, EstimateItemForInvoiceOut
 from ..schemas.projects import (
     CostCodeVarianceOut,
     CostCodeVarianceRow,
@@ -307,6 +307,65 @@ async def get_estimate_items_for_invoice(project_id: str, _: CurrentUser = Depen
         out.append(
             EstimateItemForInvoiceOut(
                 id=i["id"],
+                title=i["title"],
+                cost_code_id=i.get("cost_code_id"),
+                cost_codes=i.get("cost_codes"),
+                cost_type=i.get("cost_type") or "none",
+                owner_price=owner_price,
+                notes_external=i.get("notes_external"),
+                invoiced_amount=invoiced_amount,
+                invoiced_pct=invoiced_pct,
+                remaining_amount=round(owner_price - invoiced_amount, 2),
+            )
+        )
+    return out
+
+
+@router.get("/{project_id}/change-order-items-for-invoice", response_model=list[ChangeOrderItemForInvoiceOut])
+async def get_change_order_items_for_invoice(project_id: str, _: CurrentUser = Depends(get_current_user)):
+    """Backs the "Add from Change Order" invoice picker, the same shape as
+    get_estimate_items_for_invoice above -- every line item across this
+    project's APPROVED change orders (only approved ones are actually part
+    of what the client owes), each annotated with how much of it has
+    already been invoiced. A change order with no line items (the original
+    flat owner_price/description style) isn't listed here -- there's
+    nothing per-line to reference, and its price is already folded into
+    remaining_to_invoice via financial-summary regardless."""
+    cos = await db_get("change_orders", f"?project_id=eq.{project_id}&status=eq.approved&select=id,co_number,title")
+    if not cos:
+        return []
+    co_by_id = {c["id"]: c for c in cos}
+    co_ids = ",".join(co_by_id.keys())
+
+    items = await db_get(
+        "change_order_line_items",
+        f"?change_order_id=in.({co_ids})&order=sort_order.asc&select=*,cost_codes(code,name)",
+    )
+    if not items:
+        return []
+
+    item_ids = ",".join(i["id"] for i in items)
+    invoice_items = await db_get(
+        "invoice_line_items", f"?source_co_item_id=in.({item_ids})&select=source_co_item_id,amount"
+    )
+    invoiced_by_item: dict[str, float] = {}
+    for ii in invoice_items:
+        source_id = ii.get("source_co_item_id")
+        if source_id:
+            invoiced_by_item[source_id] = invoiced_by_item.get(source_id, 0) + (ii.get("amount") or 0)
+
+    out = []
+    for i in items:
+        co = co_by_id.get(i["change_order_id"], {})
+        owner_price = i.get("owner_price") or 0
+        invoiced_amount = round(invoiced_by_item.get(i["id"], 0), 2)
+        invoiced_pct = round((invoiced_amount / owner_price) * 100, 2) if owner_price else 0.0
+        out.append(
+            ChangeOrderItemForInvoiceOut(
+                id=i["id"],
+                change_order_id=i["change_order_id"],
+                co_number=co.get("co_number"),
+                co_title=co.get("title") or "",
                 title=i["title"],
                 cost_code_id=i.get("cost_code_id"),
                 cost_codes=i.get("cost_codes"),
