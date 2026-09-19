@@ -7,7 +7,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from ..deps import CurrentUser, get_current_user
 from ..mentions import create_mention_notifications
 from ..project_phases import merge_custom_phases
-from ..schemas.invoices import ChangeOrderItemForInvoiceOut, EstimateItemForInvoiceOut
+from ..schemas.invoices import InvoiceableItemOut
 from ..schemas.projects import (
     CostCodeVarianceOut,
     CostCodeVarianceRow,
@@ -267,29 +267,47 @@ async def get_financial_summary(project_id: str, _: CurrentUser = Depends(get_cu
     )
 
 
-@router.get("/{project_id}/estimate-items-for-invoice", response_model=list[EstimateItemForInvoiceOut])
-async def get_estimate_items_for_invoice(project_id: str, _: CurrentUser = Depends(get_current_user)):
-    """Backs the "Add from Estimate" invoice picker -- every line item on the
-    project's current estimate (the highest-version APPROVED one if any
-    exists, else the highest version overall -- see _get_invoicing_estimate),
-    each annotated with how much of it has already been invoiced across
-    every invoice for this project, not just the one being built right now.
-    That total is computed live by summing invoice_line_items rather than
-    trusting a stored running total, so it can never drift out of sync with
-    reality."""
-    estimate = await _get_invoicing_estimate(project_id, select="id")
-    if not estimate:
-        return []
-    estimate_id = estimate["id"]
+async def _approved_change_orders(project_id: str, select: str) -> list[dict]:
+    return await db_get("change_orders", f"?project_id=eq.{project_id}&status=eq.approved&order=co_number.asc&select={select}")
 
-    items = await db_get(
-        "estimate_line_items",
-        f"?estimate_id=eq.{estimate_id}&order=sort_order.asc&select=*,cost_codes(code,name)",
-    )
+
+@router.get("/{project_id}/invoiceable-items", response_model=list[InvoiceableItemOut])
+async def get_invoiceable_items(project_id: str, _: CurrentUser = Depends(get_current_user)):
+    """Backs the "Add line items to invoice" picker -- every line item on the
+    project's current estimate (the highest-version APPROVED one if any
+    exists, else the highest version overall -- see _get_invoicing_estimate)
+    plus every line item on its APPROVED change orders (only approved ones
+    are part of what the client owes). Both live in the same line-item
+    table, so one query per parent and one shared invoiced-amount lookup
+    covers them. Each row is annotated with how much of it has already been
+    invoiced across every invoice for this project, not just the one being
+    built right now -- computed live by summing invoice_line_items rather
+    than trusting a stored running total, so it can never drift."""
+    estimate = await _get_invoicing_estimate(project_id, select="id")
+    items: list[tuple[str, str, dict]] = []  # (source_type, source_label, row)
+    if estimate:
+        est_items = await db_get(
+            "estimate_line_items",
+            f"?estimate_id=eq.{estimate['id']}&order=sort_order.asc&select=*,cost_codes(code,name)",
+        )
+        items += [("estimate", "Estimate", i) for i in est_items]
+
+    cos = await _approved_change_orders(project_id, "id,co_number")
+    if cos:
+        co_by_id = {c["id"]: c for c in cos}
+        co_items = await db_get(
+            "estimate_line_items",
+            f"?change_order_id=in.({','.join(co_by_id)})&order=sort_order.asc&select=*,cost_codes(code,name)",
+        )
+        co_items.sort(key=lambda i: (co_by_id[i["change_order_id"]].get("co_number") or 0, i.get("sort_order") or 0))
+        items += [
+            ("change_order", f"CO-{str(co_by_id[i['change_order_id']].get('co_number') or '?').zfill(3)}", i)
+            for i in co_items
+        ]
     if not items:
         return []
 
-    item_ids = ",".join(i["id"] for i in items)
+    item_ids = ",".join(row["id"] for _, _, row in items)
     invoice_items = await db_get(
         "invoice_line_items", f"?source_line_item_id=in.({item_ids})&select=source_line_item_id,amount"
     )
@@ -300,72 +318,15 @@ async def get_estimate_items_for_invoice(project_id: str, _: CurrentUser = Depen
             invoiced_by_item[source_id] = invoiced_by_item.get(source_id, 0) + (ii.get("amount") or 0)
 
     out = []
-    for i in items:
+    for source_type, source_label, i in items:
         owner_price = i.get("owner_price") or 0
         invoiced_amount = round(invoiced_by_item.get(i["id"], 0), 2)
         invoiced_pct = round((invoiced_amount / owner_price) * 100, 2) if owner_price else 0.0
         out.append(
-            EstimateItemForInvoiceOut(
+            InvoiceableItemOut(
                 id=i["id"],
-                title=i["title"],
-                cost_code_id=i.get("cost_code_id"),
-                cost_codes=i.get("cost_codes"),
-                cost_type=i.get("cost_type") or "none",
-                owner_price=owner_price,
-                notes_external=i.get("notes_external"),
-                invoiced_amount=invoiced_amount,
-                invoiced_pct=invoiced_pct,
-                remaining_amount=round(owner_price - invoiced_amount, 2),
-            )
-        )
-    return out
-
-
-@router.get("/{project_id}/change-order-items-for-invoice", response_model=list[ChangeOrderItemForInvoiceOut])
-async def get_change_order_items_for_invoice(project_id: str, _: CurrentUser = Depends(get_current_user)):
-    """Backs the "Add from Change Order" invoice picker, the same shape as
-    get_estimate_items_for_invoice above -- every line item across this
-    project's APPROVED change orders (only approved ones are actually part
-    of what the client owes), each annotated with how much of it has
-    already been invoiced. A change order with no line items (the original
-    flat owner_price/description style) isn't listed here -- there's
-    nothing per-line to reference, and its price is already folded into
-    remaining_to_invoice via financial-summary regardless."""
-    cos = await db_get("change_orders", f"?project_id=eq.{project_id}&status=eq.approved&select=id,co_number,title")
-    if not cos:
-        return []
-    co_by_id = {c["id"]: c for c in cos}
-    co_ids = ",".join(co_by_id.keys())
-
-    items = await db_get(
-        "change_order_line_items",
-        f"?change_order_id=in.({co_ids})&order=sort_order.asc&select=*,cost_codes(code,name)",
-    )
-    if not items:
-        return []
-
-    item_ids = ",".join(i["id"] for i in items)
-    invoice_items = await db_get(
-        "invoice_line_items", f"?source_co_item_id=in.({item_ids})&select=source_co_item_id,amount"
-    )
-    invoiced_by_item: dict[str, float] = {}
-    for ii in invoice_items:
-        source_id = ii.get("source_co_item_id")
-        if source_id:
-            invoiced_by_item[source_id] = invoiced_by_item.get(source_id, 0) + (ii.get("amount") or 0)
-
-    out = []
-    for i in items:
-        co = co_by_id.get(i["change_order_id"], {})
-        owner_price = i.get("owner_price") or 0
-        invoiced_amount = round(invoiced_by_item.get(i["id"], 0), 2)
-        invoiced_pct = round((invoiced_amount / owner_price) * 100, 2) if owner_price else 0.0
-        out.append(
-            ChangeOrderItemForInvoiceOut(
-                id=i["id"],
-                change_order_id=i["change_order_id"],
-                co_number=co.get("co_number"),
-                co_title=co.get("title") or "",
+                source_type=source_type,
+                source_label=source_label,
                 title=i["title"],
                 cost_code_id=i.get("cost_code_id"),
                 cost_codes=i.get("cost_codes"),
@@ -404,18 +365,39 @@ async def get_cost_code_variance(project_id: str, _: CurrentUser = Depends(get_c
     # to each other, rather than only the internal one being visible here.
     client_price_by_code: dict[Optional[str], float] = {}
     code_labels: dict[Optional[str], tuple[str, str]] = {}
+    # The contract is the approved estimate PLUS its approved change orders,
+    # and both store their items in the same table -- so a change order's
+    # cost codes count toward budgeted / client price / paid exactly like an
+    # estimate line's do.
     line_items: list[dict] = []
     if estimate:
-        line_items = await db_get(
+        line_items += await db_get(
             "estimate_line_items",
             f"?estimate_id=eq.{estimate['id']}&select=id,cost_code_id,builder_cost,owner_price,cost_codes(code,name)",
         )
-        for item in line_items:
-            cc_id = item.get("cost_code_id")
-            budgeted_by_code[cc_id] = budgeted_by_code.get(cc_id, 0) + (item.get("builder_cost") or 0)
-            client_price_by_code[cc_id] = client_price_by_code.get(cc_id, 0) + (item.get("owner_price") or 0)
-            cc = item.get("cost_codes")
-            code_labels[cc_id] = (cc["code"], cc["name"]) if cc else ("—", "No cost code")
+    approved_cos = await _approved_change_orders(project_id, "id,owner_price,builder_cost")
+    if approved_cos:
+        co_line_items = await db_get(
+            "estimate_line_items",
+            f"?change_order_id=in.({','.join(c['id'] for c in approved_cos)})&select=id,change_order_id,cost_code_id,builder_cost,owner_price,cost_codes(code,name)",
+        )
+        line_items += co_line_items
+        # An approved CO with no line items (the original flat-price style)
+        # still adds to the contract -- count it under "No cost code" so the
+        # totals here reconcile with financial-summary instead of silently
+        # dropping it.
+        cos_with_items = {i["change_order_id"] for i in co_line_items}
+        for co in approved_cos:
+            if co["id"] not in cos_with_items:
+                budgeted_by_code[None] = budgeted_by_code.get(None, 0) + (co.get("builder_cost") or 0)
+                client_price_by_code[None] = client_price_by_code.get(None, 0) + (co.get("owner_price") or 0)
+                code_labels.setdefault(None, ("—", "No cost code"))
+    for item in line_items:
+        cc_id = item.get("cost_code_id")
+        budgeted_by_code[cc_id] = budgeted_by_code.get(cc_id, 0) + (item.get("builder_cost") or 0)
+        client_price_by_code[cc_id] = client_price_by_code.get(cc_id, 0) + (item.get("owner_price") or 0)
+        cc = item.get("cost_codes")
+        code_labels[cc_id] = (cc["code"], cc["name"]) if cc else ("—", "No cost code")
 
     actual_by_code: dict[Optional[str], float] = {}
     transactions = await db_get(

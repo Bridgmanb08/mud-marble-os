@@ -9,9 +9,9 @@ from openpyxl.styles import Font
 from reportlab.lib import colors
 from reportlab.lib.pagesizes import letter
 from reportlab.lib.units import inch
-from reportlab.platypus import HRFlowable, Paragraph, SimpleDocTemplate, Spacer, Table, TableStyle
+from reportlab.platypus import HRFlowable, Paragraph, SimpleDocTemplate, Spacer
 
-from .. import branding
+from .. import line_items
 from ..change_order_utils import compute_sop_breach
 from ..deps import CurrentUser, get_current_user
 from ..pdf_export import (
@@ -20,20 +20,14 @@ from ..pdf_export import (
     SIDE_MARGIN,
     breadcrumb_for,
     build_info_card,
+    build_line_items_table,
     build_letterhead,
     build_styles,
     build_totals_band,
     xml_escape,
 )
-from ..routers.estimates import _compute_costs
-from ..schemas.change_orders import (
-    ChangeOrderCreate,
-    ChangeOrderLineItemCreate,
-    ChangeOrderLineItemOut,
-    ChangeOrderLineItemUpdate,
-    ChangeOrderOut,
-    ChangeOrderUpdate,
-)
+from ..schemas.change_orders import ChangeOrderCreate, ChangeOrderOut, ChangeOrderUpdate
+from ..schemas.estimates import LineItemCreate, LineItemOut, LineItemUpdate
 from ..supabase_client import db_delete, db_get, db_patch, db_post
 
 router = APIRouter(prefix="/change-orders", tags=["change_orders"])
@@ -62,7 +56,7 @@ async def _recalc_co_totals(co_id: str) -> None:
     no line items at all) is never affected by this running. Deliberately
     always persists the sum, including 0 once the last item is removed,
     rather than leaving a stale nonzero total behind."""
-    items = await db_get("change_order_line_items", f"?change_order_id=eq.{co_id}&select=builder_cost,owner_price")
+    items = await db_get("estimate_line_items", f"?change_order_id=eq.{co_id}&select=builder_cost,owner_price")
     total_builder_cost = round(sum(i.get("builder_cost") or 0 for i in items), 2)
     total_owner_price = round(sum(i.get("owner_price") or 0 for i in items), 2)
 
@@ -175,59 +169,31 @@ async def get_change_order(co_id: str, _: CurrentUser = Depends(get_current_user
     return _attach_breach(rows[0])
 
 
-@router.get("/{co_id}/items", response_model=list[ChangeOrderLineItemOut])
+@router.get("/{co_id}/items", response_model=list[LineItemOut])
 async def list_co_items(co_id: str, _: CurrentUser = Depends(get_current_user)):
-    return await db_get(
-        "change_order_line_items", f"?change_order_id=eq.{co_id}&order=sort_order.asc&select=*,cost_codes(code,name)"
-    )
+    return await line_items.list_items("change_order_id", co_id)
 
 
-@router.post("/{co_id}/items", response_model=ChangeOrderLineItemOut)
-async def create_co_item(co_id: str, body: ChangeOrderLineItemCreate, _: CurrentUser = Depends(get_current_user)):
+@router.post("/{co_id}/items", response_model=LineItemOut)
+async def create_co_item(co_id: str, body: LineItemCreate, _: CurrentUser = Depends(get_current_user)):
     existing = await db_get("change_orders", f"?id=eq.{co_id}&select=id")
     if not existing:
         raise HTTPException(status_code=404, detail="Change order not found")
-    builder_cost, owner_price = _compute_costs(body.quantity, body.unit_cost, body.markup_type, body.markup_value)
-    data = body.model_dump(exclude_none=True)
-    data["change_order_id"] = co_id
-    data["builder_cost"] = builder_cost
-    data["owner_price"] = owner_price
-    rows = await db_post("change_order_line_items", data)
+    item = await line_items.create_item("change_order_id", co_id, body)
     await _recalc_co_totals(co_id)
-    full = await db_get("change_order_line_items", f"?id=eq.{rows[0]['id']}&select=*,cost_codes(code,name)")
-    return full[0]
+    return item
 
 
-@router.patch("/{co_id}/items/{item_id}", response_model=ChangeOrderLineItemOut)
-async def update_co_item(
-    co_id: str, item_id: str, body: ChangeOrderLineItemUpdate, _: CurrentUser = Depends(get_current_user)
-):
-    existing = await db_get(
-        "change_order_line_items", f"?id=eq.{item_id}&select=quantity,unit_cost,markup_type,markup_value"
-    )
-    if not existing:
-        raise HTTPException(status_code=404, detail="Line item not found")
-    current = existing[0]
-    # exclude_unset (not exclude_none) -- an explicit null (e.g. clearing a
-    # cost code) has to reach the database, same convention every other
-    # PATCH endpoint in this app follows.
-    updates = body.model_dump(exclude_unset=True)
-    quantity = updates.get("quantity", current["quantity"])
-    unit_cost = updates.get("unit_cost", current["unit_cost"])
-    markup_type = updates.get("markup_type", current["markup_type"])
-    markup_value = updates.get("markup_value", current["markup_value"])
-    builder_cost, owner_price = _compute_costs(quantity, unit_cost, markup_type, markup_value)
-    updates["builder_cost"] = builder_cost
-    updates["owner_price"] = owner_price
-    await db_patch("change_order_line_items", item_id, updates)
+@router.patch("/{co_id}/items/{item_id}", response_model=LineItemOut)
+async def update_co_item(co_id: str, item_id: str, body: LineItemUpdate, _: CurrentUser = Depends(get_current_user)):
+    item = await line_items.update_item(item_id, body)
     await _recalc_co_totals(co_id)
-    full = await db_get("change_order_line_items", f"?id=eq.{item_id}&select=*,cost_codes(code,name)")
-    return full[0]
+    return item
 
 
 @router.delete("/{co_id}/items/{item_id}")
 async def delete_co_item(co_id: str, item_id: str, _: CurrentUser = Depends(get_current_user)):
-    await db_delete("change_order_line_items", item_id)
+    await line_items.delete_item(item_id)
     await _recalc_co_totals(co_id)
     return {"ok": True}
 
@@ -241,7 +207,7 @@ async def export_change_order_pdf(co_id: str, _: CurrentUser = Depends(get_curre
     project = co.get("projects") or {}
     breadcrumb = breadcrumb_for(project)
     project_name = (project.get("name") or "").split("|")[0].strip()
-    items = await db_get("change_order_line_items", f"?change_order_id=eq.{co_id}&order=sort_order.asc&select=title,description,owner_price")
+    items = await line_items.list_items("change_order_id", co_id)
 
     buf = io.BytesIO()
     doc = SimpleDocTemplate(
@@ -286,27 +252,7 @@ async def export_change_order_pdf(co_id: str, _: CurrentUser = Depends(get_curre
     # builder_cost stay off this client-facing table, same rule the
     # estimate/invoice exports follow.
     if items:
-        item_col = PAGE_WIDTH * 0.30
-        desc_col = PAGE_WIDTH * 0.50
-        amount_col = PAGE_WIDTH - item_col - desc_col
-        table_data = [[Paragraph("Item", s["th"]), Paragraph("Description", s["th"]), Paragraph("Amount", s["th_right"])]]
-        for it in items:
-            table_data.append([
-                Paragraph(xml_escape(it.get("title") or ""), s["cell"]),
-                Paragraph(xml_escape(it.get("description") or ""), s["cell"]),
-                Paragraph(f"${(it.get('owner_price') or 0):,.2f}", s["cell_right"]),
-            ])
-        t = Table(table_data, colWidths=[item_col, desc_col, amount_col], repeatRows=1)
-        t.setStyle(TableStyle([
-            ("BACKGROUND", (0, 0), (-1, 0), branding.BRAND_CREAM),
-            ("LINEBELOW", (0, 0), (-1, 0), 0.75, branding.BRAND_BROWN),
-            ("LINEBELOW", (0, 1), (-1, -1), 0.25, colors.lightgrey),
-            ("ROWBACKGROUNDS", (0, 1), (-1, -1), [colors.white, colors.HexColor("#FAF8F3")]),
-            ("VALIGN", (0, 0), (-1, -1), "TOP"),
-            ("TOPPADDING", (0, 0), (-1, -1), 5), ("BOTTOMPADDING", (0, 0), (-1, -1), 5),
-            ("LEFTPADDING", (0, 0), (0, -1), 6), ("RIGHTPADDING", (-1, 0), (-1, -1), 6),
-        ]))
-        elements.append(t)
+        elements.append(build_line_items_table(s, PAGE_WIDTH, [(i.get("title"), line_items.client_text(i), i.get("owner_price")) for i in items]))
         elements.append(Spacer(1, 12))
 
     # Owner price only -- builder_cost is internal margin data, same rule
@@ -352,7 +298,7 @@ async def export_change_order_excel(co_id: str, _: CurrentUser = Depends(get_cur
     project = co.get("projects") or {}
     project_name = (project.get("name") or "").split("|")[0].strip()
     co_number = f"CO-{str(co.get('co_number') or '?').zfill(3)}"
-    items = await db_get("change_order_line_items", f"?change_order_id=eq.{co_id}&order=sort_order.asc&select=title,description,owner_price")
+    items = await line_items.list_items("change_order_id", co_id)
 
     wb = Workbook()
     ws = wb.active
@@ -394,7 +340,7 @@ async def export_change_order_excel(co_id: str, _: CurrentUser = Depends(get_cur
         for cell in ws[ws.max_row]:
             cell.font = header_font
         for it in items:
-            ws.append([it.get("title"), it.get("description"), it.get("owner_price") or 0])
+            ws.append([it.get("title"), line_items.client_text(it), it.get("owner_price") or 0])
         ws.append([])
 
     ws.append(["", "Price", co.get("owner_price") or 0])

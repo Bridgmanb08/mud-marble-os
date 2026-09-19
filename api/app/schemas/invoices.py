@@ -54,7 +54,6 @@ class CostCodeBrief(BaseModel):
 
 class InvoiceLineItemCreate(BaseModel):
     source_line_item_id: Optional[str] = None
-    source_co_item_id: Optional[str] = None
     cost_code_id: Optional[str] = None
     title: str
     description: Optional[str] = None
@@ -80,7 +79,6 @@ class InvoiceLineItemOut(BaseModel):
     id: str
     invoice_id: str
     source_line_item_id: Optional[str] = None
-    source_co_item_id: Optional[str] = None
     cost_code_id: Optional[str] = None
     title: str
     description: Optional[str] = None
@@ -91,37 +89,18 @@ class InvoiceLineItemOut(BaseModel):
     cost_codes: Optional[CostCodeBrief] = None
 
 
-# "Estimate Line Items" for the BuilderTrend-style Add-from-Estimate picker --
-# each row from the project's current estimate, annotated with how much of
-# it has already been invoiced across every invoice for this project (not
-# just the one currently being built), so the picker can show a progress bar
-# and cap what's left to invoice. Computed live, not stored -- same
-# derive-don't-store convention used throughout this app (lease_status,
-# equity, is_late, etc.).
-class EstimateItemForInvoiceOut(BaseModel):
+# Rows for the "Add line items to invoice" picker -- every line item on the
+# project's current estimate AND on its approved change orders, annotated
+# with how much of it has already been invoiced across every invoice for this
+# project (not just the one currently being built), so the picker can show a
+# progress bar and cap what's left to invoice. Computed live, not stored --
+# same derive-don't-store convention used throughout this app.
+# source_label says where a row came from ("Estimate" or "CO-001"), since the
+# picker mixes both.
+class InvoiceableItemOut(BaseModel):
     id: str
-    title: str
-    cost_code_id: Optional[str] = None
-    cost_codes: Optional[CostCodeBrief] = None
-    cost_type: str
-    owner_price: float
-    notes_external: Optional[str] = None
-    invoiced_amount: float
-    invoiced_pct: float
-    remaining_amount: float
-
-
-# The same shape as EstimateItemForInvoiceOut above, for the "Add from
-# Change Order" invoice picker -- one row per line item on an APPROVED
-# change order (only approved ones are actually part of what the client
-# owes). co_number/co_title identify which change order a row came from,
-# since this picker spans every approved CO on the project at once, unlike
-# the estimate picker which only ever has one estimate to pull from.
-class ChangeOrderItemForInvoiceOut(BaseModel):
-    id: str
-    change_order_id: str
-    co_number: Optional[int] = None
-    co_title: str
+    source_type: str  # "estimate" | "change_order"
+    source_label: str
     title: str
     cost_code_id: Optional[str] = None
     cost_codes: Optional[CostCodeBrief] = None
