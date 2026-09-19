@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { IconDownload, IconPlus } from '@tabler/icons-react';
 import { api, ApiError } from '../../api/client';
 import { useToast } from '../ui/Toast';
+import { EditableTitle } from '../ui/EditableTitle';
 import { fmt } from '../../lib/format';
 import { pdfExportFilename, triggerDownload } from '../../lib/download';
 import { ChangeOrderLineItemModal } from './ChangeOrderLineItemModal';
@@ -87,7 +88,7 @@ export function ChangeOrderEditor({ coId, onChanged }: { coId: string; onChanged
     <>
       <div className="ph">
         <div>
-          <h1>{coNumber}</h1>
+          <EditableTitle prefix={coNumber} value={co.title} fallback="Untitled change order" onSave={(v) => saveField('title', v)} />
           <p>{co.projects?.name || ''}</p>
         </div>
         <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>

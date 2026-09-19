@@ -17,6 +17,7 @@ import {
 } from '@tabler/icons-react';
 import { api, ApiError } from '../api/client';
 import { useToast } from '../components/ui/Toast';
+import { EditableTitle } from '../components/ui/EditableTitle';
 import { openDatePicker } from '../lib/datePicker';
 import { fmt, fmtD } from '../lib/format';
 import { pdfExportFilename, triggerDownload } from '../lib/download';
@@ -204,6 +205,16 @@ export default function EstimateWorksheet() {
     }
   }
 
+  async function saveTitle(next: string | null) {
+    if (!id) return;
+    try {
+      await api.patch(`/estimates/${id}`, { title: next });
+      load();
+    } catch (e) {
+      toast(e instanceof ApiError ? e.message : 'Failed to rename estimate', true);
+    }
+  }
+
   async function changeStatus(status: string) {
     if (!id) return;
     try {
@@ -312,9 +323,14 @@ export default function EstimateWorksheet() {
       <div style={{ flex: 1, minWidth: 0 }}>
       <div className="ph" style={{ flexWrap: 'wrap', gap: 12 }}>
         <div>
-          <h1>{estimate.projects?.name?.replace(/\|.*/, '').trim() || 'Estimate'}</h1>
+          <EditableTitle
+            value={estimate.title}
+            fallback={estimate.projects?.name?.replace(/\|.*/, '').trim() || 'Estimate'}
+            allowEmpty
+            onSave={saveTitle}
+          />
           <p>
-            Version {estimate.version} ·{' '}
+            {estimate.title ? `${estimate.projects?.name?.replace(/\|.*/, '').trim() || ''} · ` : ''}Version {estimate.version} ·{' '}
             <select
               className="fi"
               style={{ width: 'auto', display: 'inline-block', fontSize: 12, padding: '2px 6px' }}
