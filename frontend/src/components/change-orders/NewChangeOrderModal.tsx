@@ -101,12 +101,12 @@ export function NewChangeOrderModal({ onClose, onCreated, defaultProjectId }: Ne
           <div className="card-section-header">Financials</div>
           <div className="fr">
             <div className="fg">
-              <label className="fl">Owner price ($)</label>
-              <input className="fi" type="number" value={ownerPrice} onChange={(e) => setOwnerPrice(e.target.value)} />
-            </div>
-            <div className="fg">
               <label className="fl">Builder cost ($)</label>
               <input className="fi" type="number" value={builderCost} onChange={(e) => setBuilderCost(e.target.value)} />
+            </div>
+            <div className="fg">
+              <label className="fl">Owner price ($)</label>
+              <input className="fi" type="number" value={ownerPrice} onChange={(e) => setOwnerPrice(e.target.value)} />
             </div>
           </div>
           <div className="fg">
