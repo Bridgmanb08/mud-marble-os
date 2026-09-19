@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { IconDownload, IconFileDollar, IconGitBranch, IconPlus, IconTrash } from '@tabler/icons-react';
 import { api, ApiError } from '../../api/client';
 import { useToast } from '../ui/Toast';
+import { EditableTitle } from '../ui/EditableTitle';
 import { openDatePicker } from '../../lib/datePicker';
 import { fmtCents } from '../../lib/format';
 import { pdfExportFilename, triggerDownload } from '../../lib/download';
@@ -127,7 +128,12 @@ export function InvoiceEditor({
     <>
       <div className="ph">
         <div>
-          <h1>{invoice.title || invoice.invoice_number || 'Draft invoice'}</h1>
+          <EditableTitle
+            value={invoice.title}
+            fallback={invoice.invoice_number || 'Draft invoice'}
+            allowEmpty
+            onSave={(v) => saveField('title', v)}
+          />
           <p>
             {invoice.title && invoice.invoice_number ? `${invoice.invoice_number} · ` : ''}
             {invoice.projects?.name || ''}
