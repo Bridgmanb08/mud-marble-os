@@ -7,9 +7,8 @@ from fastapi.responses import Response
 from reportlab.lib import colors
 from reportlab.lib.pagesizes import letter
 from reportlab.lib.units import inch
-from reportlab.platypus import HRFlowable, Paragraph, SimpleDocTemplate, Spacer, Table, TableStyle
+from reportlab.platypus import HRFlowable, Paragraph, SimpleDocTemplate, Spacer
 
-from .. import branding
 from ..deps import CurrentUser, get_current_user
 from ..pdf_export import (
     STATUS_COLORS,
@@ -17,6 +16,7 @@ from ..pdf_export import (
     SIDE_MARGIN,
     breadcrumb_for,
     build_info_card,
+    build_line_items_table,
     build_letterhead,
     build_styles,
     build_totals_band,
@@ -44,23 +44,18 @@ router = APIRouter(prefix="/invoices", tags=["invoices"])
 ITEM_SELECT = "*,cost_codes(code,name)"
 
 
-async def _validate_source_amounts(
-    items: list[tuple[Optional[str], float]],
-    source_table: str,
-    source_column: str,
-    label: str,
-    exclude_item_id: Optional[str] = None,
+async def _validate_invoice_amounts(
+    items: list[tuple[Optional[str], float]], exclude_item_id: Optional[str] = None
 ) -> None:
-    """Guards against invoicing more of a source line item (an estimate
-    line item, or -- via source_co_item_id -- a change-order line item)
-    than it's actually worth, across every invoice on the project, not
-    just the one being edited right now. The "Add from Estimate"/"Add from
-    Change Order" pickers already clamp this in the UI, but that clamp
-    used a snapshot fetched once on mount; two invoices open in two tabs
-    (or two sessions without a reload between them) could each
-    independently commit up to the full remaining amount, double-invoicing
-    the same scope. This is the actual, authoritative check -- the
-    client-side clamp is just a nicer first line of defense.
+    """Guards against invoicing more of a source line item (from an estimate
+    OR a change order -- both live in the same line-item table) than it's
+    actually worth, across every invoice on the project, not just the one
+    being edited right now. The "Add line items" picker already clamps this
+    in the UI, but that clamp used a snapshot fetched once on mount; two
+    invoices open in two tabs (or two sessions without a reload between
+    them) could each independently commit up to the full remaining amount,
+    double-invoicing the same scope. This is the actual, authoritative
+    check -- the client-side clamp is just a nicer first line of defense.
     exclude_item_id lets an update recompute the already-invoiced sum
     without double-counting the very row being changed."""
     source_ids = {sid for sid, _ in items if sid}
@@ -68,17 +63,17 @@ async def _validate_source_amounts(
         return
     id_filter = ",".join(source_ids)
 
-    sources = await db_get(source_table, f"?id=in.({id_filter})&select=id,owner_price")
+    sources = await db_get("estimate_line_items", f"?id=in.({id_filter})&select=id,owner_price")
     owner_price_by_id = {s["id"]: s.get("owner_price") or 0 for s in sources}
 
     existing = await db_get(
-        "invoice_line_items", f"?{source_column}=in.({id_filter})&select=id,{source_column},amount"
+        "invoice_line_items", f"?source_line_item_id=in.({id_filter})&select=id,source_line_item_id,amount"
     )
     already_invoiced: dict[str, float] = {}
     for row in existing:
         if exclude_item_id and row["id"] == exclude_item_id:
             continue
-        sid = row.get(source_column)
+        sid = row.get("source_line_item_id")
         if sid:
             already_invoiced[sid] = already_invoiced.get(sid, 0) + (row.get("amount") or 0)
 
@@ -102,22 +97,10 @@ async def _validate_source_amounts(
             raise HTTPException(
                 status_code=400,
                 detail=(
-                    f"That would invoice more than this line item's {label} total (${cap:,.2f}) -- "
+                    f"That would invoice more than this line item's total (${cap:,.2f}) -- "
                     f"${already:,.2f} of it is already invoiced elsewhere on this project."
                 ),
             )
-
-
-async def _validate_invoice_amounts(
-    items: list[tuple[Optional[str], float]], exclude_item_id: Optional[str] = None
-) -> None:
-    await _validate_source_amounts(items, "estimate_line_items", "source_line_item_id", "estimate", exclude_item_id)
-
-
-async def _validate_invoice_co_amounts(
-    items: list[tuple[Optional[str], float]], exclude_item_id: Optional[str] = None
-) -> None:
-    await _validate_source_amounts(items, "change_order_line_items", "source_co_item_id", "change order", exclude_item_id)
 
 
 async def _validate_invoice_total(project_id: str, invoice_id: str, amount_due: float) -> None:
@@ -271,7 +254,6 @@ async def create_invoice_item(
     invoice_id: str, body: InvoiceLineItemCreate, _: CurrentUser = Depends(get_current_user)
 ):
     await _validate_invoice_amounts([(body.source_line_item_id, body.amount)])
-    await _validate_invoice_co_amounts([(body.source_co_item_id, body.amount)])
     rows = await db_post("invoice_line_items", {**body.model_dump(), "invoice_id": invoice_id})
     await _recalc_invoice_total(invoice_id)
     full = await db_get("invoice_line_items", f"?id=eq.{rows[0]['id']}&select={ITEM_SELECT}")
@@ -287,7 +269,6 @@ async def bulk_create_invoice_items(
     if not body.items:
         return []
     await _validate_invoice_amounts([(item.source_line_item_id, item.amount) for item in body.items])
-    await _validate_invoice_co_amounts([(item.source_co_item_id, item.amount) for item in body.items])
     rows = await db_post_many(
         "invoice_line_items", [{**item.model_dump(), "invoice_id": invoice_id} for item in body.items]
     )
@@ -303,18 +284,13 @@ async def update_invoice_item(
     # exclude_unset -- same reasoning as update_invoice above.
     updates = body.model_dump(exclude_unset=True)
     if updates.get("amount") is not None:
-        # Neither source_line_item_id nor source_co_item_id is part of
-        # InvoiceLineItemUpdate (both are immutable after creation), so
-        # whichever one is set has to be looked up here to know which
-        # source line item to re-validate the new amount against.
-        current = await db_get(
-            "invoice_line_items", f"?id=eq.{item_id}&select=source_line_item_id,source_co_item_id"
-        )
+        # source_line_item_id isn't part of InvoiceLineItemUpdate (it's
+        # immutable after creation), so it has to be looked up here to know
+        # which source line item to re-validate the new amount against.
+        current = await db_get("invoice_line_items", f"?id=eq.{item_id}&select=source_line_item_id")
         source_line_item_id = current[0].get("source_line_item_id") if current else None
-        source_co_item_id = current[0].get("source_co_item_id") if current else None
         await _validate_invoice_amounts([(source_line_item_id, updates["amount"])], exclude_item_id=item_id)
-        await _validate_invoice_co_amounts([(source_co_item_id, updates["amount"])], exclude_item_id=item_id)
-    await db_patch("invoice_line_items", item_id, updates)
+        await db_patch("invoice_line_items", item_id, updates)
     await _recalc_invoice_total(invoice_id)
     full = await db_get("invoice_line_items", f"?id=eq.{item_id}&select={ITEM_SELECT}")
     if not full:
@@ -382,29 +358,7 @@ async def export_invoice_pdf(invoice_id: str, _: CurrentUser = Depends(get_curre
         elements.append(Spacer(1, 10))
 
     if items:
-        # Cost codes are internal categorization, same call as the estimate
-        # export -- not shown on a client-facing invoice.
-        item_col = PAGE_WIDTH * 0.30
-        desc_col = PAGE_WIDTH * 0.50
-        amount_col = PAGE_WIDTH - item_col - desc_col
-        table_data = [[Paragraph("Item", s["th"]), Paragraph("Description", s["th"]), Paragraph("Amount", s["th_right"])]]
-        for it in items:
-            table_data.append([
-                Paragraph(xml_escape(it.get("title") or ""), s["cell"]),
-                Paragraph(xml_escape(it.get("description") or ""), s["cell"]),
-                Paragraph(f"${(it.get('amount') or 0):,.2f}", s["cell_right"]),
-            ])
-        t = Table(table_data, colWidths=[item_col, desc_col, amount_col], repeatRows=1)
-        t.setStyle(TableStyle([
-            ("BACKGROUND", (0, 0), (-1, 0), branding.BRAND_CREAM),
-            ("LINEBELOW", (0, 0), (-1, 0), 0.75, branding.BRAND_BROWN),
-            ("LINEBELOW", (0, 1), (-1, -1), 0.25, colors.lightgrey),
-            ("ROWBACKGROUNDS", (0, 1), (-1, -1), [colors.white, colors.HexColor("#FAF8F3")]),
-            ("VALIGN", (0, 0), (-1, -1), "TOP"),
-            ("TOPPADDING", (0, 0), (-1, -1), 5), ("BOTTOMPADDING", (0, 0), (-1, -1), 5),
-            ("LEFTPADDING", (0, 0), (0, -1), 6), ("RIGHTPADDING", (-1, 0), (-1, -1), 6),
-        ]))
-        elements.append(t)
+        elements.append(build_line_items_table(s, PAGE_WIDTH, [(i.get("title"), i.get("description"), i.get("amount")) for i in items]))
         elements.append(Spacer(1, 12))
 
     amount_due = invoice.get("amount_due") or 0

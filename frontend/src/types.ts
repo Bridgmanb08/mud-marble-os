@@ -240,9 +240,12 @@ export interface Estimate {
   projects?: ProjectBrief;
 }
 
+// Change order items are the same shape -- a line item belongs to exactly one
+// of an estimate or a change order.
 export interface EstimateLineItem {
   id: string;
-  estimate_id: string;
+  estimate_id: string | null;
+  change_order_id: string | null;
   cost_code_id: string | null;
   group_name: string | null;
   bucket: string;
@@ -364,7 +367,6 @@ export interface InvoiceLineItem {
   id: string;
   invoice_id: string;
   source_line_item_id: string | null;
-  source_co_item_id: string | null;
   cost_code_id: string | null;
   title: string;
   description: string | null;
@@ -375,34 +377,15 @@ export interface InvoiceLineItem {
   cost_codes: { code: string; name: string } | null;
 }
 
-// The "Add from Estimate" picker's row shape -- one per line item on the
-// project's current estimate, annotated with how much of it has already
-// been invoiced across every invoice for the project (not just the one
-// being built), so the picker can show a progress bar and cap what's left.
-export interface EstimateItemForInvoice {
+// A row in the "Add line items to invoice" picker -- one per line item on the
+// project's current estimate OR on one of its approved change orders (both
+// are the same kind of line item), annotated with how much of it has already
+// been invoiced across every invoice for the project so the picker can show a
+// progress bar and cap what's left.
+export interface InvoiceableItem {
   id: string;
-  title: string;
-  cost_code_id: string | null;
-  cost_codes: { code: string; name: string } | null;
-  cost_type: string;
-  owner_price: number;
-  notes_external: string | null;
-  invoiced_amount: number;
-  invoiced_pct: number;
-  remaining_amount: number;
-}
-
-// The "Add from Change Order" picker's row shape -- the same idea as
-// EstimateItemForInvoice above, but one row per line item across every
-// APPROVED change order on the project (only approved ones are actually
-// part of what the client owes). co_number/co_title identify which change
-// order a row came from, since this picker spans several change orders
-// at once instead of a single estimate.
-export interface ChangeOrderItemForInvoice {
-  id: string;
-  change_order_id: string;
-  co_number: number | null;
-  co_title: string;
+  source_type: 'estimate' | 'change_order';
+  source_label: string;
   title: string;
   cost_code_id: string | null;
   cost_codes: { code: string; name: string } | null;
@@ -430,27 +413,6 @@ export interface ChangeOrder {
   created_at: string;
   projects: ProjectBrief | null;
   sop_breach: boolean;
-}
-
-export interface ChangeOrderLineItem {
-  id: string;
-  change_order_id: string;
-  cost_code_id: string | null;
-  title: string;
-  description: string | null;
-  quantity: number;
-  unit: string | null;
-  unit_cost: number;
-  cost_type: string;
-  builder_cost: number;
-  markup_type: string;
-  markup_value: number;
-  owner_price: number;
-  notes_internal: string | null;
-  notes_external: string | null;
-  sort_order: number;
-  cost_codes: { code: string; name: string } | null;
-  created_at: string;
 }
 
 export interface Transaction {
@@ -1547,3 +1509,5 @@ export interface Quote {
   source: string | null;
   created_at: string;
 }
+
+export type LineItem = EstimateLineItem;

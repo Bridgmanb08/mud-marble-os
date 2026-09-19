@@ -26,6 +26,7 @@ __all__ = [
     "build_letterhead",
     "build_info_card",
     "build_totals_band",
+    "build_line_items_table",
     "breadcrumb_for",
     "fmt_pdf_date",
     "STATUS_COLORS",
@@ -223,6 +224,40 @@ def build_totals_band(styles: dict, page_width: float, rows: list) -> Table:
         if is_grand and i > 0:
             style_commands.append(("TOPPADDING", (0, i), (-1, i), 8))
     t.setStyle(TableStyle(style_commands))
+    return t
+
+
+def build_line_items_table(styles: dict, page_width: float, rows: list) -> Table:
+    """rows: (title, description, amount) triples -> the Item / Description /
+    Amount table shared by the invoice and change order PDFs, so a line item
+    prints identically wherever it appears. Cost codes and builder cost are
+    internal and deliberately not part of this client-facing table."""
+    item_col = page_width * 0.30
+    desc_col = page_width * 0.50
+    amount_col = page_width - item_col - desc_col
+    data = [[Paragraph("Item", styles["th"]), Paragraph("Description", styles["th"]), Paragraph("Amount", styles["th_right"])]]
+    for title, description, amount in rows:
+        data.append([
+            Paragraph(xml_escape(title or ""), styles["cell"]),
+            Paragraph(xml_escape(description or ""), styles["cell"]),
+            Paragraph(f"${(amount or 0):,.2f}", styles["cell_right"]),
+        ])
+    t = Table(data, colWidths=[item_col, desc_col, amount_col], repeatRows=1)
+    t.setStyle(
+        TableStyle(
+            [
+                ("BACKGROUND", (0, 0), (-1, 0), branding.BRAND_CREAM),
+                ("LINEBELOW", (0, 0), (-1, 0), 0.75, branding.BRAND_BROWN),
+                ("LINEBELOW", (0, 1), (-1, -1), 0.25, colors.lightgrey),
+                ("ROWBACKGROUNDS", (0, 1), (-1, -1), [colors.white, colors.HexColor("#FAF8F3")]),
+                ("VALIGN", (0, 0), (-1, -1), "TOP"),
+                ("TOPPADDING", (0, 0), (-1, -1), 5),
+                ("BOTTOMPADDING", (0, 0), (-1, -1), 5),
+                ("LEFTPADDING", (0, 0), (0, -1), 6),
+                ("RIGHTPADDING", (-1, 0), (-1, -1), 6),
+            ]
+        )
+    )
     return t
 
 

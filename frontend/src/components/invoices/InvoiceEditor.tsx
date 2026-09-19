@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { IconDownload, IconFileDollar, IconGitBranch, IconPlus, IconTrash } from '@tabler/icons-react';
+import { IconDownload, IconFileDollar, IconPlus, IconTrash } from '@tabler/icons-react';
 import { api, ApiError } from '../../api/client';
 import { useToast } from '../ui/Toast';
 import { EditableTitle } from '../ui/EditableTitle';
@@ -7,8 +7,7 @@ import { openDatePicker } from '../../lib/datePicker';
 import { fmtCents } from '../../lib/format';
 import { pdfExportFilename, triggerDownload } from '../../lib/download';
 import { InvoiceLineItemModal } from './InvoiceLineItemModal';
-import { AddEstimateLineItemsModal } from './AddEstimateLineItemsModal';
-import { AddChangeOrderLineItemsModal } from './AddChangeOrderLineItemsModal';
+import { AddLineItemsToInvoiceModal } from './AddLineItemsToInvoiceModal';
 import type { FinancialSummary, Invoice, InvoiceLineItem } from '../../types';
 
 const STATUS_OPTIONS = ['draft', 'sent', 'paid', 'overdue', 'void'];
@@ -53,7 +52,6 @@ export function InvoiceEditor({
   const [showItemModal, setShowItemModal] = useState(false);
   const [editingItem, setEditingItem] = useState<InvoiceLineItem | undefined>(undefined);
   const [showFromEstimate, setShowFromEstimate] = useState(false);
-  const [showFromChangeOrder, setShowFromChangeOrder] = useState(false);
   const [financialSummary, setFinancialSummary] = useState<FinancialSummary | null>(null);
 
   function load() {
@@ -298,10 +296,7 @@ export function InvoiceEditor({
           </div>
           <div style={{ display: 'flex', gap: 8 }}>
             <button className="btn btn-sm" onClick={() => setShowFromEstimate(true)}>
-              <IconFileDollar size={14} /> Add from Estimate
-            </button>
-            <button className="btn btn-sm" onClick={() => setShowFromChangeOrder(true)}>
-              <IconGitBranch size={14} /> Add from Change Order
+              <IconFileDollar size={14} /> Add from Estimate / Change Order
             </button>
             <button
               className="btn btn-sm"
@@ -397,24 +392,12 @@ export function InvoiceEditor({
         />
       )}
       {showFromEstimate && invoice && (
-        <AddEstimateLineItemsModal
+        <AddLineItemsToInvoiceModal
           invoiceId={invoiceId}
           projectId={invoice.project_id}
           onClose={() => setShowFromEstimate(false)}
           onAdded={() => {
             setShowFromEstimate(false);
-            toast('Line items added to invoice');
-            load();
-          }}
-        />
-      )}
-      {showFromChangeOrder && invoice && (
-        <AddChangeOrderLineItemsModal
-          invoiceId={invoiceId}
-          projectId={invoice.project_id}
-          onClose={() => setShowFromChangeOrder(false)}
-          onAdded={() => {
-            setShowFromChangeOrder(false);
             toast('Line items added to invoice');
             load();
           }}

@@ -7,8 +7,10 @@ import { useReferenceData } from '../../reference-data/ReferenceDataContext';
 import type { EstimateLineItem, EstimateTemplateItem, LineItemReference } from '../../types';
 
 interface LineItemModalProps {
+  // Exactly one parent: an estimate, an estimate template, or a change order.
   estimateId?: string;
   templateId?: string;
+  changeOrderId?: string;
   item?: EstimateLineItem | EstimateTemplateItem;
   defaultBucket?: string;
   defaultGroupName?: string;
@@ -43,6 +45,7 @@ function round2(n: number): number {
 export function LineItemModal({
   estimateId,
   templateId,
+  changeOrderId,
   item,
   defaultBucket,
   defaultGroupName,
@@ -56,7 +59,14 @@ export function LineItemModal({
   onSaved,
   onDeleted,
 }: LineItemModalProps) {
-  const basePath = templateId ? `/estimate-templates/${templateId}` : `/estimates/${estimateId}`;
+  const basePath = templateId
+    ? `/estimate-templates/${templateId}`
+    : changeOrderId
+      ? `/change-orders/${changeOrderId}`
+      : `/estimates/${estimateId}`;
+  // Group / bucket / workdays only mean something on an estimate's proposal
+  // layout; a change order's items just skip them.
+  const isChangeOrder = !!changeOrderId;
   const { costCodes: costCodesData } = useReferenceData();
   const costCodes = costCodesData ?? [];
   const [costCodeId, setCostCodeId] = useState(item?.cost_code_id || defaultCostCodeId || '');
@@ -304,6 +314,12 @@ export function LineItemModal({
           <div className="card-section-header">
             Item details
           </div>
+          {isChangeOrder ? (
+            <div className="fg">
+              <label className="fl">Item name</label>
+              <input className="fi" value={title} onChange={(e) => setTitle(e.target.value)} placeholder="e.g. Relocate stairwell framing" />
+            </div>
+          ) : (
           <div className="fr3">
             <div className="fg">
               <label className="fl">Item name</label>
@@ -335,7 +351,8 @@ export function LineItemModal({
               </select>
             </div>
           </div>
-          <div className="fr3">
+          )}
+          <div className={isChangeOrder ? 'fr' : 'fr3'}>
             <div className="fg">
               <label className="fl">Cost code</label>
               <input
@@ -361,6 +378,7 @@ export function LineItemModal({
                 ))}
               </select>
             </div>
+            {!isChangeOrder && (
             <div className="fg">
               <label className="fl">Est. workdays</label>
               <input
@@ -371,6 +389,7 @@ export function LineItemModal({
                 placeholder="Optional"
               />
             </div>
+            )}
           </div>
           <div className="fr">
             <div className="fg">

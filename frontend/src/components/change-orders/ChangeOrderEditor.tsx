@@ -5,8 +5,8 @@ import { useToast } from '../ui/Toast';
 import { EditableTitle } from '../ui/EditableTitle';
 import { fmt } from '../../lib/format';
 import { pdfExportFilename, triggerDownload } from '../../lib/download';
-import { ChangeOrderLineItemModal } from './ChangeOrderLineItemModal';
-import type { ChangeOrder, ChangeOrderLineItem } from '../../types';
+import { LineItemModal } from '../estimates/LineItemModal';
+import type { ChangeOrder, LineItem } from '../../types';
 
 const STATUS_OPTIONS = ['pending', 'sent', 'approved', 'rejected'];
 const STATUS_BADGE: Record<string, string> = {
@@ -24,7 +24,7 @@ export function ChangeOrderEditor({ coId, onChanged }: { coId: string; onChanged
   const toast = useToast();
 
   const [co, setCo] = useState<ChangeOrder | null>(null);
-  const [items, setItems] = useState<ChangeOrderLineItem[]>([]);
+  const [items, setItems] = useState<LineItem[]>([]);
   const [title, setTitle] = useState('');
   const [coType, setCoType] = useState('client_addition');
   const [discoveredBy, setDiscoveredBy] = useState('');
@@ -33,7 +33,7 @@ export function ChangeOrderEditor({ coId, onChanged }: { coId: string; onChanged
   const [description, setDescription] = useState('');
   const [notesInternal, setNotesInternal] = useState('');
   const [showItemModal, setShowItemModal] = useState(false);
-  const [editingItem, setEditingItem] = useState<ChangeOrderLineItem | undefined>(undefined);
+  const [editingItem, setEditingItem] = useState<LineItem | undefined>(undefined);
 
   function load() {
     if (!coId) return;
@@ -55,7 +55,7 @@ export function ChangeOrderEditor({ coId, onChanged }: { coId: string; onChanged
 
   function loadItems() {
     if (!coId) return;
-    api.get<ChangeOrderLineItem[]>(`/change-orders/${coId}/items`).catch(() => []).then((rows) => setItems(rows || []));
+    api.get<LineItem[]>(`/change-orders/${coId}/items`).catch(() => []).then((rows) => setItems(rows || []));
   }
 
   useEffect(() => {
@@ -299,8 +299,8 @@ export function ChangeOrderEditor({ coId, onChanged }: { coId: string; onChanged
       </div>
 
       {showItemModal && (
-        <ChangeOrderLineItemModal
-          coId={coId}
+        <LineItemModal
+          changeOrderId={coId}
           item={editingItem}
           onClose={() => setShowItemModal(false)}
           onSaved={() => {

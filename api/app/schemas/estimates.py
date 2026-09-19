@@ -117,7 +117,9 @@ class LineItemUpdate(BaseModel):
 
 class LineItemOut(BaseModel):
     id: str
-    estimate_id: str
+    # Exactly one of these is set -- an item belongs to an estimate OR a change order.
+    estimate_id: Optional[str] = None
+    change_order_id: Optional[str] = None
     cost_code_id: Optional[str] = None
     group_name: Optional[str] = None
     bucket: str

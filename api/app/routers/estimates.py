@@ -27,39 +27,13 @@ from ..schemas.estimates import (
     LineItemReference,
     LineItemUpdate,
 )
+from .. import line_items
 from ..supabase_client import db_delete, db_delete_query, db_get, db_patch, db_post, db_post_many
 
 router = APIRouter(prefix="/estimates", tags=["estimates"])
 
-
-def _compute_costs(quantity: float, unit_cost: float, markup_type: str, markup_value: float) -> tuple[float, float]:
-    builder_cost = round((quantity or 0) * (unit_cost or 0), 2)
-    if markup_type == "flat":
-        owner_price = round(builder_cost + (markup_value or 0), 2)
-    else:
-        owner_price = round(builder_cost * (1 + (markup_value or 0) / 100), 2)
-    return builder_cost, owner_price
-
-
-async def _check_not_below_invoiced(item_id: str, new_owner_price: float) -> None:
-    """Reducing a line item's price below what's already been invoiced
-    against it (a real workflow -- price corrections happen after partial
-    invoicing) had no guard at all: the invoice picker's remaining_amount
-    (owner_price - invoiced_amount, see projects.py's
-    get_estimate_items_for_invoice) would silently go negative, and its
-    invoiced_pct could read over 100%, with nothing anywhere stopping it or
-    explaining why. Mirrors invoices.py's own _validate_invoice_amounts,
-    just checked from the estimate side of the same relationship."""
-    invoiced_rows = await db_get("invoice_line_items", f"?source_line_item_id=eq.{item_id}&select=amount")
-    already_invoiced = sum(r.get("amount") or 0 for r in invoiced_rows)
-    if already_invoiced and round(new_owner_price, 2) < round(already_invoiced, 2):
-        raise HTTPException(
-            status_code=400,
-            detail=(
-                f"Can't lower this line item's price below ${already_invoiced:,.2f} -- "
-                f"that much of it has already been invoiced."
-            ),
-        )
+# Kept under its old name -- estimate_templates.py imports it from here.
+_compute_costs = line_items.compute_costs
 
 
 async def _recalc_estimate_totals(estimate_id: str) -> None:
@@ -100,7 +74,7 @@ async def search_line_items(
 ):
     if not cost_code_id and not q:
         return []
-    query = "?order=created_at.desc&limit=25&select=*,estimates(project_id,projects(name))"
+    query = "?estimate_id=not.is.null&order=created_at.desc&limit=25&select=*,estimates(project_id,projects(name))"
     if cost_code_id:
         query += f"&cost_code_id=eq.{cost_code_id}"
     if q:
@@ -304,54 +278,28 @@ async def duplicate_estimate(estimate_id: str, _: CurrentUser = Depends(get_curr
 
 @router.get("/{estimate_id}/items", response_model=list[LineItemOut])
 async def list_line_items(estimate_id: str, _: CurrentUser = Depends(get_current_user)):
-    return await db_get(
-        "estimate_line_items", f"?estimate_id=eq.{estimate_id}&order=sort_order.asc&select=*,cost_codes(code,name)"
-    )
+    return await line_items.list_items("estimate_id", estimate_id)
 
 
 @router.post("/{estimate_id}/items", response_model=LineItemOut)
 async def create_line_item(estimate_id: str, body: LineItemCreate, _: CurrentUser = Depends(get_current_user)):
-    builder_cost, owner_price = _compute_costs(body.quantity, body.unit_cost, body.markup_type, body.markup_value)
-    data = {
-        **body.model_dump(exclude_none=True),
-        "estimate_id": estimate_id,
-        "builder_cost": builder_cost,
-        "owner_price": owner_price,
-    }
-    rows = await db_post("estimate_line_items", data)
+    item = await line_items.create_item("estimate_id", estimate_id, body)
     await _recalc_estimate_totals(estimate_id)
-    full = await db_get("estimate_line_items", f"?id=eq.{rows[0]['id']}&select=*,cost_codes(code,name)")
-    return full[0]
+    return item
 
 
 @router.patch("/{estimate_id}/items/{item_id}", response_model=LineItemOut)
 async def update_line_item(
     estimate_id: str, item_id: str, body: LineItemUpdate, _: CurrentUser = Depends(get_current_user)
 ):
-    existing_rows = await db_get("estimate_line_items", f"?id=eq.{item_id}")
-    if not existing_rows:
-        raise HTTPException(status_code=404, detail="Line item not found")
-    existing = existing_rows[0]
-    # exclude_unset (not exclude_none) -- a caller may need to explicitly
-    # clear a field (e.g. removing a cost_code_id or notes_external), and
-    # that null has to reach the database instead of being silently dropped.
-    updates = body.model_dump(exclude_unset=True)
-    merged = {**existing, **updates}
-    builder_cost, owner_price = _compute_costs(
-        merged.get("quantity") or 0, merged.get("unit_cost") or 0, merged.get("markup_type") or "percent", merged.get("markup_value") or 0
-    )
-    await _check_not_below_invoiced(item_id, owner_price)
-    updates["builder_cost"] = builder_cost
-    updates["owner_price"] = owner_price
-    await db_patch("estimate_line_items", item_id, updates)
+    item = await line_items.update_item(item_id, body)
     await _recalc_estimate_totals(estimate_id)
-    full = await db_get("estimate_line_items", f"?id=eq.{item_id}&select=*,cost_codes(code,name)")
-    return full[0]
+    return item
 
 
 @router.delete("/{estimate_id}/items/{item_id}")
 async def delete_line_item(estimate_id: str, item_id: str, _: CurrentUser = Depends(get_current_user)):
-    await db_delete("estimate_line_items", item_id)
+    await line_items.delete_item(item_id)
     await _recalc_estimate_totals(estimate_id)
     return {"ok": True}
 
@@ -476,7 +424,7 @@ async def export_estimate_pdf(estimate_id: str, _: CurrentUser = Depends(get_cur
             table_data.append(
                 [
                     Paragraph(item_label, cell),
-                    Paragraph(_xml_escape(item.get("description") or ""), cell),
+                    Paragraph(_xml_escape(line_items.client_text(item)), cell),
                     Paragraph(qty_unit, cell_right),
                     Paragraph(f"${client_unit_price:,.2f}", cell_right),
                     Paragraph(f"${owner_price:,.2f}", cell_right),
@@ -564,7 +512,7 @@ async def export_estimate_excel(estimate_id: str, _: CurrentUser = Depends(get_c
             ws.append(
                 [
                     item.get("title"),
-                    item.get("description"),
+                    line_items.client_text(item),
                     item.get("quantity"),
                     item.get("unit"),
                     client_unit_price,
