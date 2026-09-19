@@ -250,16 +250,6 @@ export function ChangeOrderEditor({ coId, onChanged }: { coId: string; onChanged
         ) : (
           <div className="fr">
             <div className="fg">
-              <label className="fl">Owner price ($)</label>
-              <input
-                className="fi"
-                type="number"
-                value={ownerPrice}
-                onChange={(e) => setOwnerPrice(e.target.value)}
-                onBlur={(e) => saveField('owner_price', parseFloat(e.target.value) || 0)}
-              />
-            </div>
-            <div className="fg">
               <label className="fl">Builder cost ($)</label>
               <input
                 className="fi"
@@ -267,6 +257,16 @@ export function ChangeOrderEditor({ coId, onChanged }: { coId: string; onChanged
                 value={builderCost}
                 onChange={(e) => setBuilderCost(e.target.value)}
                 onBlur={(e) => saveField('builder_cost', e.target.value.trim() === '' ? null : parseFloat(e.target.value))}
+              />
+            </div>
+            <div className="fg">
+              <label className="fl">Owner price ($)</label>
+              <input
+                className="fi"
+                type="number"
+                value={ownerPrice}
+                onChange={(e) => setOwnerPrice(e.target.value)}
+                onBlur={(e) => saveField('owner_price', parseFloat(e.target.value) || 0)}
               />
             </div>
           </div>
