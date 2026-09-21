@@ -1,6 +1,6 @@
 from typing import Optional
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel
 
 
 class ChangeOrderCreate(BaseModel):
@@ -47,47 +47,3 @@ class ChangeOrderOut(BaseModel):
     created_at: str
     projects: Optional[ProjectBrief] = None
     sop_breach: bool = False
-
-
-class CostCodeBrief(BaseModel):
-    code: str
-    name: str
-
-
-class ChangeOrderLineItemCreate(BaseModel):
-    cost_code_id: Optional[str] = None
-    title: str
-    description: Optional[str] = None
-    quantity: float = Field(default=1, ge=0)
-    unit: Optional[str] = None
-    unit_cost: float = Field(default=0, ge=0)
-    cost_type: str = "none"
-    markup_type: str = "percent"
-    markup_value: float = 0
-    notes_internal: Optional[str] = None
-    notes_external: Optional[str] = None
-    sort_order: int = 0
-
-
-class ChangeOrderLineItemUpdate(BaseModel):
-    cost_code_id: Optional[str] = None
-    title: Optional[str] = None
-    description: Optional[str] = None
-    quantity: Optional[float] = Field(default=None, ge=0)
-    unit: Optional[str] = None
-    unit_cost: Optional[float] = Field(default=None, ge=0)
-    cost_type: Optional[str] = None
-    markup_type: Optional[str] = None
-    markup_value: Optional[float] = None
-    notes_internal: Optional[str] = None
-    notes_external: Optional[str] = None
-    sort_order: Optional[int] = None
-
-
-class ChangeOrderLineItemOut(ChangeOrderLineItemCreate):
-    id: str
-    change_order_id: str
-    builder_cost: float
-    owner_price: float
-    cost_codes: Optional[CostCodeBrief] = None
-    created_at: str
