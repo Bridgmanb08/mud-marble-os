@@ -57,6 +57,7 @@
 }
 .permit-box label{display:flex;align-items:center;gap:8px;font-size:13px;font-weight:500;cursor:pointer;flex:1;min-width:0;}
 .permit-box input[type="date"]{max-width:150px;}
+.permit-box input.permit-number{flex:0 0 170px;width:170px;min-width:0;}
 
 /* Dumpster status card */
 .dumpster-card{display:flex;flex-wrap:wrap;gap:14px;align-items:flex-end;}
