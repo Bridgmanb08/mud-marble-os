@@ -10,6 +10,7 @@ import { useDndSensors } from '../hooks/useDndSensors';
 import { fmt } from '../lib/format';
 import type { Project, ProjectBoardLayout } from '../types';
 import { NewProjectModal } from '../components/projects/NewProjectModal';
+import { ProjectRowMenu } from '../components/projects/ProjectRowMenu';
 import { Skeleton } from '../components/ui/Skeleton';
 import { PROJECT_STATUS_OPTIONS as PROJECT_STATUS_ORDER, projectStatusLabel, statusOptionsIncluding } from '../lib/projectStatuses';
 
@@ -57,6 +58,7 @@ export default function Projects() {
   const [projects, setProjects] = useState<Project[] | null>(null);
   const [filter, setFilter] = useState('all');
   const [showNew, setShowNew] = useState(false);
+  const [editing, setEditing] = useState<Project | null>(null);
   // Saved section order/collapse state -- fetched once, then kept in sync
   // locally (optimistic) as the user drags/collapses, PUT back to persist.
   const [statusOrder, setStatusOrder] = useState<string[]>([]);
@@ -152,6 +154,22 @@ export default function Projects() {
     }
   }
 
+  async function handleDelete(project: Project) {
+    if (
+      !window.confirm(
+        `Permanently delete "${projectTitle(project.name)}"? Its tasks, notes, and files will be deleted too. This can't be undone.`
+      )
+    )
+      return;
+    try {
+      await api.delete(`/projects/${project.id}`);
+      toast('Project deleted');
+      load();
+    } catch (e) {
+      toast(e instanceof ApiError ? e.message : 'Failed to delete project', true);
+    }
+  }
+
   return (
     <>
       <div className="ph">
@@ -220,10 +238,24 @@ export default function Projects() {
                 onToggleCollapsed={() => toggleCollapsed(status)}
                 onNavigate={(id) => navigate(`/projects/${id}`)}
                 onStatusChange={handleStatusChange}
+                onEdit={setEditing}
+                onDelete={handleDelete}
               />
             ))}
           </SortableContext>
         </DndContext>
+      )}
+
+      {editing && (
+        <NewProjectModal
+          project={editing}
+          onClose={() => setEditing(null)}
+          onCreated={() => {
+            setEditing(null);
+            toast('Project updated');
+            load();
+          }}
+        />
       )}
 
       {showNew && (
@@ -248,6 +280,8 @@ function ProjectStatusSection({
   onToggleCollapsed,
   onNavigate,
   onStatusChange,
+  onEdit,
+  onDelete,
 }: {
   status: string;
   items: Project[];
@@ -256,6 +290,8 @@ function ProjectStatusSection({
   onToggleCollapsed: () => void;
   onNavigate: (id: string) => void;
   onStatusChange: (project: Project, newStatus: string) => void;
+  onEdit: (project: Project) => void;
+  onDelete: (project: Project) => void;
 }) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
     id: status,
@@ -292,7 +328,14 @@ function ProjectStatusSection({
       </div>
       {!collapsed &&
         items.map((p) => (
-          <ProjectCard key={p.id} project={p} onNavigate={() => onNavigate(p.id)} onStatusChange={onStatusChange} />
+          <ProjectCard
+            key={p.id}
+            project={p}
+            onNavigate={() => onNavigate(p.id)}
+            onStatusChange={onStatusChange}
+            onEdit={onEdit}
+            onDelete={onDelete}
+          />
         ))}
     </div>
   );
@@ -302,10 +345,14 @@ function ProjectCard({
   project: p,
   onNavigate,
   onStatusChange,
+  onEdit,
+  onDelete,
 }: {
   project: Project;
   onNavigate: () => void;
   onStatusChange: (project: Project, newStatus: string) => void;
+  onEdit: (project: Project) => void;
+  onDelete: (project: Project) => void;
 }) {
   return (
     <div
@@ -345,6 +392,7 @@ function ProjectCard({
             </option>
           ))}
         </select>
+        <ProjectRowMenu onEdit={() => onEdit(p)} onDelete={() => onDelete(p)} />
       </div>
     </div>
   );
