@@ -33,11 +33,12 @@ begin
 end $$;
 
 -- Copy change order items across, keeping their ids so invoice references
--- stay valid.
+-- stay valid. bucket is NOT NULL on this table (an estimate concept); change
+-- order items just take 'construction'.
 insert into estimate_line_items
-  (id, change_order_id, cost_code_id, title, description, quantity, unit, unit_cost, cost_type,
+  (id, change_order_id, bucket, cost_code_id, title, description, quantity, unit, unit_cost, cost_type,
    markup_type, markup_value, builder_cost, owner_price, notes_internal, notes_external, sort_order, created_at)
-select id, change_order_id, cost_code_id, title, description, quantity, unit, unit_cost, cost_type,
+select id, change_order_id, 'construction', cost_code_id, title, description, quantity, unit, unit_cost, cost_type,
        markup_type, markup_value, builder_cost, owner_price, notes_internal, notes_external, sort_order, created_at
 from change_order_line_items
 on conflict (id) do nothing;
