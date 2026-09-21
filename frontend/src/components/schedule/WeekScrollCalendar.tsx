@@ -1,5 +1,16 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
-import { IconSun, IconCloud, IconCloudFog, IconCloudRain, IconSnowflake, IconCloudStorm } from '@tabler/icons-react';
+import {
+  IconSun,
+  IconCloud,
+  IconCloudFog,
+  IconCloudRain,
+  IconSnowflake,
+  IconCloudStorm,
+  IconChevronUp,
+  IconChevronDown,
+  IconChevronsUp,
+  IconChevronsDown,
+} from '@tabler/icons-react';
 import { api, ApiError } from '../../api/client';
 import { useToast } from '../ui/Toast';
 import type { Project, Task, WeatherOut } from '../../types';
@@ -24,6 +35,10 @@ const STATUS_COLOR: Record<string, string> = {
 const DAY_MS = 86400000;
 const WEEKS_PER_PAGE = 8;
 const SCROLL_TRIGGER_PX = 400;
+// Paged mode: a fixed window of weeks, moved with arrows instead of scrolling.
+const PAGED_WEEKS = 6;
+const PAGED_WEEKS_BEFORE_TODAY = 1;
+const MONTH_STEP_WEEKS = 4;
 const MAX_LANES = 5;
 const BAR_HEIGHT = 20;
 const BAR_GAP = 3;
@@ -107,6 +122,10 @@ function assignLanes(spans: TaskSpan[]): Map<string, number> {
   return laneOf;
 }
 
+function defaultWindowStart(): Date {
+  return addDays(sundayOf(new Date()), -7 * PAGED_WEEKS_BEFORE_TODAY);
+}
+
 function fmtRange(weekStart: Date): string {
   const end = addDays(weekStart, 6);
   const startStr = weekStart.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
@@ -119,6 +138,7 @@ export function WeekScrollCalendar({
   projectId,
   projects,
   colorForTask,
+  paged = false,
   onOpenTask,
   onChanged,
 }: {
@@ -131,6 +151,11 @@ export function WeekScrollCalendar({
   /** Overrides the default status-based bar color, e.g. to color by job on a
    * multi-project calendar where distinguishing jobs matters more than status. */
   colorForTask?: (task: Task) => string;
+  /** Show a fixed window of weeks moved with up/down arrows (single = a week,
+   * double = four weeks) instead of an internally-scrolling calendar. Used
+   * where the calendar sits inside a long page: an inner scroll box traps
+   * the mouse wheel and stops the page from scrolling. */
+  paged?: boolean;
   onOpenTask: (id: string) => void;
   onChanged: () => void;
 }) {
@@ -143,6 +168,7 @@ export function WeekScrollCalendar({
     const thisWeek = sundayOf(new Date());
     return [...weeksFrom(thisWeek, 4, -1), thisWeek, ...weeksFrom(addDays(thisWeek, 7), WEEKS_PER_PAGE - 1, 1)];
   });
+  const [windowStart, setWindowStart] = useState<Date>(defaultWindowStart);
   const [drag, setDrag] = useState<DragState | null>(null);
   const [quickAdd, setQuickAdd] = useState<{ startKey: string; endKey: string; title: string; projectId: string } | null>(null);
   const [weather, setWeather] = useState<WeatherOut | null>(null);
@@ -163,7 +189,7 @@ export function WeekScrollCalendar({
 
   function handleScroll() {
     const el = scrollRef.current;
-    if (!el) return;
+    if (!el || paged) return;
     if (el.scrollTop < SCROLL_TRIGGER_PX) {
       pendingPrependHeight.current = el.scrollHeight;
       setWeekStarts((prev) => [...weeksFrom(prev[0], WEEKS_PER_PAGE, -1), ...prev]);
@@ -173,6 +199,10 @@ export function WeekScrollCalendar({
   }
 
   function scrollToToday() {
+    if (paged) {
+      setWindowStart(defaultWindowStart());
+      return;
+    }
     const container = scrollRef.current;
     const rows = container?.querySelectorAll<HTMLElement>('[data-week-row]');
     if (!container || !rows) return;
@@ -199,9 +229,12 @@ export function WeekScrollCalendar({
   }
 
   useEffect(() => {
-    scrollToToday();
+    if (!paged) scrollToToday();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  const visibleWeeks = paged ? Array.from({ length: PAGED_WEEKS }, (_, i) => addDays(windowStart, 7 * i)) : weekStarts;
+  const shiftWindow = (weeks: number) => setWindowStart((prev) => addDays(prev, 7 * weeks));
 
   const spans = useMemo(() => tasks.map(taskSpan).filter((s): s is TaskSpan => s !== null), [tasks]);
   const todayKey = dateKey(new Date());
@@ -327,9 +360,35 @@ export function WeekScrollCalendar({
   return (
     <div className="wcal-wrap">
       <div className="wcal-toolbar">
+        {paged && (
+          <div className="wcal-range">
+            {windowStart.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })} –{' '}
+            {addDays(windowStart, 7 * PAGED_WEEKS - 1).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
+          </div>
+        )}
+        {paged && (
+          <>
+            <button type="button" className="btn btn-sm wcal-nav" title="Back 4 weeks" aria-label="Back 4 weeks" onClick={() => shiftWindow(-MONTH_STEP_WEEKS)}>
+              <IconChevronsUp size={14} />
+            </button>
+            <button type="button" className="btn btn-sm wcal-nav" title="Back 1 week" aria-label="Back 1 week" onClick={() => shiftWindow(-1)}>
+              <IconChevronUp size={14} />
+            </button>
+          </>
+        )}
         <button type="button" className="btn btn-sm" onClick={scrollToToday}>
           Today
         </button>
+        {paged && (
+          <>
+            <button type="button" className="btn btn-sm wcal-nav" title="Forward 1 week" aria-label="Forward 1 week" onClick={() => shiftWindow(1)}>
+              <IconChevronDown size={14} />
+            </button>
+            <button type="button" className="btn btn-sm wcal-nav" title="Forward 4 weeks" aria-label="Forward 4 weeks" onClick={() => shiftWindow(MONTH_STEP_WEEKS)}>
+              <IconChevronsDown size={14} />
+            </button>
+          </>
+        )}
       </div>
       <div className="wcal">
         <div className="wcal-hd">
@@ -339,8 +398,8 @@ export function WeekScrollCalendar({
             </div>
           ))}
         </div>
-        <div className="wcal-scroll" ref={scrollRef} onScroll={handleScroll}>
-        {weekStarts.map((weekStart) => {
+        <div className={`wcal-scroll${paged ? ' paged' : ''}`} ref={scrollRef} onScroll={handleScroll}>
+        {visibleWeeks.map((weekStart) => {
           const weekStartKey = dateKey(weekStart);
           const weekEndKey = dateKey(addDays(weekStart, 6));
           const weekSpans = spans.filter((s) => s.startKey <= weekEndKey && s.endKey >= weekStartKey);

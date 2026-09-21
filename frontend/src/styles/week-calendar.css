@@ -2,13 +2,17 @@
    Additive-only, imported once from index.css. */
 
 .wcal-wrap{max-width:760px;}
-.wcal-toolbar{display:flex;justify-content:flex-end;margin-bottom:8px;}
+.wcal-toolbar{display:flex;justify-content:flex-end;align-items:center;gap:6px;margin-bottom:8px;}
+.wcal-range{margin-right:auto;font-size:12.5px;color:var(--t2);font-weight:500;}
+.wcal-nav{padding-left:8px;padding-right:8px;}
 
 .wcal{border:1px solid var(--border);border-radius:var(--rl);background:var(--surface);overflow:hidden;}
 .wcal-hd{display:grid;grid-template-columns:repeat(7,1fr);border-bottom:1px solid var(--border);background:var(--surface);}
 .wcal-hd-cell{padding:8px 4px;font-size:11px;font-weight:600;color:var(--t2);text-align:center;text-transform:uppercase;letter-spacing:.4px;}
 
 .wcal-scroll{height:560px;overflow-y:auto;}
+/* Paged mode has no inner scrollbar at all, so the mouse wheel always scrolls the page. */
+.wcal-scroll.paged{height:auto;overflow:visible;}
 
 .wcal-week{position:relative;border-bottom:1px solid var(--border);padding-top:2px;}
 .wcal-week-label{position:absolute;top:2px;left:6px;font-size:9.5px;color:var(--t3);font-weight:600;text-transform:uppercase;letter-spacing:.3px;pointer-events:none;z-index:2;}
@@ -44,5 +48,6 @@
 
 @media(max-width:768px){
   .wcal-scroll{height:70vh;}
+  .wcal-scroll.paged{height:auto;}
   .wcal-hd-cell{font-size:10px;padding:6px 2px;}
 }
