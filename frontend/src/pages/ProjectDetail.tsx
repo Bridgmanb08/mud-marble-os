@@ -777,7 +777,7 @@ export default function ProjectDetail() {
                 <p className="empty-s" style={{ marginTop: -6, marginBottom: 10 }}>
                   Drag to create a task across days, drag a task to move it, or drag its edges to resize. Click a task for details.
                 </p>
-                <WeekScrollCalendar tasks={filteredTasks} projectId={id} onOpenTask={openTask} onChanged={loadTasks} />
+                <WeekScrollCalendar paged tasks={filteredTasks} projectId={id} onOpenTask={openTask} onChanged={loadTasks} />
               </>
             ) : filteredTasks.length === 0 ? (
               <div className="empty-s">No tasks scheduled yet.</div>
