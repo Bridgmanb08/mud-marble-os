@@ -23,7 +23,7 @@ from ..schemas.projects import (
     ProjectOut,
     ProjectUpdate,
 )
-from ..supabase_client import db_get, db_patch, db_post
+from ..supabase_client import db_delete, db_delete_query, db_get, db_patch, db_post
 
 router = APIRouter(prefix="/projects", tags=["projects"])
 
@@ -119,6 +119,49 @@ async def update_project(project_id: str, body: ProjectUpdate, _: CurrentUser = 
     await db_patch("projects", project_id, body.model_dump(exclude_unset=True))
     full = await db_get("projects", f"?id=eq.{project_id}&select=*,clients(id,first_name,last_name,preferred_contact_method,is_advocate,is_repeat_client,notes),sms_contacts(id,phone_number,name)")
     return full[0]
+
+
+# Records that make up a project's financial history. A project that has any
+# of these can't be hard-deleted -- same "don't let a delete destroy real
+# financial history" rule invoices and change orders already follow. Set the
+# project to Closed/Lost instead.
+_FINANCIAL_HISTORY = (
+    ("estimates", "estimate"),
+    ("invoices", "invoice"),
+    ("change_orders", "change order"),
+    ("transactions", "transaction"),
+)
+
+
+@router.delete("/{project_id}")
+async def delete_project(project_id: str, _: CurrentUser = Depends(get_current_user)):
+    existing = await db_get("projects", f"?id=eq.{project_id}&select=id")
+    if not existing:
+        raise HTTPException(status_code=404, detail="Project not found")
+
+    blockers = []
+    for table, label in _FINANCIAL_HISTORY:
+        rows = await db_get(table, f"?project_id=eq.{project_id}&select=id")
+        if rows:
+            blockers.append(f"{len(rows)} {label}{'' if len(rows) == 1 else 's'}")
+    if blockers:
+        raise HTTPException(
+            status_code=400,
+            detail=(
+                f"Can't delete a project that has {', '.join(blockers)} -- that's real financial history. "
+                "Set its status to Closed or Lost instead."
+            ),
+        )
+
+    # Tasks and notes don't cascade with the project, and leaving them behind
+    # would strand orphaned "No job" tasks on the Task Board. Everything else
+    # that points at a project (files, notifications, in-house sheet,
+    # subcontractor items) cascades on its own, and messages/reminders
+    # simply lose their project link.
+    await db_delete_query("schedule_items", f"?project_id=eq.{project_id}")
+    await db_delete_query("project_notes", f"?project_id=eq.{project_id}")
+    await db_delete("projects", project_id)
+    return {"ok": True}
 
 
 @router.get("/{project_id}/phase-progress", response_model=PhaseProgressOut)
