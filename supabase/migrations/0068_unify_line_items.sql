@@ -13,6 +13,11 @@
 
 alter table estimate_line_items alter column estimate_id drop not null;
 
+-- The "Reference from another job" search (estimates.py) orders by and returns
+-- created_at, but this table never had the column -- that search has been
+-- 502ing. Existing rows get today's date.
+alter table estimate_line_items add column if not exists created_at timestamptz not null default now();
+
 alter table estimate_line_items
   add column if not exists change_order_id uuid references change_orders(id) on delete cascade;
 
