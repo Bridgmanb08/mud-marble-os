@@ -10,6 +10,7 @@ from ..estimate_copilot_tools import (
     ESTIMATE_TOOLS,
     WRITE_TOOLS,
     current_estimate_context,
+    format_change_orders,
     format_cost_codes,
     format_line_items,
     run_estimate_tool,
@@ -36,6 +37,12 @@ it matches; leave cost_code_id unset rather than guessing:
 
 Current line items on this estimate:
 {line_items}
+
+Approved change orders on this project -- already-agreed scope beyond this base estimate. You can't edit \
+these (add_line_item/update_line_item/remove_line_item only ever touch THIS estimate), but check them before \
+adding scope or flagging a gap, so you don't propose something that's already been added as a change order or \
+contradict what's already been agreed to:
+{change_orders}
 
 How to work:
 - Use add_line_item/update_line_item/remove_line_item directly when the user asks you to add, change, or \
@@ -76,6 +83,7 @@ async def _load_system_prompt(estimate_id: str, user_name: str) -> str:
         dependency_examples=DEPENDENCY_EXAMPLES,
         cost_codes=format_cost_codes(ctx["cost_codes"]),
         line_items=format_line_items(ctx["items"]),
+        change_orders=format_change_orders(ctx["change_orders"]),
     )
 
 
@@ -144,13 +152,17 @@ residential builder, thinking like an experienced GC about what naturally comes 
 Current line items on this estimate, in the order they were added:
 {line_items}
 
+Approved change orders on this project (already-agreed extra scope -- don't suggest something already \
+covered by one of these):
+{change_orders}
+
 Active cost codes (id: code - name):
 {cost_codes}
 
 Based on typical construction sequencing and what's already listed, propose exactly ONE line item that most \
 likely comes next -- the single most obvious next thing, given what's already there. Don't suggest something \
-already present (check titles/groups carefully), and don't force a suggestion that's too speculative -- if \
-nothing obvious comes next, say so honestly rather than reaching.
+already present (check titles/groups AND the approved change orders above carefully), and don't force a \
+suggestion that's too speculative -- if nothing obvious comes next, say so honestly rather than reaching.
 
 Return ONLY a JSON object, no markdown, no explanation:
 {{"title": "...", "group_name": "an existing group this belongs with, or a sensible new one", "cost_code_id": \

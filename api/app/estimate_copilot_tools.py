@@ -34,21 +34,54 @@ construction knowledge too, but calibrate to examples like these):
 - Demo -> dumpster/debris haul-off"""
 
 
+async def _approved_change_orders_with_items(project_id: str) -> list[dict]:
+    """Every APPROVED change order on this project, with its line items --
+    change order items live in the same estimate_line_items table as the
+    estimate's own (change_order_id set instead of estimate_id), so this is
+    one more query against a table the assistant already reads. Unapproved
+    change orders aren't included -- they aren't agreed scope yet, and
+    surfacing them here could read as though they already are."""
+    cos = await db_get(
+        "change_orders", f"?project_id=eq.{project_id}&status=eq.approved&order=co_number.asc&select=id,co_number,title"
+    )
+    if not cos:
+        return []
+    co_by_id = {c["id"]: {**c, "items": []} for c in cos}
+    items = await db_get(
+        "estimate_line_items",
+        f"?change_order_id=in.({','.join(co_by_id)})&order=sort_order.asc&select=id,change_order_id,title,owner_price,cost_codes(code,name)",
+    )
+    for i in items:
+        co_by_id[i["change_order_id"]]["items"].append(i)
+    return list(co_by_id.values())
+
+
 async def current_estimate_context(estimate_id: str) -> dict:
     """Everything the system prompt needs to ground this specific
     conversation: the estimate's own line items (so the assistant can
-    reference existing groups/items by id without a search round-trip) and
-    the active cost-code catalog. Fetched fresh every chat turn, not cached --
-    the whole point is this reflects what's actually on the estimate right
-    now, including edits made earlier in the same conversation."""
-    items, cost_codes = await asyncio.gather(
+    reference existing groups/items by id without a search round-trip), the
+    active cost-code catalog, and the project's approved change orders (so
+    the assistant doesn't propose scope that's already been added as a
+    change order, or contradict what's already been agreed to beyond the
+    base estimate). Fetched fresh every chat turn, not cached -- the whole
+    point is this reflects what's actually there right now, including edits
+    made earlier in the same conversation."""
+    estimates = await db_get("estimates", f"?id=eq.{estimate_id}&select=project_id")
+    project_id = estimates[0]["project_id"] if estimates else None
+
+    items, cost_codes, change_orders = await asyncio.gather(
         db_get(
             "estimate_line_items",
             f"?estimate_id=eq.{estimate_id}&order=sort_order.asc&select=id,title,group_name,bucket,quantity,unit_cost,owner_price,cost_codes(id,code,name)",
         ),
         db_get("cost_codes", "?is_active=eq.true&order=code.asc&limit=200&select=id,code,name"),
+        _approved_change_orders_with_items(project_id) if project_id else _noop_list(),
     )
-    return {"items": items, "cost_codes": cost_codes}
+    return {"items": items, "cost_codes": cost_codes, "change_orders": change_orders}
+
+
+async def _noop_list() -> list[dict]:
+    return []
 
 
 def format_line_items(items: list[dict]) -> str:
@@ -69,6 +102,23 @@ def format_cost_codes(cost_codes: list[dict]) -> str:
     if not cost_codes:
         return "(no active cost codes yet)"
     return "\n".join(f"- {c['id']}: {c['code']} - {c['name']}" for c in cost_codes)
+
+
+def format_change_orders(change_orders: list[dict]) -> str:
+    if not change_orders:
+        return "(no approved change orders on this project)"
+    lines = []
+    for co in change_orders:
+        label = f"CO-{str(co.get('co_number') or '?').zfill(3)}: {co['title']}"
+        if not co["items"]:
+            lines.append(f"- {label} (flat price, no line-item breakdown)")
+            continue
+        lines.append(f"- {label}:")
+        for i in co["items"]:
+            cc = i.get("cost_codes") or {}
+            cc_label = f"{cc['code']} - {cc['name']}" if cc else "no cost code"
+            lines.append(f"    - \"{i['title']}\" | \${i['owner_price']} client price | {cc_label}")
+    return "\n".join(lines)
 
 
 async def _tool_add_line_item(estimate_id: str, **kwargs) -> dict:
