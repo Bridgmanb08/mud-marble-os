@@ -186,6 +186,15 @@ body{font-family:var(--font);background:var(--bg);color:var(--text);font-size:14
 .fg{margin-bottom:14px;}
 .fl{display:block;font-size:11px;font-weight:500;color:var(--t2);margin-bottom:5px;text-transform:uppercase;letter-spacing:.4px;}
 .fi{width:100%;padding:8px 10px;font-size:13px;font-family:var(--font);border:1px solid var(--border-md);border-radius:var(--r);background:var(--surface);color:var(--text);}
+
+/* CostCodeSelect -- live-filtered combobox dropdown (estimates, change orders, invoices) */
+.css-dropdown{position:absolute;top:calc(100% + 4px);left:0;right:0;z-index:50;background:var(--surface);border:1px solid var(--border-md);border-radius:var(--r);box-shadow:0 4px 16px rgba(0,0,0,.12);max-height:260px;overflow-y:auto;padding:4px;}
+.css-option{display:block;width:100%;text-align:left;padding:7px 9px;font-size:13px;border:none;background:none;border-radius:6px;cursor:pointer;color:var(--text);}
+.css-option:hover,.css-option.active{background:var(--bg);}
+.css-option .css-code{color:var(--t2);font-variant-numeric:tabular-nums;margin-right:4px;}
+.css-option.css-clear{color:var(--t2);border-bottom:1px solid var(--border);border-radius:0;margin-bottom:2px;padding-bottom:8px;}
+.css-empty{padding:8px 9px;font-size:12.5px;color:var(--t3);}
+
 .fi:focus{outline:none;border-color:var(--accent);}
 textarea.fi{resize:vertical;min-height:80px;}
 .fr{display:grid;grid-template-columns:1fr 1fr;gap:12px;}

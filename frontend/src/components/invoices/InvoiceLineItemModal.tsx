@@ -2,6 +2,7 @@ import { useState, type FormEvent } from 'react';
 import { api, ApiError } from '../../api/client';
 import { Modal } from '../ui/Modal';
 import { useReferenceData } from '../../reference-data/ReferenceDataContext';
+import { CostCodeSelect } from '../ui/CostCodeSelect';
 import type { InvoiceLineItem } from '../../types';
 
 interface InvoiceLineItemModalProps {
@@ -64,16 +65,7 @@ export function InvoiceLineItemModal({ invoiceId, item, onClose, onSaved }: Invo
         <div className="fr">
           <div className="fg">
             <label className="fl">Cost code</label>
-            <select className="fi" value={costCodeId} onChange={(e) => setCostCodeId(e.target.value)}>
-              <option value="">— None —</option>
-              {(costCodes || [])
-                .filter((c) => c.is_active)
-                .map((c) => (
-                  <option key={c.id} value={c.id}>
-                    {c.code} - {c.name}
-                  </option>
-                ))}
-            </select>
+            <CostCodeSelect costCodes={costCodes || []} value={costCodeId} onSelect={(c) => setCostCodeId(c?.id || '')} />
           </div>
           <div className="fg">
             <label className="fl">Amount ($)</label>
