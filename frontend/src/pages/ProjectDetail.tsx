@@ -11,6 +11,7 @@ import { NewProjectModal } from '../components/projects/NewProjectModal';
 import { statusOptionsIncluding } from '../lib/projectStatuses';
 import { NewChangeOrderModal } from '../components/change-orders/NewChangeOrderModal';
 import { ChangeOrderDetailModal } from '../components/change-orders/ChangeOrderDetailModal';
+import { CostCodeItemsModal } from '../components/projects/CostCodeItemsModal';
 import { ChangeOrderRowMenu } from '../components/change-orders/ChangeOrderRowMenu';
 import { NewInvoiceModal } from '../components/invoices/NewInvoiceModal';
 import { InvoiceDetailModal } from '../components/invoices/InvoiceDetailModal';
@@ -69,6 +70,7 @@ export default function ProjectDetail() {
   const [showEditProject, setShowEditProject] = useState(false);
   const [showNewCO, setShowNewCO] = useState(false);
   const [selectedCoId, setSelectedCoId] = useState<string | null>(null);
+  const [selectedCostCode, setSelectedCostCode] = useState<{ id: string | null; label: string } | null>(null);
   const [showNewInvoice, setShowNewInvoice] = useState(false);
   const [showImportEstimate, setShowImportEstimate] = useState(false);
   const [selectedInvoiceId, setSelectedInvoiceId] = useState<string | null>(null);
@@ -509,11 +511,10 @@ export default function ProjectDetail() {
             Budget vs. actual by cost code
           </div>
           <div style={{ fontSize: 12, color: 'var(--t2)', marginBottom: 14 }}>
-            In-House Number and Client Price both come from the estimate — internal cost vs. what the client owes.
-            Actual comes from real expense transactions tagged to this job. Paid traces invoices back to the
-            estimate line items they were built from — a quick way to see what still needs to be invoiced.
-            Approved change orders aren't broken out by cost code here — see the
-            Change Orders tab for those.
+            In-House Number and Client Price come from the estimate and any approved change orders — internal
+            cost vs. what the client owes. Actual comes from real expense transactions tagged to this job. Paid
+            traces invoices back to the line items they were built from — a quick way to see what still needs to
+            be invoiced. Click a row to see the line item(s) behind it.
           </div>
           {!variance || variance.rows.length === 0 ? (
             <div className="empty-s">
@@ -538,7 +539,13 @@ export default function ProjectDetail() {
                   </thead>
                   <tbody>
                     {variance.rows.map((r) => (
-                      <tr key={r.cost_code_id || 'uncategorized'}>
+                      <tr
+                        key={r.cost_code_id || 'uncategorized'}
+                        style={{ cursor: 'pointer' }}
+                        onClick={() =>
+                          setSelectedCostCode({ id: r.cost_code_id, label: r.code !== '—' ? `${r.code} — ${r.name}` : r.name })
+                        }
+                      >
                         <td className="sticky-col" style={{ fontWeight: 500 }}>
                           {r.code !== '—' ? `${r.code} — ${r.name}` : r.name}
                         </td>
@@ -859,6 +866,15 @@ export default function ProjectDetail() {
             loadChangeOrders();
             api.get<Project>(`/projects/${id}`).then(setProject).catch(() => {});
           }}
+        />
+      )}
+
+      {selectedCostCode && id && (
+        <CostCodeItemsModal
+          projectId={id}
+          costCodeId={selectedCostCode.id}
+          costCodeLabel={selectedCostCode.label}
+          onClose={() => setSelectedCostCode(null)}
         />
       )}
 

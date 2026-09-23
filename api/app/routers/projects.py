@@ -9,6 +9,7 @@ from ..mentions import create_mention_notifications
 from ..project_phases import merge_custom_phases
 from ..schemas.invoices import InvoiceableItemOut
 from ..schemas.projects import (
+    CostCodeItemOut,
     CostCodeVarianceOut,
     CostCodeVarianceRow,
     CustomPhaseCreate,
@@ -515,6 +516,38 @@ async def get_cost_code_variance(project_id: str, _: CurrentUser = Depends(get_c
         total_variance=round(sum(r.variance for r in rows), 2),
         total_paid=round(sum(r.paid for r in rows), 2),
     )
+
+
+@router.get("/{project_id}/cost-code-items", response_model=list[CostCodeItemOut])
+async def get_cost_code_items(
+    project_id: str, cost_code_id: Optional[str] = None, _: CurrentUser = Depends(get_current_user)
+):
+    """Backs clicking a Budget-vs-actual row -- the actual line item(s) (from
+    the current estimate and/or its approved change orders) that rolled up
+    into that row's aggregated numbers, in full detail. Same "current
+    estimate + approved change orders" source set get_cost_code_variance
+    rolls up, just returned as raw items instead of summed. cost_code_id
+    omitted/empty matches the "No cost code" row."""
+    select = "id,title,description,quantity,unit,unit_cost,cost_type,builder_cost,markup_type,markup_value,owner_price,notes_internal,notes_external,cost_codes(code,name)"
+    code_filter = f"&cost_code_id=eq.{cost_code_id}" if cost_code_id else "&cost_code_id=is.null"
+
+    out: list[CostCodeItemOut] = []
+    estimate = await _get_invoicing_estimate(project_id, select="id")
+    if estimate:
+        est_items = await db_get("estimate_line_items", f"?estimate_id=eq.{estimate['id']}{code_filter}&select={select}")
+        out += [CostCodeItemOut(source_label="Estimate", **i) for i in est_items]
+
+    approved_cos = await _approved_change_orders(project_id, "id,co_number")
+    if approved_cos:
+        co_by_id = {c["id"]: c for c in approved_cos}
+        co_items = await db_get(
+            "estimate_line_items",
+            f"?change_order_id=in.({','.join(co_by_id)}){code_filter}&select=change_order_id,{select}",
+        )
+        for i in co_items:
+            co = co_by_id[i.pop("change_order_id")]
+            out.append(CostCodeItemOut(source_label=f"CO-{str(co.get('co_number') or '?').zfill(3)}", **i))
+    return out
 
 
 @router.get("/{project_id}/notes", response_model=list[ProjectNoteOut])

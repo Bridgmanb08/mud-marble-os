@@ -590,6 +590,28 @@ export interface CostCodeVariance {
   total_paid: number;
 }
 
+// A single line item behind one Budget-vs-actual row -- read-only preview
+// (clicking a cost-code row can show several of these, since more than one
+// line item can share a cost code). source_label says which document it
+// came from ("Estimate" or "CO-001").
+export interface CostCodeItem {
+  id: string;
+  source_label: string;
+  title: string;
+  description: string | null;
+  quantity: number;
+  unit: string | null;
+  unit_cost: number;
+  cost_type: string;
+  builder_cost: number;
+  markup_type: string;
+  markup_value: number;
+  owner_price: number;
+  notes_internal: string | null;
+  notes_external: string | null;
+  cost_codes: { code: string; name: string } | null;
+}
+
 export interface ProjectSubItem {
   id: string;
   project_id: string;
