@@ -85,3 +85,16 @@ class LeadConvertRequest(BaseModel):
 class LeadConvertResponse(BaseModel):
     client_id: str
     project_id: str
+
+
+class LeadBoardLayoutOut(BaseModel):
+    # Empty means "use the stage list's own sort_order" / "nothing
+    # collapsed" -- not ambiguous with "no preference saved yet", same
+    # convention as ProjectBoardLayoutOut.
+    stage_order: list[str] = []
+    collapsed_stages: list[str] = []
+
+
+class LeadBoardLayoutUpdate(BaseModel):
+    stage_order: Optional[list[str]] = None
+    collapsed_stages: Optional[list[str]] = None

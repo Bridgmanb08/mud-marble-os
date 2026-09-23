@@ -547,6 +547,11 @@ export interface ProjectBoardLayout {
   collapsed_statuses: string[];
 }
 
+export interface LeadBoardLayout {
+  stage_order: string[];
+  collapsed_stages: string[];
+}
+
 export interface FinancialSummary {
   owner_price: number;
   builder_cost: number;
