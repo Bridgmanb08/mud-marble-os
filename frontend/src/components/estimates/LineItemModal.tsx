@@ -4,7 +4,8 @@ import { api, ApiError } from '../../api/client';
 import { Modal } from '../ui/Modal';
 import { fmt } from '../../lib/format';
 import { useReferenceData } from '../../reference-data/ReferenceDataContext';
-import type { EstimateLineItem, EstimateTemplateItem, LineItemReference } from '../../types';
+import { CostCodeSelect } from '../ui/CostCodeSelect';
+import type { CostCode, EstimateLineItem, EstimateTemplateItem, LineItemReference } from '../../types';
 
 interface LineItemModalProps {
   // Exactly one parent: an estimate, an estimate template, or a change order.
@@ -70,7 +71,6 @@ export function LineItemModal({
   const { costCodes: costCodesData } = useReferenceData();
   const costCodes = costCodesData ?? [];
   const [costCodeId, setCostCodeId] = useState(item?.cost_code_id || defaultCostCodeId || '');
-  const [costCodeQuery, setCostCodeQuery] = useState('');
   const [bucket, setBucket] = useState(item?.bucket || defaultBucket || 'construction');
   const [groupName, setGroupName] = useState(item?.group_name || defaultGroupName || '');
   const [title, setTitle] = useState(item?.title || defaultTitle || '');
@@ -86,18 +86,7 @@ export function LineItemModal({
   const [error, setError] = useState('');
   const [saving, setSaving] = useState(false);
 
-  useEffect(() => {
-    const idToResolve = item?.cost_code_id || defaultCostCodeId;
-    if (idToResolve && costCodes.length) {
-      const found = costCodes.find((c) => c.id === idToResolve);
-      if (found) setCostCodeQuery(`${found.code} - ${found.name}`);
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [costCodes]);
-
-  function handleCostCodeInput(value: string) {
-    setCostCodeQuery(value);
-    const match = costCodes.find((c) => `${c.code} - ${c.name}` === value);
+  function handleSelectCostCode(match: CostCode | null) {
     setCostCodeId(match ? match.id : '');
     // Auto-fill the standard scope language for this cost code, but only if
     // the description is still blank -- never clobber something already typed.
@@ -355,18 +344,7 @@ export function LineItemModal({
           <div className={isChangeOrder ? 'fr' : 'fr3'}>
             <div className="fg">
               <label className="fl">Cost code</label>
-              <input
-                className="fi"
-                list="line-item-cost-code-options"
-                value={costCodeQuery}
-                onChange={(e) => handleCostCodeInput(e.target.value)}
-                placeholder="Start typing, e.g. electrical…"
-              />
-              <datalist id="line-item-cost-code-options">
-                {costCodes.map((c) => (
-                  <option key={c.id} value={`${c.code} - ${c.name}`} />
-                ))}
-              </datalist>
+              <CostCodeSelect costCodes={costCodes} value={costCodeId} onSelect={handleSelectCostCode} />
             </div>
             <div className="fg">
               <label className="fl">Cost type</label>
