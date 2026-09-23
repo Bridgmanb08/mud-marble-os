@@ -1,7 +1,15 @@
 from fastapi import APIRouter, Depends, HTTPException
 
 from ..deps import CurrentUser, get_current_user
-from ..schemas.leads import LeadConvertRequest, LeadConvertResponse, LeadCreate, LeadOut, LeadUpdate
+from ..schemas.leads import (
+    LeadBoardLayoutOut,
+    LeadBoardLayoutUpdate,
+    LeadConvertRequest,
+    LeadConvertResponse,
+    LeadCreate,
+    LeadOut,
+    LeadUpdate,
+)
 from ..supabase_client import db_get, db_patch, db_post
 
 router = APIRouter(prefix="/leads", tags=["leads"])
@@ -49,6 +57,31 @@ async def create_lead(body: LeadCreate, _: CurrentUser = Depends(get_current_use
     await _validate_lead_status(body.status)
     rows = await db_post("leads", body.model_dump(exclude_none=True))
     return (await _attach_referrers(rows))[0]
+
+
+# Registered before /{lead_id} -- same reasoning as projects.py's own
+# board-layout routes: a literal path segment has to come first, or a
+# parameterized route further down would try to match "board-layout" as if
+# it were a lead_id.
+@router.get("/board-layout", response_model=LeadBoardLayoutOut)
+async def get_lead_board_layout(current_user: CurrentUser = Depends(get_current_user)):
+    rows = await db_get("lead_board_layout", f"?user_id=eq.{current_user.id}&select=stage_order,collapsed_stages")
+    if rows:
+        return LeadBoardLayoutOut(**rows[0])
+    return LeadBoardLayoutOut()
+
+
+@router.put("/board-layout", response_model=LeadBoardLayoutOut)
+async def update_lead_board_layout(body: LeadBoardLayoutUpdate, current_user: CurrentUser = Depends(get_current_user)):
+    updates = body.model_dump(exclude_unset=True)
+    existing = await db_get("lead_board_layout", f"?user_id=eq.{current_user.id}&select=id,stage_order,collapsed_stages")
+    if existing:
+        merged = {**existing[0], **updates}
+        await db_patch("lead_board_layout", existing[0]["id"], updates)
+    else:
+        merged = {"stage_order": [], "collapsed_stages": [], **updates}
+        await db_post("lead_board_layout", {"user_id": current_user.id, **merged})
+    return LeadBoardLayoutOut(stage_order=merged.get("stage_order", []), collapsed_stages=merged.get("collapsed_stages", []))
 
 
 @router.patch("/{lead_id}", response_model=LeadOut)
