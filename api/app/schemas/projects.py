@@ -186,6 +186,35 @@ class CostCodeVarianceOut(BaseModel):
     total_paid: float = 0
 
 
+class CostCodeBrief(BaseModel):
+    code: str
+    name: str
+
+
+# Backs the Budget vs. actual table's row-click preview -- the real line
+# item(s) (title, notes, builder cost, markup...) that rolled up into one
+# aggregated cost-code row, so clicking a row shows what's actually behind
+# that number instead of just the summed total. source_label says which
+# document an item came from ("Estimate" or "CO-001"), since a cost code's
+# items can span both.
+class CostCodeItemOut(BaseModel):
+    id: str
+    source_label: str
+    title: str
+    description: Optional[str] = None
+    quantity: float
+    unit: Optional[str] = None
+    unit_cost: float
+    cost_type: str
+    builder_cost: float
+    markup_type: str
+    markup_value: float
+    owner_price: float
+    notes_internal: Optional[str] = None
+    notes_external: Optional[str] = None
+    cost_codes: Optional[CostCodeBrief] = None
+
+
 class ProjectNoteCreate(BaseModel):
     author: str
     note_type: str = "internal"
