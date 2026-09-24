@@ -445,16 +445,16 @@ export function LineItemModal({
               <div style={{ fontSize: 15, fontWeight: 600 }}>{fmt(builderCost)}</div>
             </div>
             <div>
-              <div style={{ fontSize: 11, color: 'var(--t2)', textTransform: 'uppercase' }}>Client price</div>
-              <div style={{ fontSize: 15, fontWeight: 600 }}>{fmt(ownerPrice)}</div>
-            </div>
-            <div>
               <div style={{ fontSize: 11, color: 'var(--t2)', textTransform: 'uppercase' }}>Profit</div>
               <div style={{ fontSize: 15, fontWeight: 600, color: 'var(--green)' }}>{fmt(profit)}</div>
             </div>
             <div>
-              <div style={{ fontSize: 11, color: 'var(--t2)', textTransform: 'uppercase' }}>Margin</div>
-              <div style={{ fontSize: 15, fontWeight: 600 }}>{margin.toFixed(0)}%</div>
+              <div style={{ fontSize: 11, color: 'var(--t2)', textTransform: 'uppercase' }}>Client price</div>
+              <div style={{ fontSize: 15, fontWeight: 600 }}>{fmt(ownerPrice)}</div>
+            </div>
+            <div>
+              <div style={{ fontSize: 11, color: 'var(--t3)', textTransform: 'uppercase' }}>Margin</div>
+              <div style={{ fontSize: 13, fontWeight: 400, color: 'var(--t2)' }}>{margin.toFixed(0)}%</div>
             </div>
           </div>
         </div>
