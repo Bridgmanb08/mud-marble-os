@@ -314,6 +314,12 @@ async def delete_line_item(estimate_id: str, item_id: str, _: CurrentUser = Depe
 
 GROUP_LABEL_FALLBACK = "Ungrouped"
 
+# Mirrors BUCKET_LABEL in frontend/src/components/estimates/useGroupedLineItemDrag.ts --
+# the worksheet shows an item with no group_name under its bucket heading
+# (Construction/PM Fee/Allowance) instead of a literal "Ungrouped", so the
+# export falls back the same way before giving up and using the fallback.
+BUCKET_LABEL = {"pm_fee": "PM Fee", "construction": "Construction", "allowance": "Allowance"}
+
 
 async def _gather_export_data(estimate_id: str):
     estimates = await db_get("estimates", f"?id=eq.{estimate_id}&select=*,projects(name,address,clients(first_name,last_name))")
@@ -325,7 +331,7 @@ async def _gather_export_data(estimate_id: str):
     )
     groups: dict[str, list[dict]] = {}
     for item in items:
-        key = item.get("group_name") or GROUP_LABEL_FALLBACK
+        key = item.get("group_name") or BUCKET_LABEL.get(item.get("bucket")) or GROUP_LABEL_FALLBACK
         groups.setdefault(key, []).append(item)
     return estimate, groups
 
