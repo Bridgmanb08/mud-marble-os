@@ -146,6 +146,11 @@ export function InvoiceEditor({
           >
             <IconDownload size={14} /> PDF
           </button>
+          {/* Plain window.open, same as the change order/estimate Excel buttons
+              -- the server's own Content-Disposition filename is used as-is. */}
+          <button className="btn btn-sm" onClick={() => window.open(`/api/invoices/${invoiceId}/export/excel`, '_blank')}>
+            <IconDownload size={14} /> Excel
+          </button>
           <span className={`badge ${STATUS_BADGE[invoice.status] || 'bg-gray'}`} style={{ fontSize: 13 }}>
             {invoice.status}
           </span>

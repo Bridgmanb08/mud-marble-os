@@ -16,7 +16,15 @@ from .. import branding
 from ..deps import CurrentUser, get_current_user
 from ..estimate_defaults import DEFAULT_CLOSING_TEXT
 from ..estimate_text_defaults_store import get_or_create_estimate_text_defaults
-from ..pdf_export import SIDE_MARGIN, NumberedCanvas, breadcrumb_for, build_letterhead, build_styles, build_totals_band
+from ..pdf_export import (
+    SIDE_MARGIN,
+    NumberedCanvas,
+    breadcrumb_for,
+    build_letterhead,
+    build_line_items_table,
+    build_styles,
+    build_totals_band,
+)
 from ..rich_text import rich_text_to_pdf_markup
 from ..schemas.estimates import (
     EstimateCreate,
@@ -348,7 +356,7 @@ async def export_estimate_pdf(estimate_id: str, _: CurrentUser = Depends(get_cur
     # rather than joining the shared style dict every export pulls from.
     group_header = ParagraphStyle("group_header", parent=s["body"], fontSize=10, fontName="Helvetica-Bold", textColor=colors.white)
     group_subtotal = ParagraphStyle("group_subtotal", parent=group_header, alignment=2)
-    body, cell, cell_right, th, th_right = s["body"], s["cell"], s["cell_right"], s["th"], s["th_right"]
+    body = s["body"]
 
     elements = build_letterhead(s, PAGE_WIDTH, breadcrumb)
     title_text = _xml_escape(estimate.get("title")) if estimate.get("title") else f"Proposal for {_xml_escape(breadcrumb)}"
@@ -362,16 +370,6 @@ async def export_estimate_pdf(estimate_id: str, _: CurrentUser = Depends(get_cur
     if intro:
         elements.append(Paragraph(rich_text_to_pdf_markup(intro), body))
         elements.append(Spacer(1, 8))
-
-    # Column widths sum to exactly PAGE_WIDTH -- Item/Description get the
-    # bulk of the space (that's the text that actually wraps), the three
-    # numeric columns are just wide enough for "$12,345.67" without wrapping.
-    item_col = PAGE_WIDTH * 0.20
-    desc_col = PAGE_WIDTH * 0.38
-    qty_col = PAGE_WIDTH * 0.14
-    unit_price_col = PAGE_WIDTH * 0.14
-    price_col = PAGE_WIDTH - item_col - desc_col - qty_col - unit_price_col
-    col_widths = [item_col, desc_col, qty_col, unit_price_col, price_col]
 
     for group_name, items in groups.items():
         group_subtotal_value = sum(item.get("owner_price") or 0 for item in items)
@@ -399,57 +397,18 @@ async def export_estimate_pdf(estimate_id: str, _: CurrentUser = Depends(get_cur
         )
         elements.append(group_band)
 
-        table_data = [
-            [
-                Paragraph("Item", th),
-                Paragraph("Description", th),
-                Paragraph("Qty/Unit", th_right),
-                Paragraph("Unit Price", th_right),
-                Paragraph("Price", th_right),
-            ]
-        ]
+        # Client-facing figures only -- unit_cost/builder_cost are internal
+        # margin data and must never appear on anything a client sees. "Unit
+        # Price" here is a derived per-unit client price (owner_price /
+        # quantity), the same thing BuilderTrend's export shows, not the
+        # builder's cost. Cost codes are internal categorization -- title only.
+        rows = []
         for item in items:
-            # Cost codes are internal categorization, not something a client
-            # needs to see on their proposal -- title only.
-            item_label = _xml_escape(item.get("title") or "")
-            qty_unit = _xml_escape(f"{item.get('quantity') or 0:g}" + (f" {item['unit']}" if item.get("unit") else ""))
-            # Client-facing figures only -- unit_cost/builder_cost are internal
-            # margin data and must never appear on anything a client sees.
-            # "Unit Price" here is a derived per-unit client price
-            # (owner_price / quantity), the same thing BuilderTrend's export
-            # shows, not the builder's cost.
             qty = item.get("quantity") or 0
             owner_price = item.get("owner_price") or 0
             client_unit_price = (owner_price / qty) if qty else owner_price
-            table_data.append(
-                [
-                    Paragraph(item_label, cell),
-                    Paragraph(_xml_escape(line_items.client_text(item)), cell),
-                    Paragraph(qty_unit, cell_right),
-                    Paragraph(f"${client_unit_price:,.2f}", cell_right),
-                    Paragraph(f"${owner_price:,.2f}", cell_right),
-                ]
-            )
-        t = Table(table_data, colWidths=col_widths, repeatRows=1)
-        t.setStyle(
-            TableStyle(
-                [
-                    ("BACKGROUND", (0, 0), (-1, 0), branding.BRAND_CREAM),
-                    ("LINEBELOW", (0, 0), (-1, 0), 0.75, branding.BRAND_BROWN),
-                    ("LINEBELOW", (0, 1), (-1, -1), 0.25, colors.lightgrey),
-                    # Subtle zebra striping on data rows only (row 0 is the
-                    # header, already shaded cream above) -- easier to track
-                    # a row across five columns than a flat white table.
-                    ("ROWBACKGROUNDS", (0, 1), (-1, -1), [colors.white, colors.HexColor("#FAF8F3")]),
-                    ("VALIGN", (0, 0), (-1, -1), "TOP"),
-                    ("TOPPADDING", (0, 0), (-1, -1), 5),
-                    ("BOTTOMPADDING", (0, 0), (-1, -1), 5),
-                    ("LEFTPADDING", (0, 0), (0, -1), 6),
-                    ("RIGHTPADDING", (-1, 0), (-1, -1), 6),
-                ]
-            )
-        )
-        elements.append(t)
+            rows.append((item.get("title"), line_items.client_text(item), qty, item.get("unit"), client_unit_price, owner_price))
+        elements.append(build_line_items_table(s, PAGE_WIDTH, rows))
         elements.append(Spacer(1, 12))
 
     total = estimate.get("grand_total_owner_price") or 0

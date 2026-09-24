@@ -4,11 +4,14 @@ from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException
 from fastapi.responses import Response
+from openpyxl import Workbook
+from openpyxl.styles import Font
 from reportlab.lib import colors
 from reportlab.lib.pagesizes import letter
 from reportlab.lib.units import inch
 from reportlab.platypus import HRFlowable, Paragraph, SimpleDocTemplate, Spacer
 
+from .. import line_items
 from ..deps import CurrentUser, get_current_user
 from ..pdf_export import (
     STATUS_COLORS,
@@ -136,6 +139,53 @@ async def _validate_invoice_total(project_id: str, invoice_id: str, amount_due: 
                 f"${already:,.2f} is already invoiced elsewhere on this project."
             ),
         )
+
+
+async def _export_rows_for_items(items: list[dict]) -> list[tuple]:
+    """Enriches invoice line items for the PDF/Excel exports with the
+    description/quantity/unit/unit-price detail that invoice_line_items
+    itself doesn't store -- an invoice line is fundamentally just "bill this
+    amount", not a quantity x unit-price computation. When a line was pulled
+    from an estimate or change-order item (source_line_item_id set), this
+    falls back to that source's own client-facing text when the invoice
+    line's own description is blank (a real gap: the "Add line items"
+    picker's own description copy is opt-in, and older rows predate it
+    entirely), and derives a Qty/Unit Price pair from the source's client
+    unit price so the row is internally consistent (qty * unit_price =
+    price) even though the invoice may only be billing a fraction of the
+    source item's own quantity. A freehand line with no source has no
+    quantity concept at all and renders with blank Qty/Unit Price, same as
+    build_line_items_table already handles.
+
+    Never surfaces unit_cost -- that's the builder's internal cost per unit,
+    not something a client-facing document shows; the derived unit price is
+    always built from owner_price (what the client owes)."""
+    source_ids = {i["source_line_item_id"] for i in items if i.get("source_line_item_id")}
+    sources_by_id: dict[str, dict] = {}
+    if source_ids:
+        source_rows = await db_get(
+            "estimate_line_items", f"?id=in.({','.join(source_ids)})&select=id,quantity,unit,owner_price,description,notes_external"
+        )
+        sources_by_id = {s["id"]: s for s in source_rows}
+
+    rows = []
+    for i in items:
+        source = sources_by_id.get(i.get("source_line_item_id"))
+        description = i.get("description") or (line_items.client_text(source) if source else None)
+        amount = i.get("amount") or 0
+        qty: Optional[float] = None
+        unit: Optional[str] = None
+        unit_price: Optional[float] = None
+        if source:
+            source_qty = source.get("quantity") or 0
+            source_owner_price = source.get("owner_price") or 0
+            client_unit_price = (source_owner_price / source_qty) if source_qty else source_owner_price
+            if client_unit_price:
+                unit = source.get("unit")
+                unit_price = client_unit_price
+                qty = amount / client_unit_price
+        rows.append((i.get("title"), description, qty, unit, unit_price, amount))
+    return rows
 
 
 async def _recalc_invoice_total(invoice_id: str) -> None:
@@ -358,7 +408,7 @@ async def export_invoice_pdf(invoice_id: str, _: CurrentUser = Depends(get_curre
         elements.append(Spacer(1, 10))
 
     if items:
-        elements.append(build_line_items_table(s, PAGE_WIDTH, [(i.get("title"), i.get("description"), i.get("amount")) for i in items]))
+        elements.append(build_line_items_table(s, PAGE_WIDTH, await _export_rows_for_items(items)))
         elements.append(Spacer(1, 12))
 
     amount_due = invoice.get("amount_due") or 0
@@ -391,5 +441,73 @@ async def export_invoice_pdf(invoice_id: str, _: CurrentUser = Depends(get_curre
     return Response(
         content=pdf_bytes,
         media_type="application/pdf",
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+    )
+
+
+@router.get("/{invoice_id}/export/excel")
+async def export_invoice_excel(invoice_id: str, _: CurrentUser = Depends(get_current_user)):
+    rows = await db_get("invoices", f"?id=eq.{invoice_id}&select=*,projects(name,address)")
+    if not rows:
+        raise HTTPException(status_code=404, detail="Invoice not found")
+    invoice = rows[0]
+    items = await db_get(
+        "invoice_line_items", f"?invoice_id=eq.{invoice_id}&order=sort_order.asc&select=*,cost_codes(code,name)"
+    )
+    project = invoice.get("projects") or {}
+    project_name = (project.get("name") or "").split("|")[0].strip()
+
+    wb = Workbook()
+    ws = wb.active
+    ws.title = "Invoice"
+    header_font = Font(bold=True)
+
+    heading = invoice.get("title") or f"Invoice {invoice.get('invoice_number') or 'Draft'}"
+    ws.append([heading])
+    ws["A1"].font = Font(bold=True, size=14)
+    address = (project.get("address") or "").strip() or project_name
+    if address:
+        ws.append([address])
+    ws.append([])
+
+    if invoice.get("notes_external"):
+        ws.append([invoice["notes_external"]])
+        ws.append([])
+
+    # Same Item/Description/Qty/Unit/Unit Price/Price columns as the
+    # estimate and change order Excel exports, so a line item's scope reads
+    # identically across every export instead of this one alone staying at
+    # Item/Description/Amount.
+    if items:
+        ws.append(["Item", "Description", "Qty", "Unit", "Unit Price", "Price"])
+        for cell in ws[ws.max_row]:
+            cell.font = header_font
+        for title, description, qty, unit, unit_price, price in await _export_rows_for_items(items):
+            ws.append([title, description, qty, unit, unit_price, price])
+        ws.append([])
+
+    amount_due = invoice.get("amount_due") or 0
+    amount_paid = invoice.get("amount_paid") or 0
+    ws.append(["", "", "", "", "Amount due", amount_due])
+    ws.cell(row=ws.max_row, column=5).font = header_font
+    ws.cell(row=ws.max_row, column=6).font = header_font
+    if amount_paid:
+        ws.append(["", "", "", "", "Paid", -amount_paid])
+        ws.append(["", "", "", "", "Balance", amount_due - amount_paid])
+        ws.cell(row=ws.max_row, column=5).font = header_font
+        ws.cell(row=ws.max_row, column=6).font = header_font
+
+    for col, width in zip("ABCDEF", [28, 40, 8, 8, 12, 12]):
+        ws.column_dimensions[col].width = width
+
+    buf = io.BytesIO()
+    wb.save(buf)
+    excel_bytes = buf.getvalue()
+    buf.close()
+
+    filename = f"invoice-{invoice.get('invoice_number') or 'draft'}-{project_name or 'job'}.xlsx".replace(" ", "-")
+    return Response(
+        content=excel_bytes,
+        media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
         headers={"Content-Disposition": f'attachment; filename="{filename}"'},
     )
