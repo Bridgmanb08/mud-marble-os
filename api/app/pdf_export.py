@@ -228,21 +228,36 @@ def build_totals_band(styles: dict, page_width: float, rows: list) -> Table:
 
 
 def build_line_items_table(styles: dict, page_width: float, rows: list) -> Table:
-    """rows: (title, description, amount) triples -> the Item / Description /
-    Amount table shared by the invoice and change order PDFs, so a line item
-    prints identically wherever it appears. Cost codes and builder cost are
+    """rows: (title, description, qty, unit, unit_price, price) sextuples --
+    the exact Item / Description / Qty·Unit / Unit Price / Price table the
+    estimate PDF/Excel export originated, now shared by the change order and
+    invoice exports too so a line item's scope reads identically wherever a
+    client sees it. qty/unit/unit_price may be None (an invoice line with no
+    quantity of its own, e.g. a freehand amount) -- those cells render blank
+    rather than a fabricated "1 @ $X". Cost codes and builder cost are
     internal and deliberately not part of this client-facing table."""
-    item_col = page_width * 0.30
-    desc_col = page_width * 0.50
-    amount_col = page_width - item_col - desc_col
-    data = [[Paragraph("Item", styles["th"]), Paragraph("Description", styles["th"]), Paragraph("Amount", styles["th_right"])]]
-    for title, description, amount in rows:
+    item_col = page_width * 0.20
+    desc_col = page_width * 0.38
+    qty_col = page_width * 0.14
+    unit_price_col = page_width * 0.14
+    price_col = page_width - item_col - desc_col - qty_col - unit_price_col
+    data = [[
+        Paragraph("Item", styles["th"]),
+        Paragraph("Description", styles["th"]),
+        Paragraph("Qty/Unit", styles["th_right"]),
+        Paragraph("Unit Price", styles["th_right"]),
+        Paragraph("Price", styles["th_right"]),
+    ]]
+    for title, description, qty, unit, unit_price, price in rows:
+        qty_unit = f"{qty:g}" + (f" {unit}" if unit else "") if qty is not None else ""
         data.append([
             Paragraph(xml_escape(title or ""), styles["cell"]),
             Paragraph(xml_escape(description or ""), styles["cell"]),
-            Paragraph(f"${(amount or 0):,.2f}", styles["cell_right"]),
+            Paragraph(xml_escape(qty_unit), styles["cell_right"]),
+            Paragraph(f"${unit_price:,.2f}" if unit_price is not None else "", styles["cell_right"]),
+            Paragraph(f"${(price or 0):,.2f}", styles["cell_right"]),
         ])
-    t = Table(data, colWidths=[item_col, desc_col, amount_col], repeatRows=1)
+    t = Table(data, colWidths=[item_col, desc_col, qty_col, unit_price_col, price_col], repeatRows=1)
     t.setStyle(
         TableStyle(
             [

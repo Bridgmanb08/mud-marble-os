@@ -247,12 +247,19 @@ async def export_change_order_pdf(co_id: str, _: CurrentUser = Depends(get_curre
     # Once a change order has real line items, the flat description above is
     # no longer where the scope detail lives -- without this table the PDF
     # only ever showed a single lump "Price" line, which is exactly what
-    # made a line-itemized CO read as vague. Mirrors the Item/Description/
-    # Amount table the invoice PDF already builds; cost codes and
-    # builder_cost stay off this client-facing table, same rule the
-    # estimate/invoice exports follow.
+    # made a line-itemized CO read as vague. Same Item/Description/Qty·Unit/
+    # Unit Price/Price table the estimate PDF uses (build_line_items_table),
+    # so a line item's scope reads identically on both documents; cost codes
+    # and builder_cost stay off this client-facing table, same rule the
+    # estimate export follows.
     if items:
-        elements.append(build_line_items_table(s, PAGE_WIDTH, [(i.get("title"), line_items.client_text(i), i.get("owner_price")) for i in items]))
+        item_rows = []
+        for i in items:
+            qty = i.get("quantity") or 0
+            owner_price = i.get("owner_price") or 0
+            unit_price = (owner_price / qty) if qty else owner_price
+            item_rows.append((i.get("title"), line_items.client_text(i), qty, i.get("unit"), unit_price, owner_price))
+        elements.append(build_line_items_table(s, PAGE_WIDTH, item_rows))
         elements.append(Spacer(1, 12))
 
     # Owner price only -- builder_cost is internal margin data, same rule
@@ -332,22 +339,27 @@ async def export_change_order_excel(co_id: str, _: CurrentUser = Depends(get_cur
         ws.append([co["description"]])
         ws.append([])
 
-    # Once a change order has real line items, list them the same way the
-    # estimate Excel export lists its own -- otherwise this sheet has the
-    # exact same "flat lump price, no scope detail" gap the PDF export had.
+    # Once a change order has real line items, list them with the exact same
+    # columns as the estimate Excel export (Item/Description/Qty/Unit/Unit
+    # Price/Price) -- otherwise this sheet has the same "flat lump price, no
+    # scope detail" gap the PDF export had, and read differently from an
+    # estimate's own line items for no real reason.
     if items:
-        ws.append(["Item", "Description", "Amount"])
+        ws.append(["Item", "Description", "Qty", "Unit", "Unit Price", "Price"])
         for cell in ws[ws.max_row]:
             cell.font = header_font
         for it in items:
-            ws.append([it.get("title"), line_items.client_text(it), it.get("owner_price") or 0])
+            qty = it.get("quantity") or 0
+            owner_price = it.get("owner_price") or 0
+            unit_price = (owner_price / qty) if qty else owner_price
+            ws.append([it.get("title"), line_items.client_text(it), it.get("quantity"), it.get("unit"), unit_price, owner_price])
         ws.append([])
 
-    ws.append(["", "Price", co.get("owner_price") or 0])
-    ws.cell(row=ws.max_row, column=2).font = header_font
-    ws.cell(row=ws.max_row, column=3).font = header_font
+    ws.append(["", "", "", "", "Price", co.get("owner_price") or 0])
+    ws.cell(row=ws.max_row, column=5).font = header_font
+    ws.cell(row=ws.max_row, column=6).font = header_font
 
-    for col, width in zip("ABC", [28, 44, 18]):
+    for col, width in zip("ABCDEF", [28, 40, 8, 8, 12, 12]):
         ws.column_dimensions[col].width = width
 
     buf = io.BytesIO()
