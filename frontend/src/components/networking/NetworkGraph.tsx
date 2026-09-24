@@ -23,6 +23,17 @@ function nodeRadius(person: NetworkPerson) {
   return person.is_root ? ROOT_RADIUS : NODE_RADIUS;
 }
 
+// Person keeps the original cream/tan look (the common case, and what the
+// web already looked like before node types existed); organization and
+// title get their own color pair so the three are distinguishable on sight
+// without a separate legend.
+function nodeColors(person: NetworkPerson): { fill: string; stroke: string } {
+  if (person.is_root) return { fill: 'var(--brand-brown)', stroke: 'var(--brand-brown)' };
+  if (person.node_type === 'organization') return { fill: 'var(--bbg)', stroke: 'var(--blue)' };
+  if (person.node_type === 'title') return { fill: 'var(--abg)', stroke: 'var(--amber)' };
+  return { fill: 'var(--brand-cream)', stroke: 'var(--brand-tan)' };
+}
+
 function clamp(v: number, lo: number, hi: number) {
   return Math.max(lo, Math.min(hi, v));
 }
@@ -251,6 +262,35 @@ export function NetworkGraph({ people, connections, onNodeClick, onAddClick }: P
 
   return (
     <div className="card" style={{ padding: 0, overflow: 'hidden', height: 'calc(100vh - 230px)', minHeight: 480, position: 'relative' }}>
+      <div
+        style={{
+          position: 'absolute',
+          top: 12,
+          left: 12,
+          zIndex: 2,
+          display: 'flex',
+          gap: 14,
+          fontSize: 11.5,
+          color: 'var(--t2)',
+          background: 'var(--surface)',
+          padding: '5px 10px',
+          borderRadius: 20,
+          border: '1px solid var(--border)',
+        }}
+      >
+        <span style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
+          <span style={{ width: 9, height: 9, borderRadius: '50%', background: 'var(--brand-cream)', border: '1.5px solid var(--brand-tan)', flexShrink: 0 }} />
+          Person
+        </span>
+        <span style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
+          <span style={{ width: 9, height: 9, borderRadius: '50%', background: 'var(--bbg)', border: '1.5px solid var(--blue)', flexShrink: 0 }} />
+          Organization
+        </span>
+        <span style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
+          <span style={{ width: 9, height: 9, borderRadius: '50%', background: 'var(--abg)', border: '1.5px solid var(--amber)', flexShrink: 0 }} />
+          Title
+        </span>
+      </div>
       <div style={{ position: 'absolute', top: 12, right: 12, zIndex: 2, display: 'flex', gap: 6 }}>
         <button className="btn btn-sm" onClick={() => setZoom((z) => clamp(z * 1.2, 0.25, 2.2))}>
           +
@@ -319,8 +359,8 @@ export function NetworkGraph({ people, connections, onNodeClick, onAddClick }: P
                   cx={n.x}
                   cy={n.y}
                   r={r}
-                  fill={n.person.is_root ? 'var(--brand-brown)' : 'var(--brand-cream)'}
-                  stroke={n.person.is_root ? 'var(--brand-brown)' : 'var(--brand-tan)'}
+                  fill={nodeColors(n.person).fill}
+                  stroke={nodeColors(n.person).stroke}
                   strokeWidth={isHover ? 2.5 : 1.5}
                 />
                 <text

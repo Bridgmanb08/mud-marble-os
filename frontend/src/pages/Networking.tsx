@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { IconPlus } from '@tabler/icons-react';
 import { api, ApiError } from '../api/client';
 import { useToast } from '../components/ui/Toast';
 import { NetworkGraph } from '../components/networking/NetworkGraph';
@@ -16,6 +17,7 @@ export default function Networking() {
   const [graph, setGraph] = useState<NetworkGraphData | null>(null);
   const [selectedPerson, setSelectedPerson] = useState<NetworkPerson | null>(null);
   const [addFromPerson, setAddFromPerson] = useState<NetworkPerson | null>(null);
+  const [showAddStandalone, setShowAddStandalone] = useState(false);
   const toast = useToast();
 
   function load() {
@@ -47,6 +49,9 @@ export default function Networking() {
           <h1>Networking</h1>
           <p>Drag to rearrange, scroll to zoom, click a bubble for details, click + to grow the web</p>
         </div>
+        <button className="btn btn-sm" onClick={() => setShowAddStandalone(true)}>
+          <IconPlus size={14} /> New node
+        </button>
       </div>
 
       {graph === null ? (
@@ -68,6 +73,16 @@ export default function Networking() {
           onClose={() => setAddFromPerson(null)}
           onCreated={() => {
             setAddFromPerson(null);
+            load();
+          }}
+        />
+      )}
+
+      {showAddStandalone && (
+        <AddPersonModal
+          onClose={() => setShowAddStandalone(false)}
+          onCreated={() => {
+            setShowAddStandalone(false);
             load();
           }}
         />

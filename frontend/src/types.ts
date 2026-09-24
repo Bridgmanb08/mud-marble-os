@@ -1510,9 +1510,12 @@ export interface ChangeOrderScanPreview {
   row: ChangeOrderScanRow;
 }
 
+export type NetworkNodeType = 'person' | 'organization' | 'title';
+
 export interface NetworkPerson {
   id: string;
   name: string;
+  node_type: NetworkNodeType;
   notes: string | null;
   phone: string | null;
   email: string | null;
