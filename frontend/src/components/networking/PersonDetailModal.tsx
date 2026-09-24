@@ -3,7 +3,13 @@ import { IconTrash } from '@tabler/icons-react';
 import { Modal } from '../ui/Modal';
 import { api, ApiError } from '../../api/client';
 import { useToast } from '../ui/Toast';
-import type { NetworkPerson } from '../../types';
+import type { NetworkNodeType, NetworkPerson } from '../../types';
+
+const NODE_TYPE_OPTIONS: { value: NetworkNodeType; label: string }[] = [
+  { value: 'person', label: 'Person' },
+  { value: 'organization', label: 'Organization' },
+  { value: 'title', label: 'Title / role' },
+];
 
 // Click any bubble on the web to get here -- notes + contact info, and the
 // "connect to existing person" picker below is what covers cross-
@@ -27,6 +33,7 @@ export function PersonDetailModal({
 }) {
   const toast = useToast();
   const [name, setName] = useState(person.name);
+  const [nodeType, setNodeType] = useState<NetworkNodeType>(person.node_type);
   const [notes, setNotes] = useState(person.notes || '');
   const [phone, setPhone] = useState(person.phone || '');
   const [email, setEmail] = useState(person.email || '');
@@ -34,6 +41,11 @@ export function PersonDetailModal({
   const [title, setTitle] = useState(person.title || '');
   const [linkTargetId, setLinkTargetId] = useState('');
   const [linking, setLinking] = useState(false);
+
+  // Contact-style fields only mean something for an actual person, same as
+  // AddPersonModal -- the root node is always a person so this never hides
+  // fields it shouldn't.
+  const isPerson = nodeType === 'person';
 
   async function saveField(field: string, value: unknown) {
     try {
@@ -87,46 +99,70 @@ export function PersonDetailModal({
           />
         </div>
       )}
-      <div className="fr">
+      {!person.is_root && (
         <div className="fg">
-          <label className="fl">Company</label>
-          <input
+          <label className="fl">Type</label>
+          <select
             className="fi"
-            value={company}
-            onChange={(e) => setCompany(e.target.value)}
-            onBlur={(e) => saveField('company', e.target.value.trim() || null)}
-          />
+            value={nodeType}
+            onChange={(e) => {
+              const next = e.target.value as NetworkNodeType;
+              setNodeType(next);
+              saveField('node_type', next);
+            }}
+          >
+            {NODE_TYPE_OPTIONS.map((o) => (
+              <option key={o.value} value={o.value}>
+                {o.label}
+              </option>
+            ))}
+          </select>
         </div>
-        <div className="fg">
-          <label className="fl">Title</label>
-          <input
-            className="fi"
-            value={title}
-            onChange={(e) => setTitle(e.target.value)}
-            onBlur={(e) => saveField('title', e.target.value.trim() || null)}
-          />
-        </div>
-      </div>
-      <div className="fr">
-        <div className="fg">
-          <label className="fl">Phone</label>
-          <input
-            className="fi"
-            value={phone}
-            onChange={(e) => setPhone(e.target.value)}
-            onBlur={(e) => saveField('phone', e.target.value.trim() || null)}
-          />
-        </div>
-        <div className="fg">
-          <label className="fl">Email</label>
-          <input
-            className="fi"
-            value={email}
-            onChange={(e) => setEmail(e.target.value)}
-            onBlur={(e) => saveField('email', e.target.value.trim() || null)}
-          />
-        </div>
-      </div>
+      )}
+      {isPerson && (
+        <>
+          <div className="fr">
+            <div className="fg">
+              <label className="fl">Company</label>
+              <input
+                className="fi"
+                value={company}
+                onChange={(e) => setCompany(e.target.value)}
+                onBlur={(e) => saveField('company', e.target.value.trim() || null)}
+              />
+            </div>
+            <div className="fg">
+              <label className="fl">Title</label>
+              <input
+                className="fi"
+                value={title}
+                onChange={(e) => setTitle(e.target.value)}
+                onBlur={(e) => saveField('title', e.target.value.trim() || null)}
+              />
+            </div>
+          </div>
+          <div className="fr">
+            <div className="fg">
+              <label className="fl">Phone</label>
+              <input
+                className="fi"
+                value={phone}
+                onChange={(e) => setPhone(e.target.value)}
+                onBlur={(e) => saveField('phone', e.target.value.trim() || null)}
+              />
+            </div>
+            <div className="fg">
+              <label className="fl">Email</label>
+              <input
+                className="fi"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                onBlur={(e) => saveField('email', e.target.value.trim() || null)}
+              />
+            </div>
+          </div>
+        </>
+      )}
       <div className="fg">
         <label className="fl">Notes</label>
         <textarea
