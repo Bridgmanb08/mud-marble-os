@@ -28,8 +28,6 @@ export function ChangeOrderEditor({ coId, onChanged }: { coId: string; onChanged
   const [title, setTitle] = useState('');
   const [coType, setCoType] = useState('client_addition');
   const [discoveredBy, setDiscoveredBy] = useState('');
-  const [ownerPrice, setOwnerPrice] = useState('');
-  const [builderCost, setBuilderCost] = useState('');
   const [description, setDescription] = useState('');
   const [notesInternal, setNotesInternal] = useState('');
   const [showItemModal, setShowItemModal] = useState(false);
@@ -44,8 +42,6 @@ export function ChangeOrderEditor({ coId, onChanged }: { coId: string; onChanged
         setTitle(row.title);
         setCoType(row.co_type);
         setDiscoveredBy(row.discovered_by || '');
-        setOwnerPrice(String(row.owner_price ?? 0));
-        setBuilderCost(row.builder_cost !== null ? String(row.builder_cost) : '');
         setDescription(row.description || '');
         setNotesInternal(row.notes_internal || '');
         onChanged?.(row);
@@ -187,8 +183,9 @@ export function ChangeOrderEditor({ coId, onChanged }: { coId: string; onChanged
         </div>
         {items.length === 0 ? (
           <div className="m-sub">
-            No line items yet -- this change order is a flat amount typed in below. Add a line item to break it down by cost code instead, the
-            same way estimates work.
+            {co.owner_price
+              ? 'No line items yet -- this change order still shows the flat amount it was originally entered with (see Financials below). New change orders build their price from line items instead.'
+              : "No line items yet -- this change order's price is $0 until you add one. Builder cost and owner price are always built from line items, the same way an estimate or invoice works, not typed in directly."}
           </div>
         ) : (
           <div className="tbl-scroll">
@@ -232,44 +229,28 @@ export function ChangeOrderEditor({ coId, onChanged }: { coId: string; onChanged
         <div className="ibt" style={{ fontSize: 13, textTransform: 'none', letterSpacing: 0, border: 'none', padding: 0, marginBottom: 14 }}>
           Financials
         </div>
-        {items.length > 0 ? (
-          // Once real line items exist, owner_price/builder_cost are always
-          // the sum of those items (recomputed server-side after every
-          // add/edit/delete) -- shown read-only here instead of editable
-          // inputs a save would just get silently overwritten on, the same
-          // way an estimate's grand total isn't a free-typed field either.
-          <div className="fr" style={{ marginBottom: 14 }}>
-            <div>
-              <label className="fl">Builder cost</label>
-              <div style={{ fontSize: 15, fontWeight: 600 }}>{fmt(co.builder_cost)}</div>
-            </div>
-            <div>
-              <label className="fl">Owner price</label>
-              <div style={{ fontSize: 15, fontWeight: 600 }}>{fmt(co.owner_price)}</div>
-            </div>
+        {/* Always read-only -- once real line items exist, owner_price/
+            builder_cost are the sum of those items (recomputed server-side
+            after every add/edit/delete, see _recalc_co_totals); the backend
+            no longer accepts a direct PATCH to either field at all. A change
+            order with zero items and a nonzero price predates line items
+            entirely (a flat amount entered the old way) -- shown as-is
+            since it's real historical data, with a note that adding line
+            items summing to the same total is how to formalize it. */}
+        <div className="fr" style={{ marginBottom: 14 }}>
+          <div>
+            <label className="fl">Builder cost</label>
+            <div style={{ fontSize: 15, fontWeight: 600 }}>{fmt(co.builder_cost)}</div>
           </div>
-        ) : (
-          <div className="fr">
-            <div className="fg">
-              <label className="fl">Builder cost ($)</label>
-              <input
-                className="fi"
-                type="number"
-                value={builderCost}
-                onChange={(e) => setBuilderCost(e.target.value)}
-                onBlur={(e) => saveField('builder_cost', e.target.value.trim() === '' ? null : parseFloat(e.target.value))}
-              />
-            </div>
-            <div className="fg">
-              <label className="fl">Owner price ($)</label>
-              <input
-                className="fi"
-                type="number"
-                value={ownerPrice}
-                onChange={(e) => setOwnerPrice(e.target.value)}
-                onBlur={(e) => saveField('owner_price', parseFloat(e.target.value) || 0)}
-              />
-            </div>
+          <div>
+            <label className="fl">Owner price</label>
+            <div style={{ fontSize: 15, fontWeight: 600 }}>{fmt(co.owner_price)}</div>
+          </div>
+        </div>
+        {items.length === 0 && !!co.owner_price && (
+          <div className="m-sub" style={{ marginBottom: 14 }}>
+            This is a flat amount entered before line items existed, kept as-is. Add line items totaling the same
+            amount to break it down by cost code -- they'll become the real total.
           </div>
         )}
         <div className="fg">

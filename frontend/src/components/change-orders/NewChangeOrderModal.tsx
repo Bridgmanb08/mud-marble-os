@@ -14,8 +14,6 @@ export function NewChangeOrderModal({ onClose, onCreated, defaultProjectId }: Ne
   const [projectId, setProjectId] = useState(defaultProjectId || '');
   const [title, setTitle] = useState('');
   const [coType, setCoType] = useState('client_addition');
-  const [ownerPrice, setOwnerPrice] = useState('');
-  const [builderCost, setBuilderCost] = useState('');
   const [description, setDescription] = useState('');
   const [notesInternal, setNotesInternal] = useState('');
   const [discoveredBy, setDiscoveredBy] = useState('');
@@ -39,8 +37,6 @@ export function NewChangeOrderModal({ onClose, onCreated, defaultProjectId }: Ne
         project_id: projectId,
         title: title.trim(),
         co_type: coType,
-        owner_price: parseFloat(ownerPrice) || 0,
-        builder_cost: parseFloat(builderCost) || 0,
         description: description.trim() || null,
         notes_internal: notesInternal.trim() || null,
         discovered_by: discoveredBy || null,
@@ -99,15 +95,9 @@ export function NewChangeOrderModal({ onClose, onCreated, defaultProjectId }: Ne
 
         <div className="card" style={{ padding: 16, marginBottom: 16 }}>
           <div className="card-section-header">Financials</div>
-          <div className="fr">
-            <div className="fg">
-              <label className="fl">Builder cost ($)</label>
-              <input className="fi" type="number" value={builderCost} onChange={(e) => setBuilderCost(e.target.value)} />
-            </div>
-            <div className="fg">
-              <label className="fl">Owner price ($)</label>
-              <input className="fi" type="number" value={ownerPrice} onChange={(e) => setOwnerPrice(e.target.value)} />
-            </div>
+          <div className="m-sub" style={{ marginBottom: 14 }}>
+            No price to set here -- add line items after creating this change order and its builder cost/owner price
+            are built from those, the same way an estimate or invoice works.
           </div>
           <div className="fg">
             <label className="fl">Description</label>
