@@ -23,6 +23,7 @@ from ..pdf_export import (
     build_letterhead,
     build_line_items_table,
     build_styles,
+    money,
     build_totals_band,
 )
 from ..rich_text import rich_text_to_pdf_markup
@@ -386,7 +387,7 @@ async def export_estimate_pdf(estimate_id: str, _: CurrentUser = Depends(get_cur
         # header row so the two read as one cohesive block, not two
         # differently-styled pieces stacked on top of each other.
         group_band = Table(
-            [[Paragraph(_xml_escape(group_name.upper()), group_header), Paragraph(f"${group_subtotal_value:,.2f}", group_subtotal)]],
+            [[Paragraph(_xml_escape(group_name.upper()), group_header), Paragraph(money(group_subtotal_value), group_subtotal)]],
             colWidths=[PAGE_WIDTH * 0.7, PAGE_WIDTH * 0.3],
         )
         group_band.setStyle(
@@ -419,7 +420,7 @@ async def export_estimate_pdf(estimate_id: str, _: CurrentUser = Depends(get_cur
 
     total = estimate.get("grand_total_owner_price") or 0
     elements.append(Spacer(1, 4))
-    elements.append(build_totals_band(s, PAGE_WIDTH, [("Total Price", f"${total:,.2f}", True)]))
+    elements.append(build_totals_band(s, PAGE_WIDTH, [("Total Price", money(total), True)]))
     elements.append(Spacer(1, 16))
 
     closing = estimate.get("closing_text") or DEFAULT_CLOSING_TEXT

@@ -39,11 +39,24 @@ async def check_not_below_invoiced(item_id: str, new_owner_price: float) -> None
     the line-item side of the same relationship."""
     invoiced_rows = await db_get("invoice_line_items", f"?source_line_item_id=eq.{item_id}&select=amount")
     already_invoiced = sum(r.get("amount") or 0 for r in invoiced_rows)
-    if already_invoiced and round(new_owner_price, 2) < round(already_invoiced, 2):
+    new_price = round(new_owner_price, 2)
+    invoiced = round(already_invoiced, 2)
+    # A credit (negative price) has its invoiced amount negative too, so
+    # "below what's invoiced" means a smaller-magnitude credit there -- the
+    # item's price has to stay at or beyond what's been invoiced on its own side of zero.
+    if invoiced > 0 and new_price < invoiced:
         raise HTTPException(
             status_code=400,
             detail=(
-                f"Can't lower this line item's price below ${already_invoiced:,.2f} -- "
+                f"Can't lower this line item's price below ${invoiced:,.2f} -- "
+                f"that much of it has already been invoiced."
+            ),
+        )
+    if invoiced < 0 and new_price > invoiced:
+        raise HTTPException(
+            status_code=400,
+            detail=(
+                f"Can't shrink this credit below -${abs(invoiced):,.2f} -- "
                 f"that much of it has already been invoiced."
             ),
         )

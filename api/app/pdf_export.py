@@ -227,6 +227,13 @@ def build_totals_band(styles: dict, page_width: float, rows: list) -> Table:
     return t
 
 
+def money(value: float) -> str:
+    """Dollar string with the minus sign in front of the $ (-$500.00), not
+    Python's default $-500.00 -- negative amounts are legitimate (credits and
+    scope-reduction change orders)."""
+    return f"-${abs(value):,.2f}" if round(value, 2) < 0 else f"${value:,.2f}"
+
+
 def build_line_items_table(styles: dict, page_width: float, rows: list) -> Table:
     """rows: (title, description, qty, unit, unit_price, price) sextuples --
     the exact Item / Description / Qty·Unit / Unit Price / Price table the
@@ -254,8 +261,8 @@ def build_line_items_table(styles: dict, page_width: float, rows: list) -> Table
             Paragraph(xml_escape(title or ""), styles["cell"]),
             Paragraph(xml_escape(description or ""), styles["cell"]),
             Paragraph(xml_escape(qty_unit), styles["cell_right"]),
-            Paragraph(f"${unit_price:,.2f}" if unit_price is not None else "", styles["cell_right"]),
-            Paragraph(f"${(price or 0):,.2f}", styles["cell_right"]),
+            Paragraph(money(unit_price) if unit_price is not None else "", styles["cell_right"]),
+            Paragraph(money(price or 0), styles["cell_right"]),
         ])
     t = Table(data, colWidths=[item_col, desc_col, qty_col, unit_price_col, price_col], repeatRows=1)
     t.setStyle(

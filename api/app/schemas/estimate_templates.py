@@ -1,6 +1,6 @@
 from typing import Optional
 
-from pydantic import BaseModel, Field, model_validator
+from pydantic import BaseModel, model_validator
 
 from ..schema_validators import forbid_null
 from .estimates import CostCodeBrief
@@ -38,11 +38,10 @@ class TemplateLineItemCreate(BaseModel):
     bucket: str = "construction"
     title: str
     description: Optional[str] = None
-    # ge=0 -- see the identical LineItemCreate comment in schemas/estimates.py.
-    # markup_value stays unbounded (a negative markup is a real discount).
-    quantity: float = Field(default=1, ge=0)
+    # Negatives allowed -- see the identical LineItemCreate comment in schemas/estimates.py.
+    quantity: float = 1
     unit: Optional[str] = None
-    unit_cost: float = Field(default=0, ge=0)
+    unit_cost: float = 0
     cost_type: str = "none"
     markup_type: str = "percent"
     markup_value: float = 0
@@ -58,9 +57,9 @@ class TemplateLineItemUpdate(BaseModel):
     bucket: Optional[str] = None
     title: Optional[str] = None
     description: Optional[str] = None
-    quantity: Optional[float] = Field(default=None, ge=0)
+    quantity: Optional[float] = None
     unit: Optional[str] = None
-    unit_cost: Optional[float] = Field(default=None, ge=0)
+    unit_cost: Optional[float] = None
     cost_type: Optional[str] = None
     markup_type: Optional[str] = None
     markup_value: Optional[float] = None

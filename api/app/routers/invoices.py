@@ -22,6 +22,7 @@ from ..pdf_export import (
     build_line_items_table,
     build_letterhead,
     build_styles,
+    money,
     build_totals_band,
     fmt_pdf_date,
     xml_escape,
@@ -96,12 +97,18 @@ async def _validate_invoice_amounts(
         # absorbs ordinary float noise (e.g. 100.00000000001) without
         # needing a manual epsilon on top, which would just as easily mask
         # a genuine one-cent overage as it would a rounding artifact.
-        if round(already + new_amount, 2) > round(cap, 2):
+        # The running invoiced total has to stay between 0 and the item's
+        # price, whichever sign that price has -- a credit line (negative
+        # price) can be invoiced down to its full negative amount, but no
+        # further, and a positive line can't be pushed below zero either.
+        total = round(already + new_amount, 2)
+        low, high = min(0.0, round(cap, 2)), max(0.0, round(cap, 2))
+        if total > high or total < low:
             raise HTTPException(
                 status_code=400,
                 detail=(
-                    f"That would invoice more than this line item's total (${cap:,.2f}) -- "
-                    f"${already:,.2f} of it is already invoiced elsewhere on this project."
+                    f"That would invoice more than this line item's total ({money(cap)}) -- "
+                    f"{money(already)} of it is already invoiced elsewhere on this project."
                 ),
             )
 
@@ -135,8 +142,8 @@ async def _validate_invoice_total(project_id: str, invoice_id: str, amount_due: 
         raise HTTPException(
             status_code=400,
             detail=(
-                f"That would invoice more than the contract total (${owner_price:,.2f}) -- "
-                f"${already:,.2f} is already invoiced elsewhere on this project."
+                f"That would invoice more than the contract total ({money(owner_price)}) -- "
+                f"{money(already)} is already invoiced elsewhere on this project."
             ),
         )
 
@@ -417,12 +424,12 @@ async def export_invoice_pdf(invoice_id: str, _: CurrentUser = Depends(get_curre
     if amount_paid:
         paid_line = f"Paid{' on ' + fmt_pdf_date(invoice['paid_date']) if invoice.get('paid_date') else ''}"
         totals_rows = [
-            ("Amount due", f"${amount_due:,.2f}", False),
-            (paid_line, f"-${amount_paid:,.2f}", False),
-            ("Balance", f"${balance:,.2f}", True),
+            ("Amount due", money(amount_due), False),
+            (paid_line, money(-amount_paid), False),
+            ("Balance", money(balance), True),
         ]
     else:
-        totals_rows = [("Amount due", f"${amount_due:,.2f}", True)]
+        totals_rows = [("Amount due", money(amount_due), True)]
     elements.append(build_totals_band(s, PAGE_WIDTH, totals_rows))
 
     # A short closing line -- without it the document just stops right after

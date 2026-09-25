@@ -7,7 +7,11 @@
 // everywhere else too, so fmt() now always shows cents like fmtCents did.
 export function fmt(n: number | null | undefined): string {
   if (n === null || n === undefined) return '—';
-  return '$' + Number(n).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  const num = Number(n);
+  // Minus sign in front of the $ (-$500.00), not "$-500.00" -- negative
+  // amounts are real (credits, scope-reduction change orders).
+  const abs = Math.abs(num).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  return (num < 0 && Number(abs.replace(/,/g, '')) !== 0 ? '-$' : '$') + abs;
 }
 
 // Kept as an alias -- fmt() now does exactly this, but this name stays
