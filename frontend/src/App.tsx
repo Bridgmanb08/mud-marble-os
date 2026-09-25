@@ -10,6 +10,7 @@ import { AdminRoute } from './components/layout/AdminRoute';
 import { BrentRoute } from './components/layout/BrentRoute';
 
 const Login = lazy(() => import('./pages/Login'));
+const TaskAction = lazy(() => import('./pages/TaskAction'));
 const Dashboard = lazy(() => import('./pages/Dashboard'));
 const Leads = lazy(() => import('./pages/Leads'));
 const Projects = lazy(() => import('./pages/Projects'));
@@ -57,6 +58,7 @@ export default function App() {
           <ScrollToTop />
           <Routes>
             <Route path="/login" element={<Login />} />
+            <Route path="/task-action" element={<TaskAction />} />
             <Route
               path="/"
               element={
