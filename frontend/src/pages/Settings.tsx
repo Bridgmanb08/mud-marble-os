@@ -4,6 +4,7 @@ import { api, ApiError } from '../api/client';
 import { useToast } from '../components/ui/Toast';
 import { useAuth } from '../auth/AuthContext';
 import { Modal } from '../components/ui/Modal';
+import { EmailDigestSettings } from '../components/settings/EmailDigestSettings';
 import { NewSubcontractorModal } from '../components/subcontractors/NewSubcontractorModal';
 import { RichTextEditor } from '../components/ui/RichTextEditor';
 import { TagChip } from '../components/tags/TagChip';
@@ -815,7 +816,10 @@ export default function Settings() {
       {tab === 'person-tags' && user?.is_admin && <PersonTagsTab />}
       {tab === 'notifications' && (
         <>
-          <QuickTaskWidgetSettings />
+          <EmailDigestSettings />
+          <div style={{ marginTop: 28, paddingTop: 20, borderTop: '1px solid var(--border)' }}>
+            <QuickTaskWidgetSettings />
+          </div>
           {user?.is_admin && (
             <div style={{ marginTop: 28, paddingTop: 20, borderTop: '1px solid var(--border)' }}>
               <NotificationSettingsTab />

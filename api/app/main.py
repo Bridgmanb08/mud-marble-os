@@ -20,6 +20,8 @@ from .routers import (
     leads,
     messages,
     network,
+    cron,
+    notification_prefs,
     notification_settings,
     notifications,
     person_tags,
@@ -85,6 +87,8 @@ app.include_router(subcontractors.router, prefix="/api")
 app.include_router(subcontractor_files.router, prefix="/api")
 app.include_router(sub_intelligence.router, prefix="/api")
 app.include_router(notifications.router, prefix="/api")
+app.include_router(notification_prefs.router, prefix="/api")
+app.include_router(cron.router, prefix="/api")
 app.include_router(messages.router, prefix="/api")
 app.include_router(network.router, prefix="/api")
 app.include_router(quotes.router, prefix="/api")
