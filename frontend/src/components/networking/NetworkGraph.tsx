@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
-import { forceCollide, forceLink, forceManyBody, forceSimulation, type Simulation, type SimulationLinkDatum, type SimulationNodeDatum } from 'd3-force';
+import { forceLink, forceSimulation, type Simulation, type SimulationLinkDatum, type SimulationNodeDatum } from 'd3-force';
 import type { NetworkConnection, NetworkPerson } from '../../types';
+import { configureForces, nodeRadius as layoutNodeRadius } from './graphLayout';
 
 // The virtual coordinate space the simulation runs in -- deliberately much
 // larger than any one screen, since pan/zoom (not viewport size) is what
@@ -8,19 +9,19 @@ import type { NetworkConnection, NetworkPerson } from '../../types';
 // the whole map visibly radiates outward from Brent as connections deepen.
 const SPACE_W = 1600;
 const SPACE_H = 1100;
-const ROOT_RADIUS = 30;
-const NODE_RADIUS = 22;
 
 interface GraphNode extends SimulationNodeDatum {
   id: string;
   person: NetworkPerson;
+  isRoot: boolean;
+  name: string;
 }
 interface GraphLink extends SimulationLinkDatum<GraphNode> {
   id: string;
 }
 
 function nodeRadius(person: NetworkPerson) {
-  return person.is_root ? ROOT_RADIUS : NODE_RADIUS;
+  return layoutNodeRadius(person.is_root);
 }
 
 // Person keeps the original cream/tan look (the common case, and what the
@@ -97,7 +98,7 @@ export function NetworkGraph({ people, connections, onNodeClick, onAddClick }: P
     const prevById = new Map(nodesRef.current.map((n) => [n.id, n]));
     const nodes: GraphNode[] = people.map((person) => {
       const prev = prevById.get(person.id);
-      if (prev) return { ...prev, person };
+      if (prev) return { ...prev, person, isRoot: person.is_root, name: person.name };
       // A brand-new node starts near its first connection's source (if any)
       // instead of the dead center of the space, so it visibly springs out
       // from the person who introduced it rather than appearing at random.
@@ -108,6 +109,8 @@ export function NetworkGraph({ people, connections, onNodeClick, onAddClick }: P
       return {
         id: person.id,
         person,
+        isRoot: person.is_root,
+        name: person.name,
         x: baseX + (Math.random() - 0.5) * 60,
         y: baseY + (Math.random() - 0.5) * 60,
       };
@@ -125,17 +128,9 @@ export function NetworkGraph({ people, connections, onNodeClick, onAddClick }: P
       root.fy = SPACE_H / 2;
     }
 
+    const firstBuild = !simulationRef.current;
     if (!simulationRef.current) {
       simulationRef.current = forceSimulation<GraphNode>(nodes)
-        // No forceCenter -- the root is already pinned exactly at the
-        // space's center via fx/fy below, so a separate recentering force
-        // would fight the link force trying to push everyone else away
-        // from it (this collapsed the whole web onto the root in testing:
-        // forceCenter reacts to a free node's own distance from center by
-        // nudging the pair back together, directly canceling the link
-        // force's outward pull).
-        .force('charge', forceManyBody().strength(-320))
-        .force('collide', forceCollide<GraphNode>().radius((d) => nodeRadius(d.person) + 26))
         .alphaDecay(0.025)
         .on('tick', () => setTick((t) => t + 1))
         .on('end', () => {
@@ -152,14 +147,17 @@ export function NetworkGraph({ people, connections, onNodeClick, onAddClick }: P
     } else {
       simulationRef.current.nodes(nodes);
     }
-    simulationRef.current.force(
-      'link',
-      forceLink<GraphNode, GraphLink>(links)
-        .id((d) => d.id)
-        .distance(130)
-        .strength(0.55)
+    // The root is pinned at the center via fx/fy above; every other force
+    // (rings by introduction depth, repulsion, label-aware collision, link
+    // springs) lives in graphLayout.ts.
+    configureForces(
+      simulationRef.current,
+      nodes,
+      links.map((l) => ({ id: l.id, source: l.source as string, target: l.target as string })),
+      SPACE_W / 2,
+      SPACE_H / 2
     );
-    simulationRef.current.alpha(0.7).restart();
+    simulationRef.current.alpha(firstBuild ? 1 : 0.7).restart();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [people, connections]);
 
