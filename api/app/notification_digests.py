@@ -201,6 +201,27 @@ def _render(user_id: str, first_name: str, intro: str, sections: list[Section], 
     return "".join(html_parts), "\n".join(text_parts)
 
 
+def popup_payload(user_name: str, tasks: list[dict], today) -> Optional[dict]:
+    """The morning brief as structured data for the in-app popup (same content
+    rules as the email). None when there is nothing to show."""
+    sections = morning_sections(tasks_for(tasks, user_name), today)
+    if not sections:
+        return None
+    first = (user_name or "there").split()[0]
+    return {
+        "title": f"Good morning, {first}",
+        "sections": [
+            {
+                "heading": s.heading,
+                "tone": s.tone,
+                "actions": s.actions,
+                "items": [{"task_id": i.task_id, "title": i.title, "project": i.project, "meta": i.meta} for i in s.items],
+            }
+            for s in sections
+        ],
+    }
+
+
 def build_digest(kind: str, user_id: str, user_name: str, tasks: list[dict], today, with_actions: bool = True) -> Optional[Digest]:
     """Returns None when there is nothing to say -- the caller skips the send."""
     mine = tasks_for(tasks, user_name)

@@ -5,6 +5,7 @@ import { Modal } from '../ui/Modal';
 
 interface Prefs {
   email_enabled: boolean;
+  popup_enabled: boolean;
   morning_enabled: boolean;
   morning_time: string;
   wrapup_enabled: boolean;
@@ -104,6 +105,11 @@ export function EmailDigestSettings() {
       <label style={{ display: 'flex', alignItems: 'center', gap: 10, cursor: 'pointer', marginBottom: 14 }}>
         <input type="checkbox" checked={prefs.email_enabled} onChange={() => save({ email_enabled: !prefs.email_enabled })} />
         Send me email summaries
+      </label>
+
+      <label style={{ display: 'flex', alignItems: 'center', gap: 10, cursor: 'pointer', marginBottom: 14 }}>
+        <input type="checkbox" checked={prefs.popup_enabled} onChange={() => save({ popup_enabled: !prefs.popup_enabled })} />
+        Also show my morning brief in the app, about a minute after I start working (you can snooze it)
       </label>
 
       {(['morning', 'wrapup'] as Kind[]).map((kind) => {

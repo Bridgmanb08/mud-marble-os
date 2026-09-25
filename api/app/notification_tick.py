@@ -16,6 +16,7 @@ from .supabase_client import db_get, db_patch_query, db_post
 
 DEFAULT_PREFS = {
     "email_enabled": True,
+    "popup_enabled": True,
     "morning_enabled": True,
     "morning_time": "07:00",
     "wrapup_enabled": True,

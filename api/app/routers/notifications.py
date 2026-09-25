@@ -67,25 +67,23 @@ async def task_action_info(token: str):
     }
 
 
-@router.post("/task-action")
-async def task_action(body: TaskActionRequest):
+async def apply_task_action(user: CurrentUser, task_id: str, action: str) -> str:
+    """Shared by the email buttons (token-authorized) and the in-app popup
+    (session-authorized): marks a task complete or moves its due date to
+    tomorrow, going through update_task so dependency checks and versioning
+    still apply."""
     from .tasks import update_task  # local import: tasks imports this package's siblings
 
-    payload = _read_token_or_400(body.token)
-    users = await db_get("app_users", f"?id=eq.{payload['sub']}&select=id,email,name,role,is_admin")
-    if not users:
-        raise HTTPException(status_code=404, detail="That account no longer exists.")
-    user = CurrentUser(**users[0])
-    rows = await db_get("schedule_items", f"?id=eq.{payload['task']}&select=status,scheduled_start,scheduled_end")
+    rows = await db_get("schedule_items", f"?id=eq.{task_id}&select=status,scheduled_start,scheduled_end")
     if not rows:
         raise HTTPException(status_code=404, detail="That task no longer exists.")
     current = rows[0]
 
-    if payload["act"] == "complete":
+    if action == "complete":
         if current["status"] == "complete":
-            return {"ok": True, "message": "Already marked complete."}
-        await update_task(payload["task"], TaskUpdate(status="complete"), current_user=user)
-        return {"ok": True, "message": "Marked complete."}
+            return "Already marked complete."
+        await update_task(task_id, TaskUpdate(status="complete"), current_user=user)
+        return "Marked complete."
 
     prefs = await db_get("notification_prefs", f"?user_id=eq.{user.id}&select=timezone")
     tz = (prefs[0]["timezone"] if prefs else None) or "America/Indianapolis"
@@ -94,5 +92,15 @@ async def task_action(body: TaskActionRequest):
     start = (current.get("scheduled_start") or "")[:10]
     if start and start > tomorrow:
         changes["scheduled_start"] = tomorrow
-    await update_task(payload["task"], TaskUpdate(**changes), current_user=user)
-    return {"ok": True, "message": "Moved to tomorrow."}
+    await update_task(task_id, TaskUpdate(**changes), current_user=user)
+    return "Moved to tomorrow."
+
+
+@router.post("/task-action")
+async def task_action(body: TaskActionRequest):
+    payload = _read_token_or_400(body.token)
+    users = await db_get("app_users", f"?id=eq.{payload['sub']}&select=id,email,name,role,is_admin")
+    if not users:
+        raise HTTPException(status_code=404, detail="That account no longer exists.")
+    message = await apply_task_action(CurrentUser(**users[0]), payload["task"], payload["act"])
+    return {"ok": True, "message": message}

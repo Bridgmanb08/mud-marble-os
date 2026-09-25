@@ -15,6 +15,7 @@ def _check_time(v):
 
 class NotificationPrefsUpdate(BaseModel):
     email_enabled: Optional[bool] = None
+    popup_enabled: Optional[bool] = None
     morning_enabled: Optional[bool] = None
     morning_time: Optional[str] = None
     wrapup_enabled: Optional[bool] = None
@@ -37,6 +38,7 @@ class NotificationPrefsUpdate(BaseModel):
 
 class NotificationPrefsOut(BaseModel):
     email_enabled: bool
+    popup_enabled: bool
     morning_enabled: bool
     morning_time: str
     wrapup_enabled: bool
@@ -48,3 +50,12 @@ class NotificationPrefsOut(BaseModel):
 
 class DigestRequest(BaseModel):
     kind: Literal["morning", "wrapup"]
+
+
+class PopupSnooze(BaseModel):
+    minutes: Literal[60, 180]
+
+
+class PopupTaskAction(BaseModel):
+    task_id: str
+    action: Literal["complete", "snooze"]
