@@ -1,6 +1,6 @@
 from typing import Optional
 
-from pydantic import BaseModel, Field, model_validator
+from pydantic import BaseModel, model_validator
 
 from ..schema_validators import forbid_null
 
@@ -72,15 +72,12 @@ class LineItemCreate(BaseModel):
     bucket: str = "construction"
     title: str
     description: Optional[str] = None
-    # ge=0 -- a negative quantity/unit_cost has no physical meaning (you
-    # can't have -5 sq ft of tile or a -$20 unit cost) and previously flowed
-    # straight through _compute_costs into builder_cost/owner_price with
-    # zero guardrail, silently shrinking the estimate total. markup_value is
-    # deliberately left unbounded -- a negative flat/percent markup is a
-    # legitimate real discount, not a data error.
-    quantity: float = Field(default=1, ge=0)
+    # Negative quantity/unit_cost/markup are all allowed on purpose -- a scope
+    # reduction or credit is a legitimate negative line (and a negative change
+    # order is built from negative line items), so nothing here clamps to >= 0.
+    quantity: float = 1
     unit: Optional[str] = None
-    unit_cost: float = Field(default=0, ge=0)
+    unit_cost: float = 0
     cost_type: str = "none"
     markup_type: str = "percent"
     markup_value: float = 0
@@ -96,9 +93,9 @@ class LineItemUpdate(BaseModel):
     bucket: Optional[str] = None
     title: Optional[str] = None
     description: Optional[str] = None
-    quantity: Optional[float] = Field(default=None, ge=0)
+    quantity: Optional[float] = None
     unit: Optional[str] = None
-    unit_cost: Optional[float] = Field(default=None, ge=0)
+    unit_cost: Optional[float] = None
     cost_type: Optional[str] = None
     markup_type: Optional[str] = None
     markup_value: Optional[float] = None

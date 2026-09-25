@@ -59,7 +59,9 @@ export function AddLineItemsToInvoiceModal({ invoiceId, projectId, onClose, onAd
     // Cap at what's actually left to invoice -- the input-layer half of the
     // "don't overcharge this line item" guarantee (the server-computed
     // remaining_amount is the other, authoritative half).
-    const maxPct = item.owner_price > 0 ? Math.max(0, (item.remaining_amount / item.owner_price) * 100) : 0;
+    // owner_price can be negative (a credit / scope-reduction line) -- the
+    // remaining amount and price share a sign there, so the ratio is still >= 0.
+    const maxPct = item.owner_price !== 0 ? Math.max(0, (item.remaining_amount / item.owner_price) * 100) : 0;
     const clamped = Math.min(Math.max(rawPct, 0), maxPct);
     if (rawPct > maxPct + 0.01) {
       toast(`Capped at ${maxPct.toFixed(1)}% — that's all that's left to invoice on "${item.title}".`);
@@ -71,11 +73,12 @@ export function AddLineItemsToInvoiceModal({ invoiceId, projectId, onClose, onAd
   function setAmount(id: string, rawAmount: number) {
     const item = itemById(id);
     if (!item) return;
-    const clamped = Math.min(Math.max(rawAmount, 0), item.remaining_amount);
-    if (rawAmount > item.remaining_amount + 0.01) {
+    // Clamp between 0 and what's left, whichever sign that is (credits are negative).
+    const clamped = Math.min(Math.max(rawAmount, Math.min(0, item.remaining_amount)), Math.max(0, item.remaining_amount));
+    if (Math.abs(rawAmount - clamped) > 0.01) {
       toast(`Capped at ${fmtCents(item.remaining_amount)} — that's all that's left to invoice on "${item.title}".`);
     }
-    const pct = item.owner_price > 0 ? round2((clamped / item.owner_price) * 100) : 0;
+    const pct = item.owner_price !== 0 ? round2((clamped / item.owner_price) * 100) : 0;
     setRows((prev) => ({ ...prev, [id]: { ...prev[id], pct: String(pct), amount: clamped.toFixed(2) } }));
   }
 
@@ -105,7 +108,7 @@ export function AddLineItemsToInvoiceModal({ invoiceId, projectId, onClose, onAd
   async function handleCommit() {
     if (!items) return;
     const toAdd = items
-      .filter((i) => rows[i.id]?.checked && (parseFloat(rows[i.id].amount) || 0) > 0)
+      .filter((i) => rows[i.id]?.checked && (parseFloat(rows[i.id].amount) || 0) !== 0)
       .map((i, idx) => ({
         source_line_item_id: i.id,
         cost_code_id: i.cost_code_id,
@@ -116,7 +119,7 @@ export function AddLineItemsToInvoiceModal({ invoiceId, projectId, onClose, onAd
         sort_order: idx,
       }));
     if (toAdd.length === 0) {
-      toast('Check at least one line item with an amount greater than $0.', true);
+      toast('Check at least one line item with a non-zero amount.', true);
       return;
     }
     setSaving(true);

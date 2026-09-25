@@ -146,11 +146,11 @@ export function LineItemModal({
   const builderCost = qty * cost;
   const ownerPrice = markupType === 'flat' ? builderCost + markup : builderCost * (1 + markup / 100);
   const profit = ownerPrice - builderCost;
-  const margin = ownerPrice > 0 ? (profit / ownerPrice) * 100 : 0;
+  const margin = ownerPrice !== 0 ? (profit / ownerPrice) * 100 : 0;
 
   function handleMarkupTypeChange(newType: string) {
     if (newType === markupType) return;
-    if (builderCost > 0) {
+    if (builderCost !== 0) {
       if (newType === 'flat') {
         setMarkupValue(String(round2(builderCost * (markup / 100))));
       } else {

@@ -23,6 +23,7 @@ from ..pdf_export import (
     build_line_items_table,
     build_letterhead,
     build_styles,
+    money,
     build_totals_band,
     xml_escape,
 )
@@ -266,7 +267,7 @@ async def export_change_order_pdf(co_id: str, _: CurrentUser = Depends(get_curre
     # the estimate PDF already follows for its own owner-price/builder-cost
     # split. Same totals-band treatment as the invoice PDF's Amount Due.
     owner_price = co.get("owner_price") or 0
-    elements.append(build_totals_band(s, PAGE_WIDTH, [("Price", f"${owner_price:,.2f}", True)]))
+    elements.append(build_totals_band(s, PAGE_WIDTH, [("Price", money(owner_price), True)]))
 
     # A change order needs the client's sign-off to actually be approved --
     # unlike an invoice (just a bill), this is an agreement, so it gets the
