@@ -254,6 +254,8 @@ export interface EstimateLineItem {
   quantity: number;
   unit: string | null;
   unit_cost: number;
+  unit_cost_labor: number | null;
+  unit_cost_material: number | null;
   cost_type: string;
   builder_cost: number;
   markup_type: string;
@@ -335,6 +337,8 @@ export interface LineItemReference {
   quantity: number;
   unit: string | null;
   unit_cost: number;
+  unit_cost_labor: number | null;
+  unit_cost_material: number | null;
   cost_type: string;
   builder_cost: number;
   markup_type: string;

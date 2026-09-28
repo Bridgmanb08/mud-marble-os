@@ -78,6 +78,13 @@ class LineItemCreate(BaseModel):
     quantity: float = 1
     unit: Optional[str] = None
     unit_cost: float = 0
+    # Optional labor/material breakdown of unit_cost -- leave both unset for
+    # the plain single-number workflow every existing caller already uses.
+    # When either is set, line_items.py overrides unit_cost with their sum
+    # before it drives builder_cost/owner_price, so "unit_cost" stays the one
+    # number everything downstream reads, per usual.
+    unit_cost_labor: Optional[float] = None
+    unit_cost_material: Optional[float] = None
     cost_type: str = "none"
     markup_type: str = "percent"
     markup_value: float = 0
@@ -96,6 +103,8 @@ class LineItemUpdate(BaseModel):
     quantity: Optional[float] = None
     unit: Optional[str] = None
     unit_cost: Optional[float] = None
+    unit_cost_labor: Optional[float] = None
+    unit_cost_material: Optional[float] = None
     cost_type: Optional[str] = None
     markup_type: Optional[str] = None
     markup_value: Optional[float] = None
@@ -125,6 +134,8 @@ class LineItemOut(BaseModel):
     quantity: float
     unit: Optional[str] = None
     unit_cost: float
+    unit_cost_labor: Optional[float] = None
+    unit_cost_material: Optional[float] = None
     cost_type: str
     builder_cost: float
     markup_type: str
@@ -146,6 +157,8 @@ class LineItemReference(BaseModel):
     quantity: float
     unit: Optional[str] = None
     unit_cost: float
+    unit_cost_labor: Optional[float] = None
+    unit_cost_material: Optional[float] = None
     cost_type: str
     builder_cost: float
     markup_type: str
