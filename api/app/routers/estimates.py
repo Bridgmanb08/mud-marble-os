@@ -463,20 +463,26 @@ async def export_estimate_excel(estimate_id: str, _: CurrentUser = Depends(get_c
     ws["A1"].font = Font(bold=True, size=14)
     ws.append([])
 
+    # Builder Cost rides along here only -- this internal Excel copy is for
+    # Brent's own use, unlike the client-facing PDF (which still never shows
+    # cost/margin data). Tracked as we go since the estimate row itself only
+    # stores the client-price grand total, not a total builder cost.
+    total_builder_cost = 0.0
     for group_name, items in groups.items():
         ws.append([group_name])
         ws.cell(row=ws.max_row, column=1).font = header_font
-        ws.append(["Item", "Description", "Qty", "Unit", "Unit Price", "Price"])
+        ws.append(["Item", "Description", "Qty", "Unit", "Unit Price", "Price", "Builder Cost"])
         for cell in ws[ws.max_row]:
             cell.font = header_font
         for item in items:
-            # Client-facing figures only -- unit_cost/builder_cost are internal
-            # margin data and must never appear in anything exported for a
-            # client. "Unit Price" is a derived client per-unit price
-            # (owner_price / quantity), not the builder's cost.
+            # "Unit Price" is a derived client per-unit price (owner_price /
+            # quantity), not the builder's cost -- that's the separate
+            # Builder Cost column.
             qty = item.get("quantity") or 0
             owner_price = item.get("owner_price") or 0
+            builder_cost = item.get("builder_cost") or 0
             client_unit_price = (owner_price / qty) if qty else owner_price
+            total_builder_cost += builder_cost
             ws.append(
                 [
                     item.get("title"),
@@ -485,15 +491,17 @@ async def export_estimate_excel(estimate_id: str, _: CurrentUser = Depends(get_c
                     item.get("unit"),
                     client_unit_price,
                     owner_price,
+                    builder_cost,
                 ]
             )
         ws.append([])
 
-    ws.append(["", "", "", "", "Total", estimate.get("grand_total_owner_price") or 0])
+    ws.append(["", "", "", "", "Total", estimate.get("grand_total_owner_price") or 0, round(total_builder_cost, 2)])
     ws.cell(row=ws.max_row, column=5).font = header_font
     ws.cell(row=ws.max_row, column=6).font = header_font
+    ws.cell(row=ws.max_row, column=7).font = header_font
 
-    for col, width in zip("ABCDEF", [28, 40, 8, 8, 12, 12]):
+    for col, width in zip("ABCDEFG", [28, 40, 8, 8, 12, 12, 12]):
         ws.column_dimensions[col].width = width
 
     buf = io.BytesIO()
