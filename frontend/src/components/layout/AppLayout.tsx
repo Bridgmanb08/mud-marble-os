@@ -4,6 +4,7 @@ import { Topbar } from './Topbar';
 import { Sidebar } from './Sidebar';
 import { NotificationTicker } from './NotificationTicker';
 import { TeamReminders } from './TeamReminders';
+import { DigestPopup } from './DigestPopup';
 import { CommandPalette } from './CommandPalette';
 import { AskAIWidget } from '../ai/AskAIWidget';
 import { QuickTaskWidget } from '../reminders/QuickTaskWidget';
@@ -38,6 +39,7 @@ export function AppLayout() {
       <AskAIWidget />
       <QuickTaskWidget />
       <TeamReminders />
+      <DigestPopup />
       <CommandPalette />
     </>
   );

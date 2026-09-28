@@ -17,6 +17,10 @@ class Settings(BaseSettings):
     twilio_auth_token: str = ""
     twilio_from_number: str = ""
     public_base_url: str = ""
+    # Bearer secret the scheduler (Vercel Cron or Supabase pg_cron) sends to /api/cron/*.
+    cron_secret: str = ""
+    resend_api_key: str = ""
+    email_from: str = "Mud & Marble OS <notify@notify.mudmarble.com>"
 
 
 settings = Settings()
