@@ -513,6 +513,13 @@ export function LineItemModal({
               <div style={{ fontSize: 11, color: 'var(--t3)', textTransform: 'uppercase' }}>Margin</div>
               <div style={{ fontSize: 13, fontWeight: 400, color: 'var(--t2)' }}>{margin.toFixed(0)}%</div>
             </div>
+            <div>
+              {/* Defaults to "sq ft" when Unit is left blank -- the most
+                  common basis for a whole-house $/sqft sanity check -- but
+                  follows whatever unit was actually typed (e.g. "each"). */}
+              <div style={{ fontSize: 11, color: 'var(--t3)', textTransform: 'uppercase' }}>Client price / {unit.trim() || 'sq ft'}</div>
+              <div style={{ fontSize: 13, fontWeight: 400, color: 'var(--t2)' }}>{qty > 0 ? fmt(ownerPrice / qty) : '—'}</div>
+            </div>
           </div>
         </div>
 
