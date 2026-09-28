@@ -106,6 +106,8 @@ async def search_line_items(
                 quantity=r["quantity"],
                 unit=r.get("unit"),
                 unit_cost=r["unit_cost"],
+                unit_cost_labor=r.get("unit_cost_labor"),
+                unit_cost_material=r.get("unit_cost_material"),
                 cost_type=r["cost_type"],
                 builder_cost=r["builder_cost"],
                 markup_type=r["markup_type"],

@@ -31,6 +31,17 @@ def compute_costs(quantity: float, unit_cost: float, markup_type: str, markup_va
     return builder_cost, owner_price
 
 
+def _resolve_unit_cost(fields: dict) -> dict:
+    """When either labor or material is set, unit_cost is their sum -- the
+    split is just how the number is entered; everything downstream (builder
+    cost, owner price, margin) still reads the one unit_cost field, same as
+    before this existed. Computed server-side (not trusted from the client)
+    so a stale or hand-crafted request can't desync the two."""
+    if fields.get("unit_cost_labor") is not None or fields.get("unit_cost_material") is not None:
+        fields["unit_cost"] = round((fields.get("unit_cost_labor") or 0) + (fields.get("unit_cost_material") or 0), 2)
+    return fields
+
+
 async def check_not_below_invoiced(item_id: str, new_owner_price: float) -> None:
     """Reducing a line item's price below what's already been invoiced
     against it (a real workflow -- price corrections happen after partial
@@ -67,9 +78,10 @@ async def list_items(parent_column: str, parent_id: str) -> list[dict]:
 
 
 async def create_item(parent_column: str, parent_id: str, body: LineItemCreate) -> dict:
-    builder_cost, owner_price = compute_costs(body.quantity, body.unit_cost, body.markup_type, body.markup_value)
+    data = _resolve_unit_cost({**body.model_dump(exclude_none=True)})
+    builder_cost, owner_price = compute_costs(body.quantity, data["unit_cost"], body.markup_type, body.markup_value)
     data = {
-        **body.model_dump(exclude_none=True),
+        **data,
         parent_column: parent_id,
         "builder_cost": builder_cost,
         "owner_price": owner_price,
@@ -88,7 +100,9 @@ async def update_item(item_id: str, body: LineItemUpdate) -> dict:
     # clear a field (e.g. removing a cost_code_id or notes_external), and
     # that null has to reach the database instead of being silently dropped.
     updates = body.model_dump(exclude_unset=True)
-    merged = {**existing, **updates}
+    merged = _resolve_unit_cost({**existing, **updates})
+    if merged["unit_cost"] != existing.get("unit_cost"):
+        updates["unit_cost"] = merged["unit_cost"]
     builder_cost, owner_price = compute_costs(
         merged.get("quantity") or 0,
         merged.get("unit_cost") or 0,

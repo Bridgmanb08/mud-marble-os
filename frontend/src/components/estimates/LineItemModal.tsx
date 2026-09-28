@@ -76,7 +76,26 @@ export function LineItemModal({
   const [title, setTitle] = useState(item?.title || defaultTitle || '');
   const [quantity, setQuantity] = useState(String(item?.quantity ?? 1));
   const [unit, setUnit] = useState(item?.unit || '');
+  // Templates (a separate table with no labor/material columns) keep the
+  // single plain field; estimates and change orders always split it, so a
+  // legacy item that predates the split (both null) starts with the whole
+  // existing unit_cost parked in Material -- an arbitrary starting bucket
+  // that keeps the total unchanged until Brent actually splits it further.
+  const isTemplate = !!templateId;
+  const existingSplit = !isTemplate && item ? (item as EstimateLineItem) : null;
   const [unitCost, setUnitCost] = useState(String(item?.unit_cost ?? defaultUnitCost ?? 0));
+  const [laborCost, setLaborCost] = useState(String(existingSplit?.unit_cost_labor ?? 0));
+  const [materialCost, setMaterialCost] = useState(() => {
+    if (existingSplit) {
+      // Already split: keep it. Legacy item, never split: park the whole
+      // existing total here so nothing changes until Brent edits it.
+      if (existingSplit.unit_cost_labor != null || existingSplit.unit_cost_material != null) {
+        return String(existingSplit.unit_cost_material ?? 0);
+      }
+      return String(existingSplit.unit_cost ?? 0);
+    }
+    return String(defaultUnitCost ?? 0);
+  });
   const [costType, setCostType] = useState(item?.cost_type || 'none');
   const [markupType, setMarkupType] = useState(item?.markup_type || 'percent');
   const [markupValue, setMarkupValue] = useState(String(item?.markup_value ?? 0));
@@ -132,6 +151,13 @@ export function LineItemModal({
     setQuantity(String(ref.quantity));
     setUnit(ref.unit || '');
     setUnitCost(String(ref.unit_cost));
+    if (ref.unit_cost_labor != null || ref.unit_cost_material != null) {
+      setLaborCost(String(ref.unit_cost_labor ?? 0));
+      setMaterialCost(String(ref.unit_cost_material ?? 0));
+    } else {
+      setLaborCost('0');
+      setMaterialCost(String(ref.unit_cost));
+    }
     setCostType(ref.cost_type);
     setMarkupType(ref.markup_type);
     setMarkupValue(String(ref.markup_value));
@@ -141,7 +167,9 @@ export function LineItemModal({
   }
 
   const qty = parseFloat(quantity) || 0;
-  const cost = parseFloat(unitCost) || 0;
+  const labor = parseFloat(laborCost) || 0;
+  const material = parseFloat(materialCost) || 0;
+  const cost = isTemplate ? parseFloat(unitCost) || 0 : labor + material;
   const markup = parseFloat(markupValue) || 0;
   const builderCost = qty * cost;
   const ownerPrice = markupType === 'flat' ? builderCost + markup : builderCost * (1 + markup / 100);
@@ -176,6 +204,10 @@ export function LineItemModal({
       quantity: qty,
       unit: unit.trim() || null,
       unit_cost: cost,
+      // The backend derives unit_cost from these two whenever either is
+      // sent, so this is the one place that actually sets the price for
+      // estimates/change orders; unit_cost above only matters for templates.
+      ...(isTemplate ? {} : { unit_cost_labor: labor, unit_cost_material: material }),
       cost_type: costType,
       markup_type: markupType,
       markup_value: markup,
@@ -406,14 +438,39 @@ export function LineItemModal({
               <label className="fl">Unit</label>
               <input className="fi" value={unit} onChange={(e) => setUnit(e.target.value)} placeholder="e.g. sq ft, each" />
             </div>
-            <div className="fg">
-              <label className="fl">Unit cost ($)</label>
-              <input className="fi" type="number" value={unitCost} onChange={(e) => setUnitCost(e.target.value)} />
-              {defaultUnitCostHint && (
-                <div style={{ fontSize: 11, color: 'var(--t3)', marginTop: 4 }}>{defaultUnitCostHint}</div>
-              )}
-            </div>
+            {isTemplate ? (
+              <div className="fg">
+                <label className="fl">Unit cost ($)</label>
+                <input className="fi" type="number" value={unitCost} onChange={(e) => setUnitCost(e.target.value)} />
+                {defaultUnitCostHint && (
+                  <div style={{ fontSize: 11, color: 'var(--t3)', marginTop: 4 }}>{defaultUnitCostHint}</div>
+                )}
+              </div>
+            ) : (
+              <div className="fg">
+                <label className="fl">Total unit cost</label>
+                <div className="fi" style={{ display: 'flex', alignItems: 'center', background: 'var(--bg)', color: 'var(--t2)' }}>
+                  {fmt(cost)}
+                </div>
+                {defaultUnitCostHint && (
+                  <div style={{ fontSize: 11, color: 'var(--t3)', marginTop: 4 }}>{defaultUnitCostHint}</div>
+                )}
+              </div>
+            )}
           </div>
+          {!isTemplate && (
+            <div className="fr3">
+              <div className="fg">
+                <label className="fl">Unit cost — labor ($)</label>
+                <input className="fi" type="number" value={laborCost} onChange={(e) => setLaborCost(e.target.value)} />
+              </div>
+              <div className="fg">
+                <label className="fl">Unit cost — material ($)</label>
+                <input className="fi" type="number" value={materialCost} onChange={(e) => setMaterialCost(e.target.value)} />
+              </div>
+              <div className="fg" />
+            </div>
+          )}
           <div className="fr3">
             <div className="fg">
               <label className="fl">Markup type</label>
