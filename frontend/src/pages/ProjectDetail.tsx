@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { useParams, useNavigate, useSearchParams, Link } from 'react-router-dom';
-import { IconArrowLeft, IconPencil, IconPlus, IconCalendar, IconList, IconUpload } from '@tabler/icons-react';
+import { IconArrowLeft, IconPencil, IconPlus, IconCalendar, IconList, IconUpload, IconChevronDown, IconChevronUp } from '@tabler/icons-react';
 import { api, ApiError } from '../api/client';
 import { useToast } from '../components/ui/Toast';
 import { fmt, fmtCents, fmtD } from '../lib/format';
@@ -79,6 +79,11 @@ export default function ProjectDetail() {
   const [detailTask, setDetailTask] = useState<Task | undefined>(undefined);
   const [startingEstimate, setStartingEstimate] = useState(false);
   const [scheduleView, setScheduleView] = useState<'calendar' | 'list'>('calendar');
+  // Collapsed by default -- this table sits right after the Estimate section
+  // on the same scrolling page and was getting mistaken for part of it.
+  // Expanding it is still one click away, and jumping here from the Budget
+  // tab (or a deep link) opens it automatically.
+  const [showBudgetDetail, setShowBudgetDetail] = useState(false);
   const { subcontractors: subcontractorsData } = useReferenceData();
   const subcontractors = subcontractorsData ?? [];
   const [subFilter, setSubFilter] = useState('');
@@ -192,6 +197,7 @@ export default function ProjectDetail() {
   // that section once the page (and its section anchors) has actually mounted.
   useEffect(() => {
     if (!project || !requestedTab) return;
+    if (requestedTab === 'Budget') setShowBudgetDetail(true);
     document.getElementById(sectionId(requestedTab))?.scrollIntoView({ block: 'start' });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [project]);
@@ -200,6 +206,7 @@ export default function ProjectDetail() {
 
   function scrollToSection(t: string) {
     setActiveTab(t);
+    if (t === 'Budget') setShowBudgetDetail(true);
     document.getElementById(sectionId(t))?.scrollIntoView({ behavior: 'smooth', block: 'start' });
   }
 
@@ -507,10 +514,21 @@ export default function ProjectDetail() {
         </div>
 
         <div id={sectionId('Budget')} style={{ scrollMarginTop: SECTION_SCROLL_MARGIN, paddingBottom: 24, marginBottom: 24, borderBottom: '1px solid var(--border)' }}>
-          <div className="ibt" style={{ fontSize: 13, textTransform: 'none', letterSpacing: 0, border: 'none', padding: 0, marginBottom: 4 }}>
-            Budget vs. actual by cost code
-          </div>
-          <div style={{ fontSize: 12, color: 'var(--t2)', marginBottom: 14 }}>
+          <button
+            type="button"
+            className="btn-reset"
+            style={{ display: 'flex', alignItems: 'center', gap: 8, width: '100%', cursor: 'pointer' }}
+            onClick={() => setShowBudgetDetail((v) => !v)}
+          >
+            <div className="ibt" style={{ fontSize: 13, textTransform: 'none', letterSpacing: 0, border: 'none', padding: 0 }}>
+              Budget vs. actual by cost code
+            </div>
+            <div style={{ flex: 1 }} />
+            {showBudgetDetail ? <IconChevronUp size={16} /> : <IconChevronDown size={16} />}
+          </button>
+          {showBudgetDetail && (
+            <>
+          <div style={{ fontSize: 12, color: 'var(--t2)', margin: '4px 0 14px' }}>
             In-House Number and Client Price come from the estimate and any approved change orders — internal
             cost vs. what the client owes. Actual comes from real expense transactions tagged to this job. Paid
             traces invoices back to the line items they were built from — a quick way to see what still needs to
@@ -592,6 +610,8 @@ export default function ProjectDetail() {
                   </tfoot>
                 </table>
               </div>
+            </>
+          )}
             </>
           )}
         </div>
