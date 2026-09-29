@@ -13,7 +13,7 @@ import {
 } from '@tabler/icons-react';
 import { api, ApiError } from '../../api/client';
 import { useToast } from '../ui/Toast';
-import type { Project, Task, WeatherOut } from '../../types';
+import type { CalendarEvent, Project, Task, WeatherOut } from '../../types';
 
 const CONDITION_ICON: Record<string, typeof IconSun> = {
   clear: IconSun,
@@ -135,14 +135,20 @@ function fmtRange(weekStart: Date): string {
 
 export function WeekScrollCalendar({
   tasks,
+  events,
   projectId,
   projects,
   colorForTask,
   paged = false,
   onOpenTask,
+  onOpenEvent,
   onChanged,
 }: {
   tasks: Task[];
+  /** Calendar events -- deliberately NOT tasks (see types.ts CalendarEvent).
+   * Rendered as small chips next to the day number, never sharing a task's
+   * drag/lane/bar system, so they can't collide with or be mistaken for one. */
+  events?: CalendarEvent[];
   projectId?: string;
   /** Pass the full project list to render a project picker in the quick-add
    * popover -- only needed when `projectId` isn't fixed (a multi-project/master
@@ -157,6 +163,7 @@ export function WeekScrollCalendar({
    * the mouse wheel and stops the page from scrolling. */
   paged?: boolean;
   onOpenTask: (id: string) => void;
+  onOpenEvent?: (event: CalendarEvent) => void;
   onChanged: () => void;
 }) {
   const toast = useToast();
@@ -178,6 +185,17 @@ export function WeekScrollCalendar({
   }, []);
 
   const weatherByDate = useMemo(() => new Map((weather?.daily ?? []).map((d) => [d.date, d])), [weather]);
+
+  const eventsByDate = useMemo(() => {
+    const map = new Map<string, CalendarEvent[]>();
+    for (const ev of events ?? []) {
+      const key = ev.event_date.slice(0, 10);
+      const list = map.get(key);
+      if (list) list.push(ev);
+      else map.set(key, [ev]);
+    }
+    return map;
+  }, [events]);
 
   useLayoutEffect(() => {
     if (pendingPrependHeight.current !== null && scrollRef.current) {
@@ -453,6 +471,34 @@ export function WeekScrollCalendar({
                             );
                           })()}
                       </div>
+                      {eventsByDate.get(key)?.map((ev) => (
+                        <div
+                          key={ev.id}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            onOpenEvent?.(ev);
+                          }}
+                          title={ev.notes || ev.title}
+                          style={{
+                            display: 'flex',
+                            alignItems: 'center',
+                            gap: 4,
+                            fontSize: 10,
+                            padding: '1px 5px',
+                            marginTop: 2,
+                            borderRadius: 4,
+                            background: ev.auto_kind ? 'var(--abg)' : 'var(--bbg)',
+                            color: ev.auto_kind ? 'var(--atx)' : 'var(--btx)',
+                            border: 'none',
+                            cursor: onOpenEvent ? 'pointer' : 'default',
+                            whiteSpace: 'nowrap',
+                            overflow: 'hidden',
+                            textOverflow: 'ellipsis',
+                          }}
+                        >
+                          {ev.title}
+                        </div>
+                      ))}
                       {overflowByDay.get(key) ? <div className="wcal-more">+{overflowByDay.get(key)} more</div> : null}
                     </div>
                   );

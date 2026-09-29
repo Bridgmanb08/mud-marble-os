@@ -5,14 +5,18 @@ import { useToast } from '../components/ui/Toast';
 import { fmtD } from '../lib/format';
 import { colorForProject } from '../lib/jobColors';
 import { useReferenceData } from '../reference-data/ReferenceDataContext';
-import type { Project, Task } from '../types';
+import type { CalendarEvent, Project, Task } from '../types';
 import { TaskDetailDrawer } from '../components/tasks/TaskDetailDrawer';
 import { SubcontractorScheduleGrid } from '../components/schedule/SubcontractorScheduleGrid';
 import { WeekScrollCalendar } from '../components/schedule/WeekScrollCalendar';
 import { MasterJobFilter } from '../components/schedule/MasterJobFilter';
+import { CalendarEventModal } from '../components/schedule/CalendarEventModal';
+import { IconPlus } from '@tabler/icons-react';
 
 export default function Schedule() {
   const [tasks, setTasks] = useState<Task[] | null>(null);
+  const [events, setEvents] = useState<CalendarEvent[]>([]);
+  const [eventModal, setEventModal] = useState<{ event?: CalendarEvent } | null>(null);
   const [projects, setProjects] = useState<Project[]>([]);
   const { subcontractors: subcontractorsData } = useReferenceData();
   const subcontractors = subcontractorsData ?? [];
@@ -28,6 +32,12 @@ export default function Schedule() {
     } catch (e) {
       toast(e instanceof Error ? e.message : 'Failed to load schedule', true);
       setTasks([]);
+    }
+    try {
+      setEvents(await api.get<CalendarEvent[]>('/calendar-events'));
+    } catch {
+      // Calendar events are a secondary layer on top of tasks -- a failed
+      // fetch shouldn't block the task calendar from loading.
     }
   }
 
@@ -71,6 +81,11 @@ export default function Schedule() {
     });
   }, [tasks, selectedProjectIds, subFilter]);
 
+  const filteredEvents = useMemo(
+    () => events.filter((ev) => !selectedProjectIds || !ev.project_id || selectedProjectIds.has(ev.project_id)),
+    [events, selectedProjectIds]
+  );
+
   const datedSorted = useMemo(() => {
     return filteredTasks
       .filter((t) => t.scheduled_end || t.scheduled_start)
@@ -92,6 +107,9 @@ export default function Schedule() {
           <p>Task and milestone calendar across every active job</p>
         </div>
         <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+          <button className="btn btn-sm" onClick={() => setEventModal({})}>
+            <IconPlus size={14} /> Event
+          </button>
           <select className="fi" style={{ width: 'auto' }} value={subFilter} onChange={(e) => setSubFilter(e.target.value)}>
             <option value="">All subcontractors</option>
             {subcontractors.map((s) => (
@@ -143,9 +161,11 @@ export default function Schedule() {
           ) : view === 'calendar' ? (
             <WeekScrollCalendar
               tasks={filteredTasks}
+              events={filteredEvents}
               projects={projects}
               colorForTask={(t) => colorForProject(t.project_id ? projectsById.get(t.project_id) : undefined)}
               onOpenTask={openTask}
+              onOpenEvent={(ev) => setEventModal({ event: ev })}
               onChanged={load}
             />
           ) : view === 'list' ? (
@@ -199,6 +219,22 @@ export default function Schedule() {
           )}
         </div>
       </div>
+
+      {eventModal && (
+        <CalendarEventModal
+          event={eventModal.event}
+          projects={projects}
+          onClose={() => setEventModal(null)}
+          onSaved={() => {
+            setEventModal(null);
+            load();
+          }}
+          onDeleted={() => {
+            setEventModal(null);
+            load();
+          }}
+        />
+      )}
 
       {detailTask && (
         <TaskDetailDrawer

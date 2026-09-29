@@ -5,6 +5,7 @@ from .config import settings
 from .routers import (
     ai,
     auth,
+    calendar_events,
     change_orders,
     clients,
     cost_codes,
@@ -81,6 +82,7 @@ app.include_router(estimate_templates.router, prefix="/api")
 app.include_router(files.router, prefix="/api")
 app.include_router(invoices.router, prefix="/api")
 app.include_router(change_orders.router, prefix="/api")
+app.include_router(calendar_events.router, prefix="/api")
 app.include_router(transactions.router, prefix="/api")
 app.include_router(tasks.router, prefix="/api")
 app.include_router(subcontractors.router, prefix="/api")

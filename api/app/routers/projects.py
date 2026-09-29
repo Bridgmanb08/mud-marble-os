@@ -4,6 +4,7 @@ from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException
 
+from .. import calendar_events
 from ..deps import CurrentUser, get_current_user
 from ..mentions import create_mention_notifications
 from ..project_phases import merge_custom_phases
@@ -14,6 +15,7 @@ from ..schemas.projects import (
     CostCodeVarianceRow,
     CustomPhaseCreate,
     FinancialSummaryOut,
+    PhaseDateUpdate,
     PhaseProgressOut,
     PhaseProgressRow,
     ProjectBoardLayoutOut,
@@ -27,6 +29,20 @@ from ..schemas.projects import (
 from ..supabase_client import db_delete, db_delete_query, db_get, db_patch, db_post
 
 router = APIRouter(prefix="/projects", tags=["projects"])
+
+# (auto_kind, title) for the two dates on the project's own Project Details
+# card -- each keeps exactly one calendar_events row in sync so it shows up
+# on that project's Schedule calendar without anyone having to add it by hand.
+_DATE_MILESTONES = {
+    "start_date": ("project_start", "Project Start"),
+    "estimated_completion": ("project_completion", "Estimated Completion"),
+}
+
+
+async def _sync_project_dates(project_id: str, updates: dict) -> None:
+    for field, (auto_kind, title) in _DATE_MILESTONES.items():
+        if field in updates:
+            await calendar_events.sync_auto_event(project_id, auto_kind, title, updates[field])
 
 
 async def _get_invoicing_estimate(project_id: str, select: str) -> Optional[dict]:
@@ -71,8 +87,11 @@ async def list_projects(
 
 @router.post("", response_model=ProjectOut)
 async def create_project(body: ProjectCreate, _: CurrentUser = Depends(get_current_user)):
-    rows = await db_post("projects", body.model_dump(exclude_none=True))
-    full = await db_get("projects", f"?id=eq.{rows[0]['id']}&select=*,clients(id,first_name,last_name,preferred_contact_method,is_advocate,is_repeat_client,notes),sms_contacts(id,phone_number,name)")
+    data = body.model_dump(exclude_none=True)
+    rows = await db_post("projects", data)
+    project_id = rows[0]["id"]
+    await _sync_project_dates(project_id, data)
+    full = await db_get("projects", f"?id=eq.{project_id}&select=*,clients(id,first_name,last_name,preferred_contact_method,is_advocate,is_repeat_client,notes),sms_contacts(id,phone_number,name)")
     return full[0]
 
 
@@ -117,7 +136,9 @@ async def update_project(project_id: str, body: ProjectUpdate, _: CurrentUser = 
     # exclude_unset (not exclude_none) -- the frontend sends an explicit null to
     # clear a field (e.g. clearing start_date), and that null has to reach the
     # database. exclude_none would silently drop it instead.
-    await db_patch("projects", project_id, body.model_dump(exclude_unset=True))
+    updates = body.model_dump(exclude_unset=True)
+    await db_patch("projects", project_id, updates)
+    await _sync_project_dates(project_id, updates)
     full = await db_get("projects", f"?id=eq.{project_id}&select=*,clients(id,first_name,last_name,preferred_contact_method,is_advocate,is_repeat_client,notes),sms_contacts(id,phone_number,name)")
     return full[0]
 
@@ -171,6 +192,7 @@ async def get_phase_progress(project_id: str, _: CurrentUser = Depends(get_curre
     if not projects:
         raise HTTPException(status_code=404, detail="Project not found")
     phase_keys, _ = merge_custom_phases(projects[0].get("custom_phases") or [])
+    manual_dates = await calendar_events.auto_dates_by_kind(project_id)
 
     # Every scheduled task for this project that's tagged with a
     # construction_phase -- the fixed source of truth the phase tracker
@@ -209,9 +231,27 @@ async def get_phase_progress(project_id: str, _: CurrentUser = Depends(get_curre
                 all_complete=all_complete,
                 earliest_start=min(starts) if starts else None,
                 latest_end=max(ends) if ends else None,
+                manual_date=manual_dates.get(f"phase:{phase}"),
             )
         )
     return PhaseProgressOut(current_phase=projects[0].get("current_phase"), phases=rows)
+
+
+@router.put("/{project_id}/phase-progress/{phase}/date")
+async def set_phase_date(project_id: str, phase: str, body: PhaseDateUpdate, _: CurrentUser = Depends(get_current_user)):
+    """The Phase Tracker's own small date box per phase -- independent of any
+    task, per Brent's ask that a calendar entry not default to being linked
+    to one. Kept as a calendar_events row (auto_kind "phase:<phase>"), which
+    is also how it shows up on the Schedule calendar."""
+    projects = await db_get("projects", f"?id=eq.{project_id}&select=custom_phases")
+    if not projects:
+        raise HTTPException(status_code=404, detail="Project not found")
+    phase_keys, phase_labels = merge_custom_phases(projects[0].get("custom_phases") or [])
+    if phase not in phase_keys:
+        raise HTTPException(status_code=400, detail="Unknown phase")
+    label = phase_labels.get(phase, phase)
+    await calendar_events.sync_auto_event(project_id, f"phase:{phase}", label, body.date)
+    return {"ok": True}
 
 
 def _slugify_phase_key(label: str, existing_keys: list[str]) -> str:
