@@ -5,7 +5,7 @@ import { api, ApiError } from '../api/client';
 import { useToast } from '../components/ui/Toast';
 import { fmt, fmtCents, fmtD } from '../lib/format';
 import { useReferenceData } from '../reference-data/ReferenceDataContext';
-import type { ChangeOrder, CostCodeVariance, Estimate, FinancialSummary, Invoice, Project, ProjectNote, Task } from '../types';
+import type { CalendarEvent, ChangeOrder, CostCodeVariance, Estimate, FinancialSummary, Invoice, Project, ProjectNote, Task } from '../types';
 import { NewNoteModal } from '../components/projects/NewNoteModal';
 import { NewProjectModal } from '../components/projects/NewProjectModal';
 import { statusOptionsIncluding } from '../lib/projectStatuses';
@@ -22,6 +22,7 @@ import { KanbanBoard } from '../components/tasks/KanbanBoard';
 import { FilesTab } from '../components/projects/FilesTab';
 import { EstimateImportSection } from '../components/job-import/EstimateImportSection';
 import { WeekScrollCalendar } from '../components/schedule/WeekScrollCalendar';
+import { CalendarEventModal } from '../components/schedule/CalendarEventModal';
 import { FathomImportWidget } from '../components/projects/FathomImportWidget';
 import { PhaseTracker } from '../components/projects/PhaseTracker';
 import { PermitsChecklist } from '../components/projects/PermitsChecklist';
@@ -64,6 +65,8 @@ export default function ProjectDetail() {
   const [financialSummary, setFinancialSummary] = useState<FinancialSummary | null>(null);
   const [variance, setVariance] = useState<CostCodeVariance | null>(null);
   const [tasks, setTasks] = useState<Task[]>([]);
+  const [calendarEvents, setCalendarEvents] = useState<CalendarEvent[]>([]);
+  const [eventModal, setEventModal] = useState<{ event?: CalendarEvent } | null>(null);
   const requestedTab = searchParams.get('tab');
   const [activeTab, setActiveTab] = useState(requestedTab && TABS.includes(requestedTab) ? requestedTab : 'Overview');
   const [showNewNote, setShowNewNote] = useState(false);
@@ -178,6 +181,11 @@ export default function ProjectDetail() {
     setTasks(await api.get<Task[]>(`/tasks?project_id=${id}`).catch(() => []));
   }
 
+  async function loadCalendarEvents() {
+    if (!id) return;
+    setCalendarEvents(await api.get<CalendarEvent[]>(`/calendar-events?project_id=${id}`).catch(() => []));
+  }
+
   useEffect(() => {
     if (!id) return;
     api
@@ -190,6 +198,7 @@ export default function ProjectDetail() {
     loadChangeOrders();
     loadInvoices();
     loadTasks();
+    loadCalendarEvents();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [id]);
 
@@ -261,6 +270,10 @@ export default function ProjectDetail() {
     setProject({ ...project, [field]: nextValue });
     try {
       await api.patch(`/projects/${id}`, { [field]: nextValue });
+      // Start date / Estimated completion each keep their own calendar
+      // event in sync server-side -- refresh so the Schedule tab reflects
+      // it without a full page reload.
+      loadCalendarEvents();
     } catch (e) {
       setProject((p) => (p ? { ...p, [field]: previous } : p));
       toast(e instanceof Error ? e.message : 'Failed to update date', true);
@@ -349,6 +362,7 @@ export default function ProjectDetail() {
               customPhases={project.custom_phases}
               onPhaseChange={(phase) => setProject((p) => (p ? { ...p, current_phase: phase } : p))}
               onCustomPhasesChange={(customPhases) => setProject((p) => (p ? { ...p, custom_phases: customPhases } : p))}
+              onDateSynced={loadCalendarEvents}
             />
           </div>
 
@@ -796,6 +810,9 @@ export default function ProjectDetail() {
                 <button className="btn btn-p btn-sm" onClick={() => openNewTask('upcoming')}>
                   <IconPlus size={14} /> New task
                 </button>
+                <button className="btn btn-sm" onClick={() => setEventModal({})}>
+                  <IconPlus size={14} /> Event
+                </button>
               </div>
             </div>
 
@@ -804,7 +821,15 @@ export default function ProjectDetail() {
                 <p className="empty-s" style={{ marginTop: -6, marginBottom: 10 }}>
                   Drag to create a task across days, drag a task to move it, or drag its edges to resize. Click a task for details.
                 </p>
-                <WeekScrollCalendar paged tasks={filteredTasks} projectId={id} onOpenTask={openTask} onChanged={loadTasks} />
+                <WeekScrollCalendar
+                  paged
+                  tasks={filteredTasks}
+                  events={calendarEvents}
+                  projectId={id}
+                  onOpenTask={openTask}
+                  onOpenEvent={(ev) => setEventModal({ event: ev })}
+                  onChanged={loadTasks}
+                />
               </>
             ) : filteredTasks.length === 0 ? (
               <div className="empty-s">No tasks scheduled yet.</div>
@@ -920,6 +945,22 @@ export default function ProjectDetail() {
           invoiceId={selectedInvoiceId}
           onClose={() => setSelectedInvoiceId(null)}
           onInvoiceChanged={() => loadInvoices()}
+        />
+      )}
+
+      {eventModal && id && (
+        <CalendarEventModal
+          event={eventModal.event}
+          projectId={id}
+          onClose={() => setEventModal(null)}
+          onSaved={() => {
+            setEventModal(null);
+            loadCalendarEvents();
+          }}
+          onDeleted={() => {
+            setEventModal(null);
+            loadCalendarEvents();
+          }}
         />
       )}
 

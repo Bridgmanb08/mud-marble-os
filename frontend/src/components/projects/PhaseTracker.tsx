@@ -40,12 +40,16 @@ export function PhaseTracker({
   customPhases,
   onPhaseChange,
   onCustomPhasesChange,
+  onDateSynced,
 }: {
   projectId: string;
   currentPhase: string | null;
   customPhases: CustomPhase[];
   onPhaseChange: (phase: string) => void;
   onCustomPhasesChange: (customPhases: CustomPhase[]) => void;
+  /** Fires after a phase date box saves -- lets the page refresh its own
+   * calendar_events list (see calendar_events.py) without a full reload. */
+  onDateSynced?: () => void;
 }) {
   const toast = useToast();
   const [progress, setProgress] = useState<ProjectPhaseProgress | null>(null);
@@ -63,6 +67,26 @@ export function PhaseTracker({
 
   const { keys: phaseKeys, labels: phaseLabels } = useMemo(() => mergeCustomPhases(customPhases), [customPhases]);
   const labelFor = (phase: string) => phaseLabels[phase] || projectPhaseLabel(phase);
+
+  // A manual date per phase, independent of any task -- shows up as its own
+  // entry on the Schedule calendar (see api/app/calendar_events.py) rather
+  // than being derived from scheduled tasks like the gray date-range text
+  // above it. Local echo so typing a date doesn't wait on a round trip.
+  const [phaseDates, setPhaseDates] = useState<Record<string, string>>({});
+  useEffect(() => {
+    setPhaseDates(Object.fromEntries((progress?.phases || []).map((r) => [r.phase, r.manual_date || ''])));
+  }, [progress]);
+
+  async function savePhaseDate(phase: string, value: string) {
+    setPhaseDates((prev) => ({ ...prev, [phase]: value }));
+    try {
+      await api.put(`/projects/${projectId}/phase-progress/${phase}/date`, { date: value || null });
+      onDateSynced?.();
+    } catch (e) {
+      toast(e instanceof ApiError ? e.message : 'Failed to save the date', true);
+      load();
+    }
+  }
 
   async function load() {
     try {
@@ -236,6 +260,15 @@ export function PhaseTracker({
               />
               <div className="phase-label">{labelFor(phase)}</div>
               {dateRange && <div className="phase-dates">{dateRange}</div>}
+              <input
+                className="phase-manual-date"
+                type="date"
+                title={`${labelFor(phase)} date -- shows up on the Schedule calendar`}
+                value={phaseDates[phase] || ''}
+                onClick={openDatePicker}
+                onChange={(e) => savePhaseDate(phase, e.target.value)}
+                style={{ width: '100%', fontSize: 10, padding: '2px 3px', marginTop: 3, border: '1px solid var(--border)', borderRadius: 4, background: 'var(--surface)', color: phaseDates[phase] ? 'var(--text)' : 'var(--t3)' }}
+              />
               {quickAddPhase === phase && (
                 <div className="phase-quick-add" ref={popoverRef} onClick={(e) => e.stopPropagation()}>
                   <div className="fg">

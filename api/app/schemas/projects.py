@@ -249,8 +249,15 @@ class PhaseProgressRow(BaseModel):
     all_complete: bool = False
     earliest_start: Optional[str] = None
     latest_end: Optional[str] = None
+    # A manually-entered date for this phase, independent of any task --
+    # kept as a calendar_events row (auto_kind "phase:<phase>"), never a task.
+    manual_date: Optional[str] = None
 
 
 class PhaseProgressOut(BaseModel):
     current_phase: Optional[str] = None
     phases: list[PhaseProgressRow] = []
+
+
+class PhaseDateUpdate(BaseModel):
+    date: Optional[str] = None

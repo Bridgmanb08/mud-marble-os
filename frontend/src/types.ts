@@ -539,11 +539,27 @@ export interface PhaseProgressRow {
   all_complete: boolean;
   earliest_start: string | null;
   latest_end: string | null;
+  manual_date: string | null;
 }
 
 export interface ProjectPhaseProgress {
   current_phase: string | null;
   phases: PhaseProgressRow[];
+}
+
+// A Schedule-calendar entry that is NOT a task -- see api/app/calendar_events.py.
+// auto_kind is set only on the rows the backend keeps in sync itself
+// (a project's Start/Estimated Completion date, a phase's manual date);
+// null means a real free-standing event someone added by hand.
+export interface CalendarEvent {
+  id: string;
+  project_id: string | null;
+  title: string;
+  notes: string | null;
+  event_date: string;
+  auto_kind: string | null;
+  created_at: string;
+  projects: { name: string } | null;
 }
 
 export interface ProjectBoardLayout {
