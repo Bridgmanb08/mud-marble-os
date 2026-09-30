@@ -177,19 +177,31 @@ export function LineItemModal({
   const profit = ownerPrice - builderCost;
   const margin = ownerPrice !== 0 ? (profit / ownerPrice) * 100 : 0;
 
-  // Converts markupValue so the resulting profit stays the same across the
-  // switch -- e.g. a $500 flat markup on a 100-unit line becomes $5/unit,
-  // not $500/unit. Falls back to leaving the number as-is when there's no
-  // quantity or builder cost to convert against (nothing sensible to compute).
+  // Converts markupValue so the resulting profit stays the same across a
+  // Flat<->Percent switch -- e.g. a $500 flat markup on a 100-unit line
+  // becomes $5/unit... no wait, becomes whatever percent equals $500, not a
+  // per-unit figure. Falls back to leaving the number as-is when there's no
+  // builder cost to convert against.
+  //
+  // Per-unit is deliberately NOT part of this preservation on either side of
+  // the switch. Converting *into* per_unit by dividing the old total by
+  // quantity produces a tiny, easy-to-miss decimal (e.g. $6 flat on 2625
+  // units becomes "0.0023") that silently reproduces the exact bug this
+  // markup type exists to fix: a line meant to read "$6/unit" that's really
+  // still "$6 total" underneath, just in a different field. Reset to blank
+  // instead, so switching to Profit per unit always means typing the real
+  // number.
   function handleMarkupTypeChange(newType: string) {
     if (newType === markupType) return;
-    const currentProfit = markupType === 'flat' ? markup : markupType === 'per_unit' ? markup * qty : builderCost * (markup / 100);
-    if (newType === 'flat') {
-      setMarkupValue(String(round2(currentProfit)));
-    } else if (newType === 'per_unit') {
-      if (qty !== 0) setMarkupValue(String(round2(currentProfit / qty)));
-    } else if (builderCost !== 0) {
-      setMarkupValue(String(round2((currentProfit / builderCost) * 100)));
+    if (newType === 'per_unit' || markupType === 'per_unit') {
+      setMarkupValue('');
+    } else {
+      const currentProfit = markupType === 'flat' ? markup : builderCost * (markup / 100);
+      if (newType === 'flat') {
+        setMarkupValue(String(round2(currentProfit)));
+      } else if (builderCost !== 0) {
+        setMarkupValue(String(round2((currentProfit / builderCost) * 100)));
+      }
     }
     setMarkupType(newType);
   }
