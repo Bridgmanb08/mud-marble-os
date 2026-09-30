@@ -172,18 +172,24 @@ export function LineItemModal({
   const cost = isTemplate ? parseFloat(unitCost) || 0 : labor + material;
   const markup = parseFloat(markupValue) || 0;
   const builderCost = qty * cost;
-  const ownerPrice = markupType === 'flat' ? builderCost + markup : builderCost * (1 + markup / 100);
+  const ownerPrice =
+    markupType === 'flat' ? builderCost + markup : markupType === 'per_unit' ? builderCost + markup * qty : builderCost * (1 + markup / 100);
   const profit = ownerPrice - builderCost;
   const margin = ownerPrice !== 0 ? (profit / ownerPrice) * 100 : 0;
 
+  // Converts markupValue so the resulting profit stays the same across the
+  // switch -- e.g. a $500 flat markup on a 100-unit line becomes $5/unit,
+  // not $500/unit. Falls back to leaving the number as-is when there's no
+  // quantity or builder cost to convert against (nothing sensible to compute).
   function handleMarkupTypeChange(newType: string) {
     if (newType === markupType) return;
-    if (builderCost !== 0) {
-      if (newType === 'flat') {
-        setMarkupValue(String(round2(builderCost * (markup / 100))));
-      } else {
-        setMarkupValue(String(round2((markup / builderCost) * 100)));
-      }
+    const currentProfit = markupType === 'flat' ? markup : markupType === 'per_unit' ? markup * qty : builderCost * (markup / 100);
+    if (newType === 'flat') {
+      setMarkupValue(String(round2(currentProfit)));
+    } else if (newType === 'per_unit') {
+      if (qty !== 0) setMarkupValue(String(round2(currentProfit / qty)));
+    } else if (builderCost !== 0) {
+      setMarkupValue(String(round2((currentProfit / builderCost) * 100)));
     }
     setMarkupType(newType);
   }
@@ -477,10 +483,11 @@ export function LineItemModal({
               <select className="fi" value={markupType} onChange={(e) => handleMarkupTypeChange(e.target.value)}>
                 <option value="percent">Percent (%)</option>
                 <option value="flat">Flat ($)</option>
+                <option value="per_unit">Profit per unit ($)</option>
               </select>
             </div>
             <div className="fg">
-              <label className="fl">Markup value</label>
+              <label className="fl">Markup value{markupType === 'per_unit' ? ' (per unit)' : ''}</label>
               <input className="fi" type="number" value={markupValue} onChange={(e) => setMarkupValue(e.target.value)} />
             </div>
             <div className="fg" />
