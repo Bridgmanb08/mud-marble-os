@@ -70,7 +70,11 @@ export function CostCodeItemsModal({
                 <div>
                   <div style={{ fontSize: 11, color: 'var(--t2)', textTransform: 'uppercase' }}>Markup</div>
                   <div style={{ fontWeight: 600, fontSize: 14 }}>
-                    {item.markup_type === 'flat' ? fmt(item.markup_value) : `${item.markup_value}%`}
+                    {item.markup_type === 'flat'
+                      ? fmt(item.markup_value)
+                      : item.markup_type === 'per_unit'
+                        ? `${fmt(item.markup_value)}/unit`
+                        : `${item.markup_value}%`}
                   </div>
                 </div>
               </div>

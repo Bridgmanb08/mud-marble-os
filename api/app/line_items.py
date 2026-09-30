@@ -26,6 +26,15 @@ def compute_costs(quantity: float, unit_cost: float, markup_type: str, markup_va
     builder_cost = round((quantity or 0) * (unit_cost or 0), 2)
     if markup_type == "flat":
         owner_price = round(builder_cost + (markup_value or 0), 2)
+    elif markup_type == "per_unit":
+        # A fixed dollar profit PER UNIT of quantity, not a one-time flat
+        # amount -- e.g. $6/unit profit on 2625 units is $15,750 profit, and
+        # scales automatically if the quantity is later corrected (the gap
+        # this closes: line items imported from BuilderTrend that were meant
+        # to carry a per-unit profit had no way to express that, so they came
+        # over with "flat" markups that silently meant "$6 total," not
+        # "$6/unit," on a multi-thousand-unit line).
+        owner_price = round(builder_cost + (markup_value or 0) * (quantity or 0), 2)
     else:
         owner_price = round(builder_cost * (1 + (markup_value or 0) / 100), 2)
     return builder_cost, owner_price
