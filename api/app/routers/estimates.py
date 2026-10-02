@@ -74,6 +74,14 @@ async def list_estimates(project_id: Optional[str] = None, _: CurrentUser = Depe
     return await db_get("estimates", query)
 
 
+# Projects whose estimates are history rather than live work -- left out of
+# "Reference from another job" so it shows active estimates (leads and
+# everything in between included) instead of every estimate ever made.
+_INACTIVE_PROJECT_STATUSES = {"closed", "lost", "warranty"}
+_MAX_REFERENCE_ESTIMATES = 150
+_MAX_REFERENCE_RESULTS = 100
+
+
 @router.get("/line-items/search", response_model=list[LineItemReference])
 async def search_line_items(
     cost_code_id: Optional[str] = None,
@@ -83,24 +91,46 @@ async def search_line_items(
 ):
     if not cost_code_id and not q:
         return []
-    query = "?estimate_id=not.is.null&order=created_at.desc&limit=25&select=*,estimates(project_id,projects(name))"
+
+    # Which estimates count: not archived, and on a project that's still live.
+    # Worked out first (it's a small list) so the line item query below can be
+    # limited to exactly those, newest estimate first.
+    estimates = await db_get(
+        "estimates", "?is_archived=eq.false&select=id,version,created_at,project_id,projects(name,status)"
+    )
+    live = [
+        e
+        for e in estimates
+        if e["id"] != exclude_estimate_id and (e.get("projects") or {}).get("status") not in _INACTIVE_PROJECT_STATUSES
+    ]
+    live.sort(key=lambda e: e.get("created_at") or "", reverse=True)
+    live = live[:_MAX_REFERENCE_ESTIMATES]
+    if not live:
+        return []
+    by_id = {e["id"]: e for e in live}
+
+    query = f"?estimate_id=in.({','.join(by_id)})&select=*"
     if cost_code_id:
         query += f"&cost_code_id=eq.{cost_code_id}"
     if q:
         escaped = q.replace(",", "").replace("(", "").replace(")", "")
         query += f"&or=(title.ilike.*{escaped}*,description.ilike.*{escaped}*)"
-    if exclude_estimate_id:
-        query += f"&estimate_id=neq.{exclude_estimate_id}"
     rows = await db_get("estimate_line_items", query)
+    rows.sort(key=lambda r: r.get("sort_order") or 0)
+    rows.sort(key=lambda r: by_id[r["estimate_id"]].get("created_at") or "", reverse=True)
+
     results = []
-    for r in rows:
-        est = r.get("estimates") or {}
+    for r in rows[:_MAX_REFERENCE_RESULTS]:
+        est = by_id[r["estimate_id"]]
         proj = est.get("projects") or {}
         results.append(
             LineItemReference(
                 id=r["id"],
                 estimate_id=r["estimate_id"],
                 project_name=(proj.get("name") or "").split("|")[0].strip() or None,
+                project_status=proj.get("status"),
+                estimate_version=est.get("version"),
+                estimate_created_at=est.get("created_at"),
                 title=r["title"],
                 description=r.get("description"),
                 quantity=r["quantity"],

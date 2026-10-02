@@ -152,6 +152,9 @@ class LineItemReference(BaseModel):
     id: str
     estimate_id: str
     project_name: Optional[str] = None
+    project_status: Optional[str] = None
+    estimate_version: Optional[int] = None
+    estimate_created_at: Optional[str] = None
     title: str
     description: Optional[str] = None
     quantity: float
