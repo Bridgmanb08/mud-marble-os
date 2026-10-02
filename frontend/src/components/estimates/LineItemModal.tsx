@@ -2,7 +2,8 @@ import { useEffect, useState, type FormEvent } from 'react';
 import { IconSearch, IconChevronDown, IconChevronUp } from '@tabler/icons-react';
 import { api, ApiError } from '../../api/client';
 import { Modal } from '../ui/Modal';
-import { fmt } from '../../lib/format';
+import { fmt, fmtD } from '../../lib/format';
+import { projectStatusLabel } from '../../lib/projectStatuses';
 import { useReferenceData } from '../../reference-data/ReferenceDataContext';
 import { CostCodeSelect } from '../ui/CostCodeSelect';
 import type { CostCode, EstimateLineItem, EstimateTemplateItem, LineItemReference } from '../../types';
@@ -305,7 +306,12 @@ export function LineItemModal({
                   <div key={r.id} style={{ border: '1px solid var(--border)', borderRadius: 8, padding: 10, marginBottom: 6, background: 'var(--surface)' }}>
                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 10 }}>
                       <div style={{ flex: 1, minWidth: 0 }}>
-                        <div style={{ fontSize: 12, color: 'var(--t2)' }}>{r.project_name || 'Unknown project'}</div>
+                        <div style={{ fontSize: 12, color: 'var(--t2)' }}>
+                          {r.project_name || 'Unknown project'}
+                          {r.estimate_version != null ? ` · v${r.estimate_version}` : ''}
+                          {r.project_status ? ` · ${projectStatusLabel(r.project_status)}` : ''}
+                          {r.estimate_created_at ? ` · ${fmtD(r.estimate_created_at)}` : ''}
+                        </div>
                         <div style={{ fontSize: 13, fontWeight: 500 }}>{r.title}</div>
                         <div style={{ fontSize: 12, color: 'var(--t2)', marginTop: 2 }}>
                           {r.quantity} @ {fmt(r.unit_cost)} · builder {fmt(r.builder_cost)} · client {fmt(r.owner_price)}

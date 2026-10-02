@@ -332,6 +332,9 @@ export interface LineItemReference {
   id: string;
   estimate_id: string;
   project_name: string | null;
+  project_status: string | null;
+  estimate_version: number | null;
+  estimate_created_at: string | null;
   title: string;
   description: string | null;
   quantity: number;
