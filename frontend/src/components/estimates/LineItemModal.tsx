@@ -106,10 +106,14 @@ export function LineItemModal({
   const [saving, setSaving] = useState(false);
 
   function handleSelectCostCode(match: CostCode | null) {
+    const previous = costCodes.find((c) => c.id === costCodeId);
     setCostCodeId(match ? match.id : '');
-    // Auto-fill the standard scope language for this cost code, but only if
-    // the description is still blank -- never clobber something already typed.
-    if (match?.default_description && !notesExternal.trim()) {
+    // Auto-fill the standard scope language for this cost code (Settings >
+    // Cost codes). Only into a description that's blank or still just the
+    // previous code's own standard text -- never over something typed.
+    const current = notesExternal.trim();
+    const untouched = !current || current === (previous?.default_description || '').trim();
+    if (match?.default_description && untouched) {
       setNotesExternal(match.default_description);
     }
   }

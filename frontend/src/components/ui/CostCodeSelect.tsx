@@ -8,6 +8,23 @@ import type { CostCode } from '../../types';
 // options"). Matches against code AND name as substrings anywhere, not just
 // a prefix, so "all" finds "20.00 - Allowance" and "elec" finds
 // "08.00 - Electrical" equally well.
+export function costCodeLabel(c: CostCode): string {
+  return `${c.code} - ${c.name}`;
+}
+
+// Matches what's typed against the code and name, and ALSO against the label
+// the field itself displays ("06.00 - Roofing", dash included) -- without
+// that, clicking into a field that already holds a selection searched for its
+// own text and reported "No matching cost codes". When the box still holds
+// the selected label untouched, the whole list is offered so it can be
+// changed, instead of filtering down to just the current choice.
+export function filterCostCodes(costCodes: CostCode[], query: string, selected: CostCode | null): CostCode[] {
+  const q = query.trim().toLowerCase();
+  const pool = costCodes.filter((c) => c.is_active);
+  if (!q || (selected && q === costCodeLabel(selected).toLowerCase())) return pool.slice(0, 50);
+  return pool.filter((c) => `${c.code} ${c.name} ${costCodeLabel(c)}`.toLowerCase().includes(q)).slice(0, 50);
+}
+
 export function CostCodeSelect({
   costCodes,
   value,
@@ -44,12 +61,7 @@ export function CostCodeSelect({
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, [selected]);
 
-  const results = useMemo(() => {
-    const q = query.trim().toLowerCase();
-    const pool = costCodes.filter((c) => c.is_active);
-    if (!q) return pool.slice(0, 50);
-    return pool.filter((c) => `${c.code} ${c.name}`.toLowerCase().includes(q)).slice(0, 50);
-  }, [costCodes, query]);
+  const results = useMemo(() => filterCostCodes(costCodes, query, selected), [costCodes, query, selected]);
 
   useEffect(() => setActiveIndex(0), [query, open]);
 
