@@ -23,6 +23,7 @@ from ..pdf_export import (
     build_letterhead,
     build_line_items_table,
     build_styles,
+    export_stamp,
     money,
     build_totals_band,
 )
@@ -476,7 +477,7 @@ async def export_estimate_pdf(estimate_id: str, _: CurrentUser = Depends(get_cur
     pdf_bytes = buf.getvalue()
     buf.close()
 
-    filename = f"proposal-{project_name or 'estimate'}-v{estimate['version']}.pdf".replace(" ", "-")
+    filename = f"proposal-{project_name or 'estimate'}-v{estimate['version']}-{export_stamp()}.pdf".replace(" ", "-")
     return Response(
         content=pdf_bytes,
         media_type="application/pdf",
@@ -545,7 +546,7 @@ async def export_estimate_excel(estimate_id: str, _: CurrentUser = Depends(get_c
     excel_bytes = buf.getvalue()
     buf.close()
 
-    filename = f"proposal-{project_name or 'estimate'}-v{estimate['version']}.xlsx".replace(" ", "-")
+    filename = f"proposal-{project_name or 'estimate'}-v{estimate['version']}-{export_stamp()}.xlsx".replace(" ", "-")
     return Response(
         content=excel_bytes,
         media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",

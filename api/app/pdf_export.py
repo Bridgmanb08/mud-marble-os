@@ -3,6 +3,7 @@ need a client-facing PDF with the brand letterhead; Invoices and Change
 Orders reuse the exact same numbered-page-count trick and header layout
 instead of a second/third hand-copied version of it."""
 from datetime import datetime
+from zoneinfo import ZoneInfo
 from xml.sax.saxutils import escape as xml_escape
 
 from reportlab.lib import colors
@@ -225,6 +226,15 @@ def build_totals_band(styles: dict, page_width: float, rows: list) -> Table:
             style_commands.append(("TOPPADDING", (0, i), (-1, i), 8))
     t.setStyle(TableStyle(style_commands))
     return t
+
+
+def export_stamp() -> str:
+    """Day and month the file was produced, for the end of an export's file
+    name ("Oct-02") so it's obvious when a downloaded copy was made. Month is
+    spelled out so day-first and month-first readers can't misread it, and it
+    uses the company's local date rather than the server's UTC one -- an
+    evening export would otherwise be stamped with tomorrow."""
+    return datetime.now(ZoneInfo("America/Indianapolis")).strftime("%b-%d")
 
 
 def money(value: float) -> str:
