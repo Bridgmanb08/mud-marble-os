@@ -6,7 +6,8 @@ import { useToast } from '../components/ui/Toast';
 import { fmt } from '../lib/format';
 import { PROJECT_STATUS_OPTIONS as PROJECT_STATUS_ORDER, projectStatusLabel } from '../lib/projectStatuses';
 import { EstimateRowMenu } from '../components/estimates/EstimateRowMenu';
-import type { Estimate } from '../types';
+import { RecentlyDeletedModal } from '../components/estimates/RecentlyDeletedModal';
+import type { DeletedRecord, Estimate } from '../types';
 
 const STATUS_BADGE: Record<string, string> = {
   draft: 'bg-gray',
@@ -18,6 +19,8 @@ const STATUS_BADGE: Record<string, string> = {
 export default function Estimates() {
   const [estimates, setEstimates] = useState<Estimate[] | null>(null);
   const [showArchived, setShowArchived] = useState(false);
+  const [deletedCount, setDeletedCount] = useState(0);
+  const [showDeleted, setShowDeleted] = useState(false);
   const toast = useToast();
   const navigate = useNavigate();
 
@@ -28,8 +31,16 @@ export default function Estimates() {
       .catch((e) => toast(e instanceof Error ? e.message : 'Failed to load estimates', true));
   }
 
+  function loadDeletedCount() {
+    api
+      .get<DeletedRecord[]>('/deleted-records?kind=estimate')
+      .then((rows) => setDeletedCount(rows.length))
+      .catch(() => {});
+  }
+
   useEffect(() => {
     load();
+    loadDeletedCount();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -52,11 +63,12 @@ export default function Estimates() {
       e.status === 'approved' || e.status === 'sent_to_client'
         ? ` This version is marked "${e.status.replace(/_/g, ' ')}" -- deleting it removes that record entirely.`
         : '';
-    if (!window.confirm(`Permanently delete ${label}? This can't be undone.${extra}`)) return;
+    if (!window.confirm(`Delete ${label}? It moves to "Recently deleted," where it can be restored for 90 days.${extra}`)) return;
     try {
       await api.delete(`/estimates/${e.id}`);
       setEstimates((prev) => (prev ? prev.filter((es) => es.id !== e.id) : prev));
-      toast('Estimate deleted');
+      loadDeletedCount();
+      toast('Estimate deleted -- restore it from "Recently deleted" if needed');
     } catch (err) {
       toast(err instanceof ApiError ? err.message : 'Failed to delete estimate', true);
     }
@@ -102,12 +114,19 @@ export default function Estimates() {
             Templates
           </button>
         </div>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
+        {deletedCount > 0 && (
+          <button className="btn btn-sm" onClick={() => setShowDeleted(true)}>
+            Recently deleted ({deletedCount})
+          </button>
+        )}
         {archivedCount > 0 && (
           <label style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12.5, color: 'var(--t2)', cursor: 'pointer', paddingRight: 4 }}>
             <input type="checkbox" checked={showArchived} onChange={(e) => setShowArchived(e.target.checked)} />
             Show archived ({archivedCount})
           </label>
         )}
+        </div>
       </div>
 
       <div className="metrics">
@@ -212,6 +231,15 @@ export default function Estimates() {
             </div>
           </div>
         ))
+      )}
+      {showDeleted && (
+        <RecentlyDeletedModal
+          onClose={() => {
+            setShowDeleted(false);
+            loadDeletedCount();
+          }}
+          onRestored={load}
+        />
       )}
     </>
   );
