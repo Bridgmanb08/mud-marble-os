@@ -7,9 +7,11 @@ import { IconPencil } from '@tabler/icons-react';
 // you're working instead of hunting for a separate field.
 //
 // `value` is the real stored title (may be empty); `fallback` is what's shown
-// when there isn't one yet (e.g. the invoice number). With allowEmpty, saving
-// a blank title clears it back to the fallback; without it, a blank edit is
-// ignored so a required title can never be wiped out.
+// when there isn't one yet (e.g. the invoice number). Clicking opens the text
+// that's currently shown with the cursor at the end, so a rename is an edit
+// of what's there rather than retyping it. With allowEmpty, saving a blank
+// title clears it back to the fallback; without it, a blank edit is ignored
+// so a required title can never be wiped out.
 export function EditableTitle({
   value,
   fallback,
@@ -30,14 +32,16 @@ export function EditableTitle({
 
   useEffect(() => {
     if (editing) {
-      inputRef.current?.focus();
-      inputRef.current?.select();
+      const input = inputRef.current;
+      if (!input) return;
+      input.focus();
+      input.setSelectionRange(input.value.length, input.value.length);
     }
   }, [editing]);
 
   function startEditing() {
     cancelled.current = false;
-    setDraft(value || '');
+    setDraft(value || fallback);
     setEditing(true);
   }
 
@@ -45,7 +49,9 @@ export function EditableTitle({
     if (cancelled.current) return;
     setEditing(false);
     const trimmed = draft.trim();
-    if (trimmed === (value || '')) return;
+    // Unchanged from what was shown -- including a title that's still just
+    // the fallback, which must not get saved as if it had been typed.
+    if (trimmed === (value || fallback)) return;
     if (!trimmed && !allowEmpty) return;
     await onSave(trimmed || null);
   }
