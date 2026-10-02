@@ -22,6 +22,7 @@ from ..pdf_export import (
     build_line_items_table,
     build_letterhead,
     build_styles,
+    export_stamp,
     money,
     build_totals_band,
     fmt_pdf_date,
@@ -444,7 +445,7 @@ async def export_invoice_pdf(invoice_id: str, _: CurrentUser = Depends(get_curre
     pdf_bytes = buf.getvalue()
     buf.close()
 
-    filename = f"invoice-{invoice.get('invoice_number') or 'draft'}-{project_name or 'job'}.pdf".replace(" ", "-")
+    filename = f"invoice-{invoice.get('invoice_number') or 'draft'}-{project_name or 'job'}-{export_stamp()}.pdf".replace(" ", "-")
     return Response(
         content=pdf_bytes,
         media_type="application/pdf",
@@ -512,7 +513,7 @@ async def export_invoice_excel(invoice_id: str, _: CurrentUser = Depends(get_cur
     excel_bytes = buf.getvalue()
     buf.close()
 
-    filename = f"invoice-{invoice.get('invoice_number') or 'draft'}-{project_name or 'job'}.xlsx".replace(" ", "-")
+    filename = f"invoice-{invoice.get('invoice_number') or 'draft'}-{project_name or 'job'}-{export_stamp()}.xlsx".replace(" ", "-")
     return Response(
         content=excel_bytes,
         media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
