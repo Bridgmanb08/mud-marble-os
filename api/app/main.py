@@ -10,6 +10,7 @@ from .routers import (
     clients,
     cost_codes,
     dashboard,
+    deleted_records,
     estimate_copilot,
     estimate_templates,
     estimate_text_defaults,
@@ -83,6 +84,7 @@ app.include_router(files.router, prefix="/api")
 app.include_router(invoices.router, prefix="/api")
 app.include_router(change_orders.router, prefix="/api")
 app.include_router(calendar_events.router, prefix="/api")
+app.include_router(deleted_records.router, prefix="/api")
 app.include_router(transactions.router, prefix="/api")
 app.include_router(tasks.router, prefix="/api")
 app.include_router(subcontractors.router, prefix="/api")

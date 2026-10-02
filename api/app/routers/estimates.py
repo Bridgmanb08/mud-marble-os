@@ -36,7 +36,7 @@ from ..schemas.estimates import (
     LineItemReference,
     LineItemUpdate,
 )
-from .. import line_items
+from .. import deleted_records, line_items
 from ..supabase_client import db_delete, db_delete_query, db_get, db_patch, db_post, db_post_many
 
 router = APIRouter(prefix="/estimates", tags=["estimates"])
@@ -201,7 +201,7 @@ async def update_estimate(estimate_id: str, body: EstimateUpdate, _: CurrentUser
 
 
 @router.delete("/{estimate_id}")
-async def delete_estimate(estimate_id: str, _: CurrentUser = Depends(get_current_user)):
+async def delete_estimate(estimate_id: str, current_user: CurrentUser = Depends(get_current_user)):
     existing = await db_get("estimates", f"?id=eq.{estimate_id}&select=id")
     if not existing:
         raise HTTPException(status_code=404, detail="Estimate not found")
@@ -222,6 +222,12 @@ async def delete_estimate(estimate_id: str, _: CurrentUser = Depends(get_current
                 status_code=400,
                 detail="Can't delete this estimate -- one or more of its line items has already been invoiced. Archive it instead to hide it without losing that history.",
             )
+
+    # Saved first, and the delete stops here if it can't be -- see
+    # deleted_records.py. Nothing below runs without a copy to restore from.
+    await deleted_records.snapshot_estimate(estimate_id, current_user.name)
+
+    if item_ids:
         await db_delete_query("estimate_line_items", f"?estimate_id=eq.{estimate_id}")
 
     await db_delete("estimates", estimate_id)

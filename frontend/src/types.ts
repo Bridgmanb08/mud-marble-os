@@ -1566,3 +1566,23 @@ export interface Quote {
 }
 
 export type LineItem = EstimateLineItem;
+
+// A copy of a hard-deleted record, kept so it can be restored -- see
+// api/app/deleted_records.py. Only estimates for now.
+export interface DeletedRecord {
+  id: string;
+  kind: string;
+  original_id: string;
+  project_id: string | null;
+  label: string;
+  summary: {
+    project_name?: string;
+    title?: string | null;
+    version?: number;
+    status?: string;
+    grand_total_owner_price?: number | null;
+    item_count?: number;
+  };
+  deleted_by: string | null;
+  deleted_at: string;
+}
