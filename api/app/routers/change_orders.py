@@ -23,6 +23,7 @@ from ..pdf_export import (
     build_line_items_table,
     build_letterhead,
     build_styles,
+    export_stamp,
     money,
     build_totals_band,
     xml_escape,
@@ -289,7 +290,7 @@ async def export_change_order_pdf(co_id: str, _: CurrentUser = Depends(get_curre
     pdf_bytes = buf.getvalue()
     buf.close()
 
-    filename = f"{co_number}-{project_name or 'change-order'}.pdf".replace(" ", "-")
+    filename = f"{co_number}-{project_name or 'change-order'}-{export_stamp()}.pdf".replace(" ", "-")
     return Response(
         content=pdf_bytes,
         media_type="application/pdf",
@@ -368,7 +369,7 @@ async def export_change_order_excel(co_id: str, _: CurrentUser = Depends(get_cur
     excel_bytes = buf.getvalue()
     buf.close()
 
-    filename = f"{co_number}-{project_name or 'change-order'}.xlsx".replace(" ", "-")
+    filename = f"{co_number}-{project_name or 'change-order'}-{export_stamp()}.xlsx".replace(" ", "-")
     return Response(
         content=excel_bytes,
         media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
