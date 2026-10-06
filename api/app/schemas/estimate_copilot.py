@@ -8,6 +8,10 @@ from .ai import ChatMessage, ToolCallLog
 class EstimateCopilotChatRequest(BaseModel):
     message: str
     history: list[ChatMessage] = []
+    # "Think harder": the strongest model with extended reasoning, for the
+    # questions worth waiting longer for (is this priced right, compare these
+    # jobs, why is that job over budget).
+    deep: bool = False
 
 
 class EstimateCopilotChatResponse(BaseModel):

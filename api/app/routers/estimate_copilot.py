@@ -1,6 +1,6 @@
 import json
 
-from anthropic import AsyncAnthropic, NotFoundError, PermissionDeniedError
+from anthropic import AsyncAnthropic, BadRequestError, NotFoundError, PermissionDeniedError
 from fastapi import APIRouter, Depends, HTTPException
 
 from ..config import settings
@@ -24,23 +24,57 @@ router = APIRouter(prefix="/estimates", tags=["estimate-copilot"])
 # stays on the faster model.
 MODEL = "claude-sonnet-4-6"
 # The conversational copilot does the real estimating work, so it runs on the
-# stronger model. If that model isn't available to this API key it quietly
-# falls back to MODEL rather than breaking the panel -- see _create_message.
+# stronger model. Any model that isn't available to this API key is skipped
+# and the next one down is used, so a model name can never break the panel.
 COPILOT_MODEL = "claude-sonnet-5"
+# "Think harder" mode: the strongest model plus extended thinking.
+DEEP_MODEL = "claude-opus-5"
+THINKING_BUDGET = 6000
+DEEP_MAX_TOKENS = 12000
 MAX_TOOL_ITERATIONS = 12
 MAX_TOKENS = 4096
 TOOL_RESULT_CHARS = 16000
-_copilot_model_ok = True
+_unavailable_models: set[str] = set()
+_thinking_supported = True
 
 
-async def _create_message(client: AsyncAnthropic, **kwargs):
-    global _copilot_model_ok
-    if _copilot_model_ok:
+def _strip_thinking(messages: list[dict]) -> list[dict]:
+    out = []
+    for m in messages:
+        content = m.get("content")
+        if m.get("role") == "assistant" and isinstance(content, list):
+            content = [b for b in content if b.get("type") not in ("thinking", "redacted_thinking")]
+            m = {**m, "content": content}
+        out.append(m)
+    return out
+
+
+async def _create_message(client: AsyncAnthropic, deep: bool = False, **kwargs):
+    """One model call, walking down the model list until one is available. In
+    deep mode the first attempt also turns on extended thinking; if the API
+    rejects that (the model or SDK doesn't support it), it's switched off and
+    the same call is retried without it."""
+    global _thinking_supported
+    chain = ([DEEP_MODEL] if deep else []) + [COPILOT_MODEL, MODEL]
+    for model in chain[:-1]:
+        if model in _unavailable_models:
+            continue
         try:
-            return await client.messages.create(model=COPILOT_MODEL, **kwargs)
+            if deep and _thinking_supported:
+                try:
+                    return await client.messages.create(
+                        model=model,
+                        extra_body={"thinking": {"type": "enabled", "budget_tokens": THINKING_BUDGET}},
+                        **{**kwargs, "max_tokens": max(kwargs.get("max_tokens", 0), DEEP_MAX_TOKENS)},
+                    )
+                except BadRequestError:
+                    _thinking_supported = False
+                    kwargs = {**kwargs, "messages": _strip_thinking(kwargs["messages"])}
+            return await client.messages.create(model=model, **kwargs)
         except (NotFoundError, PermissionDeniedError):
-            _copilot_model_ok = False
-    return await client.messages.create(model=MODEL, **kwargs)
+            _unavailable_models.add(model)
+    return await client.messages.create(model=chain[-1], **kwargs)
+
 
 SYSTEM_PROMPT_TEMPLATE = """You are Mud & Marble's estimating assistant, working alongside {user_name} to \
 build out a real construction estimate live, the same way you'd help someone build a document by editing it \
@@ -76,6 +110,19 @@ markup there would silently mean "$6 total". Never compute builder_cost or owner
 show each line's margin. For totals and margins by group or bucket, call get_estimate_summary rather than \
 adding up numbers yourself.
 
+Beyond this estimate -- you can look into the whole business, read-only:
+- search_projects, search_estimates, search_change_orders, search_invoices, search_transactions, search_tasks, \
+search_clients, search_subcontractors, search_leads, and get_dashboard_summary answer questions about any job, \
+client, bill, expense, task, or lead -- "which jobs are over budget", "what's outstanding on invoices", \
+"how are our active jobs doing". get_project_overview gives one job's full picture (estimates, change orders, \
+invoices, collected, profit, budget vs actual, schedule); get_estimate_line_items reads any other estimate's \
+lines. Find ids with a search first.
+- For questions about other jobs, look it up -- don't answer from memory or guess -- and say which job or \
+estimate each number came from. Everything you can do outside this estimate is read-only; add/update/remove only \
+ever change THIS estimate.
+- For a question that spans several jobs, make as many lookups as it takes, then actually reason over what you \
+found: compare, rank, spot what's off, and give a clear answer and recommendation, not a pile of data.
+
 How to work:
 - Use add_line_items (several at once) or add_line_item, and update_line_item / update_line_items (the same \
 change across a group, bucket, or list), and remove_line_item, directly when the user asks you to add, change, or \
@@ -99,7 +146,7 @@ distinct item as its own line item with ONE add_line_items call, using judgment 
 - Keep replies concise -- a short confirmation of what changed, not a long essay. If several things need to \
 happen, do them all in one turn rather than asking to proceed step by step, unless something is genuinely \
 ambiguous and needs the user's input first.
-- You're editing THIS estimate only. Never guess a cost code that isn't in the list above, and never invent \
+- You're editing THIS estimate only (other jobs are read-only to you). Never guess a cost code that isn't in the list above, and never invent \
 prices with no basis -- ask or search when you're not confident."""
 
 
@@ -143,6 +190,7 @@ async def copilot_chat(
     for _ in range(MAX_TOOL_ITERATIONS):
         response = await _create_message(
             client,
+            deep=body.deep,
             max_tokens=MAX_TOKENS,
             system=system_prompt,
             tools=ESTIMATE_TOOLS,
@@ -162,7 +210,7 @@ async def copilot_chat(
         for block in response.content:
             if block.type != "tool_use":
                 continue
-            result = await run_estimate_tool(block.name, block.input, estimate_id)
+            result = await run_estimate_tool(block.name, block.input, estimate_id, current_user)
             tool_log.append(ToolCallLog(name=block.name, input=block.input))
             if block.name in WRITE_TOOLS and not (isinstance(result, dict) and result.get("error")):
                 items_changed = True

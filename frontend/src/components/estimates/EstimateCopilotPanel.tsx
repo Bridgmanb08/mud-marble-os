@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { IconSparkles, IconChevronsRight, IconChevronsLeft, IconSend, IconPencil, IconSearch } from '@tabler/icons-react';
+import { IconSparkles, IconChevronsRight, IconChevronsLeft, IconSend, IconPencil, IconSearch, IconBrain } from '@tabler/icons-react';
 import { api, ApiError } from '../../api/client';
 import { useIsMobile } from '../../hooks/useMediaQuery';
 import type { ChatMessage, EstimateCopilotChatResponse, ToolCallLog } from '../../types';
@@ -12,8 +12,8 @@ interface DisplayMessage extends ChatMessage {
 const SUGGESTIONS = [
   'Check this estimate for gaps',
   'Is this priced in line with our other jobs?',
+  'Which active jobs have the thinnest margins?',
   'Summarize totals, profit, and margin by group',
-  'Add gutters and downspouts to the exterior scope',
 ];
 
 const WRITE_TOOLS = new Set([
@@ -53,6 +53,9 @@ export function EstimateCopilotPanel({
   const [messages, setMessages] = useState<DisplayMessage[]>([]);
   const [input, setInput] = useState('');
   const [sending, setSending] = useState(false);
+  // "Think harder": the strongest model with extended reasoning -- slower and
+  // costlier, so it's opt-in per question rather than on for everything.
+  const [deep, setDeep] = useState(false);
   const bodyRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -73,6 +76,7 @@ export function EstimateCopilotPanel({
       const res = await api.post<EstimateCopilotChatResponse>(`/estimates/${estimateId}/copilot/chat`, {
         message: trimmed,
         history,
+        deep,
       });
       setMessages((prev) => [...prev, { role: 'assistant', content: res.reply, toolCalls: res.tool_calls }]);
       if (res.items_changed) onItemAdded();
@@ -129,8 +133,9 @@ export function EstimateCopilotPanel({
             <p>
               Talk through this estimate with me like you would with Shannon — I can check it for commonly-missed
               scope, add or change line items directly (a whole pasted scope at once, or one change across a whole
-              group), total up profit and margin, check your pricing against what the same work cost on other jobs,
-              and edit the proposal's title and text.
+              group), total up profit and margin, and edit the proposal's title and text. I can also look across
+              every job — how a project is doing, what's outstanding, how this compares to other estimates, what the
+              same work cost before. Turn on Think harder for the questions worth a deeper look.
             </p>
             <div className="ai-suggestions">
               {SUGGESTIONS.map((s) => (
@@ -168,6 +173,14 @@ export function EstimateCopilotPanel({
         )}
       </div>
 
+      <label
+        style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '6px 14px 0', fontSize: 12, color: 'var(--t2)', cursor: 'pointer' }}
+        title="Uses the strongest model with extended reasoning. Slower and costs more, so use it for the harder questions."
+      >
+        <input type="checkbox" checked={deep} onChange={(e) => setDeep(e.target.checked)} />
+        <IconBrain size={13} /> Think harder
+        {deep && <span style={{ color: 'var(--t3)' }}>— slower, deeper</span>}
+      </label>
       <form
         className="ai-input-row"
         onSubmit={(e) => {

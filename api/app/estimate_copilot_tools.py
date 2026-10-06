@@ -17,6 +17,7 @@ from typing import Any, Optional
 
 from pydantic import ValidationError
 
+from . import ai_tools
 from .supabase_client import db_get, db_patch
 
 # A short, hand-maintained set of common complementary-scope pairs -- the
@@ -433,6 +434,137 @@ async def _tool_update_estimate_details(estimate_id: str, **fields) -> dict:
     return {"updated": True, "fields": list(updates)}
 
 
+# Read-only tools from the company-wide assistant, so the copilot can answer
+# questions about ANY job, client, invoice, task or lead without leaving the
+# estimate. Edits still only ever touch THIS estimate.
+PORTFOLIO_TOOL_NAMES = (
+    "search_projects",
+    "search_estimates",
+    "search_change_orders",
+    "search_invoices",
+    "search_transactions",
+    "search_tasks",
+    "search_clients",
+    "search_subcontractors",
+    "search_leads",
+    "get_dashboard_summary",
+)
+
+
+async def _tool_get_estimate_line_items(estimate_id: str, target_estimate_id: Optional[str] = None, **_ignored) -> dict:
+    """The full line items of ANY estimate (ids come from search_estimates),
+    for comparing this one against another job or answering what was in it."""
+    target = target_estimate_id or estimate_id
+    header = await db_get(
+        "estimates",
+        f"?id=eq.{target}&select=id,version,status,title,grand_total_owner_price,created_at,projects(name,status)",
+    )
+    if not header:
+        return {"error": "estimate not found -- get ids from search_estimates"}
+    items = await db_get(
+        "estimate_line_items",
+        f"?estimate_id=eq.{target}&order=sort_order.asc&select=title,group_name,bucket,quantity,unit,unit_cost,"
+        "unit_cost_labor,unit_cost_material,builder_cost,markup_type,markup_value,owner_price,cost_codes(code,name)",
+    )
+    h = header[0]
+    return {
+        "estimate": {
+            "id": h["id"],
+            "project": ((h.get("projects") or {}).get("name") or "").split("|")[0].strip(),
+            "project_status": (h.get("projects") or {}).get("status"),
+            "version": h["version"],
+            "status": h["status"],
+            "client_total": h.get("grand_total_owner_price"),
+        },
+        "item_count": len(items),
+        "items": [
+            {
+                "title": i["title"],
+                "group": i.get("group_name"),
+                "bucket": i.get("bucket"),
+                "qty": i["quantity"],
+                "unit": i.get("unit"),
+                "unit_cost": i["unit_cost"],
+                "labor": i.get("unit_cost_labor"),
+                "material": i.get("unit_cost_material"),
+                "builder_cost": i.get("builder_cost"),
+                "markup": f"{i.get('markup_value')} {i.get('markup_type')}",
+                "client_price": i["owner_price"],
+                "cost_code": (i.get("cost_codes") or {}).get("code"),
+            }
+            for i in items[:150]
+        ],
+    }
+
+
+async def _tool_get_project_overview(estimate_id: str, project_id: str, **_ignored) -> dict:
+    """One job at a glance: details, every estimate version, change orders,
+    invoices and what's been collected, the financial position, budget vs
+    actual by cost code, and where the schedule stands. Ids from
+    search_projects."""
+    from fastapi import HTTPException
+
+    from .routers.projects import get_cost_code_variance, get_financial_summary
+
+    async def safe(coro):
+        try:
+            return await coro
+        except HTTPException:
+            return None
+
+    projects, estimates, cos, invoices, tasks, summary, variance = await asyncio.gather(
+        db_get("projects", f"?id=eq.{project_id}&select=*"),
+        db_get(
+            "estimates",
+            f"?project_id=eq.{project_id}&is_archived=eq.false&order=version.asc&select=id,version,status,grand_total_owner_price",
+        ),
+        db_get("change_orders", f"?project_id=eq.{project_id}&order=co_number.asc&select=co_number,title,status,owner_price"),
+        db_get(
+            "invoices",
+            f"?project_id=eq.{project_id}&order=created_at.asc&select=invoice_number,title,status,amount_due,amount_paid,due_date",
+        ),
+        db_get("schedule_items", f"?project_id=eq.{project_id}&select=status,scheduled_end"),
+        safe(get_financial_summary(project_id, None)),
+        safe(get_cost_code_variance(project_id, None)),
+    )
+    if not projects:
+        return {"error": "project not found -- get ids from search_projects"}
+    project = projects[0]
+    keep = (
+        "id", "name", "address", "city", "state", "status", "health_status", "start_date",
+        "estimated_completion", "current_phase", "contract_value", "description", "notes",
+    )
+    from datetime import date
+
+    today = date.today().isoformat()
+    open_tasks = [t for t in tasks if t.get("status") != "complete"]
+    result: dict = {
+        "project": {k: project.get(k) for k in keep if project.get(k) is not None},
+        "estimates": estimates,
+        "change_orders": cos,
+        "invoices": invoices,
+        "schedule": {
+            "tasks_total": len(tasks),
+            "tasks_open": len(open_tasks),
+            "tasks_overdue": sum(1 for t in open_tasks if t.get("scheduled_end") and t["scheduled_end"][:10] < today),
+        },
+    }
+    if summary is not None:
+        result["financial_summary"] = summary.model_dump() if hasattr(summary, "model_dump") else summary
+    if variance is not None:
+        v = variance.model_dump() if hasattr(variance, "model_dump") else variance
+        rows = sorted(v.get("rows", []), key=lambda r: abs(r.get("variance") or 0), reverse=True)[:8]
+        result["budget_vs_actual"] = {
+            "total_budgeted": v.get("total_budgeted"),
+            "total_actual": v.get("total_actual"),
+            "total_variance": v.get("total_variance"),
+            "biggest_variances": [
+                {k: r.get(k) for k in ("code", "name", "budgeted", "actual", "variance", "variance_pct")} for r in rows
+            ],
+        }
+    return result
+
+
 ESTIMATE_TOOLS: list[dict] = [
     {
         "name": "add_line_item",
@@ -585,6 +717,24 @@ ESTIMATE_TOOLS: list[dict] = [
         },
     },
     {
+        "name": "get_estimate_line_items",
+        "description": "The full line items (qty, unit cost, labor/material, markup, client price, cost code) of ANY estimate on any job -- use it to compare this estimate with another, or to answer what was in another job's estimate. Get ids from search_estimates.",
+        "input_schema": {
+            "type": "object",
+            "properties": {"target_estimate_id": {"type": "string", "description": "The estimate to read (from search_estimates)"}},
+            "required": ["target_estimate_id"],
+        },
+    },
+    {
+        "name": "get_project_overview",
+        "description": "One job at a glance, any job: its details, every estimate version, change orders, invoices and amounts collected, financial position (contract, builder cost, profit, billed, left to bill), budget vs actual by cost code with the biggest variances, and schedule status (open/overdue tasks). Get ids from search_projects. Use it for any question about how a specific job is doing.",
+        "input_schema": {
+            "type": "object",
+            "properties": {"project_id": {"type": "string"}},
+            "required": ["project_id"],
+        },
+    },
+    {
         "name": "update_estimate_details",
         "description": "Edit the proposal's own fields: title, introductory_text, closing_text, notes_internal, approval_deadline (YYYY-MM-DD). Cannot change the estimate's status.",
         "input_schema": {
@@ -600,6 +750,8 @@ ESTIMATE_TOOLS: list[dict] = [
     },
 ]
 
+ESTIMATE_TOOLS.extend(t for t in ai_tools.TOOLS if t["name"] in PORTFOLIO_TOOL_NAMES)
+
 _HANDLERS = {
     "add_line_item": _tool_add_line_item,
     "update_line_item": _tool_update_line_item,
@@ -611,6 +763,8 @@ _HANDLERS = {
     "get_project_context": _tool_get_project_context,
     "get_cost_code_pricing": _tool_get_cost_code_pricing,
     "update_estimate_details": _tool_update_estimate_details,
+    "get_estimate_line_items": _tool_get_estimate_line_items,
+    "get_project_overview": _tool_get_project_overview,
 }
 
 # Tools whose result should trigger the frontend to refetch the worksheet's
@@ -625,7 +779,14 @@ WRITE_TOOLS = {
 }
 
 
-async def run_estimate_tool(name: str, tool_input: dict, estimate_id: str) -> Any:
+async def run_estimate_tool(name: str, tool_input: dict, estimate_id: str, current_user: Any = None) -> Any:
+    if name in PORTFOLIO_TOOL_NAMES:
+        if name == "get_dashboard_summary" and current_user is None:
+            return {"error": "the dashboard summary needs a signed-in user"}
+        try:
+            return await ai_tools.run_tool(name, tool_input, current_user)
+        except Exception as e:  # a lookup failing shouldn't end the conversation
+            return {"error": f"lookup failed: {str(e)[:200]}"}
     handler = _HANDLERS.get(name)
     if not handler:
         return {"error": f"unknown tool '{name}'"}
