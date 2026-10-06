@@ -1,6 +1,6 @@
 import json
 
-from anthropic import AsyncAnthropic
+from anthropic import AsyncAnthropic, NotFoundError, PermissionDeniedError
 from fastapi import APIRouter, Depends, HTTPException
 
 from ..config import settings
@@ -20,14 +20,35 @@ from ..schemas.estimate_copilot import EstimateCopilotChatRequest, EstimateCopil
 
 router = APIRouter(prefix="/estimates", tags=["estimate-copilot"])
 
+# The ambient "what comes next" hint fires after every line item add, so it
+# stays on the faster model.
 MODEL = "claude-sonnet-4-6"
-MAX_TOOL_ITERATIONS = 6
+# The conversational copilot does the real estimating work, so it runs on the
+# stronger model. If that model isn't available to this API key it quietly
+# falls back to MODEL rather than breaking the panel -- see _create_message.
+COPILOT_MODEL = "claude-sonnet-5"
+MAX_TOOL_ITERATIONS = 12
+MAX_TOKENS = 4096
+TOOL_RESULT_CHARS = 16000
+_copilot_model_ok = True
+
+
+async def _create_message(client: AsyncAnthropic, **kwargs):
+    global _copilot_model_ok
+    if _copilot_model_ok:
+        try:
+            return await client.messages.create(model=COPILOT_MODEL, **kwargs)
+        except (NotFoundError, PermissionDeniedError):
+            _copilot_model_ok = False
+    return await client.messages.create(model=MODEL, **kwargs)
 
 SYSTEM_PROMPT_TEMPLATE = """You are Mud & Marble's estimating assistant, working alongside {user_name} to \
 build out a real construction estimate live, the same way you'd help someone build a document by editing it \
 directly and telling them what you did -- not by showing suggestion cards for them to click.
 
 This estimate is for: {project_name} (version {version}).
+
+You are built on Claude, a model made by Anthropic. If anyone asks what powers you, say so plainly.
 
 {dependency_examples}
 
@@ -44,8 +65,20 @@ adding scope or flagging a gap, so you don't propose something that's already be
 contradict what's already been agreed to:
 {change_orders}
 
+How pricing works in this app -- get this right when you create or change a line:
+- builder cost = quantity x unit cost. The unit cost can be split into labor and material (unit_cost_labor + \
+unit_cost_material); when you know the split, use it, since the in-house sheets track labor and material separately.
+- The client price adds a markup to the builder cost, one of three kinds: "percent" (a % on top), "flat" (one \
+dollar amount for the whole line, NOT per unit), or "per_unit" (dollars of profit PER UNIT of quantity -- e.g. \
+$6 per unit on 2,625 units is $15,750 of profit). A line priced by profit-per-unit must use per_unit; a flat \
+markup there would silently mean "$6 total". Never compute builder_cost or owner_price yourself.
+- Profit is price minus builder cost; margin is profit divided by client price. The line items above already \
+show each line's margin. For totals and margins by group or bucket, call get_estimate_summary rather than \
+adding up numbers yourself.
+
 How to work:
-- Use add_line_item/update_line_item/remove_line_item directly when the user asks you to add, change, or \
+- Use add_line_items (several at once) or add_line_item, and update_line_item / update_line_items (the same \
+change across a group, bucket, or list), and remove_line_item, directly when the user asks you to add, change, or \
 remove scope -- don't ask permission first, just do it and say plainly what you did (title, price, which \
 group) so it's easy for them to catch anything that needs fixing. This is the same "act, then confirm" \
 pattern as every other write action you can already take elsewhere in this app.
@@ -53,11 +86,16 @@ pattern as every other write action you can already take elsewhere in this app.
 scope pairs above and your own construction knowledge, and flag anything that looks missing -- e.g. drywall \
 with no paint line, tile with no waterproofing. Ask a clarifying question if you're not sure whether \
 something's already covered by an existing group, rather than guessing either way.
-- Before proposing a unit cost you're not confident about, use search_reference_line_items to check what \
-similar scope has actually cost on other real jobs -- ground pricing in that instead of a generic guess, and \
-say when you're doing this.
+- Before proposing a unit cost you're not confident about, use get_cost_code_pricing (min / median / max cost \
+and typical margin across other jobs, closed ones included) or search_reference_line_items to see what similar \
+scope has actually cost on real jobs -- ground pricing in that instead of a generic guess, and say when you're \
+doing this. When asked whether the estimate is priced well, compare its lines against get_cost_code_pricing \
+and name the ones that look high, low, or thin on margin.
+- Use get_project_context when the job itself matters (its address, status, other versions of this estimate, \
+change orders), and update_estimate_details to edit the proposal's title, intro/closing text, internal notes, \
+or approval deadline.
 - If a transcript, scope description, or list of items is pasted into the conversation, extract every \
-distinct item as its own line item via add_line_item, using judgment on grouping.
+distinct item as its own line item with ONE add_line_items call, using judgment on grouping.
 - Keep replies concise -- a short confirmation of what changed, not a long essay. If several things need to \
 happen, do them all in one turn rather than asking to proceed step by step, unless something is genuinely \
 ambiguous and needs the user's input first.
@@ -103,9 +141,9 @@ async def copilot_chat(
     tool_log: list[ToolCallLog] = []
     items_changed = False
     for _ in range(MAX_TOOL_ITERATIONS):
-        response = await client.messages.create(
-            model=MODEL,
-            max_tokens=2048,
+        response = await _create_message(
+            client,
+            max_tokens=MAX_TOKENS,
             system=system_prompt,
             tools=ESTIMATE_TOOLS,
             messages=messages,
@@ -132,7 +170,7 @@ async def copilot_chat(
                 {
                     "type": "tool_result",
                     "tool_use_id": block.id,
-                    "content": json.dumps(result, default=str)[:8000],
+                    "content": json.dumps(result, default=str)[:TOOL_RESULT_CHARS],
                 }
             )
         messages.append({"role": "user", "content": tool_results})

@@ -11,11 +11,19 @@ interface DisplayMessage extends ChatMessage {
 
 const SUGGESTIONS = [
   'Check this estimate for gaps',
+  'Is this priced in line with our other jobs?',
+  'Summarize totals, profit, and margin by group',
   'Add gutters and downspouts to the exterior scope',
-  'What has tile work run on other jobs?',
 ];
 
-const WRITE_TOOLS = new Set(['add_line_item', 'update_line_item', 'remove_line_item']);
+const WRITE_TOOLS = new Set([
+  'add_line_item',
+  'update_line_item',
+  'remove_line_item',
+  'add_line_items',
+  'update_line_items',
+  'update_estimate_details',
+]);
 
 function toolLabel(name: string): string {
   return name.replace(/_/g, ' ');
@@ -120,8 +128,9 @@ export function EstimateCopilotPanel({
           <div className="ai-empty">
             <p>
               Talk through this estimate with me like you would with Shannon — I can check it for commonly-missed
-              complementary scope, add/update/remove line items directly, or look up what similar work has cost on
-              other jobs.
+              scope, add or change line items directly (a whole pasted scope at once, or one change across a whole
+              group), total up profit and margin, check your pricing against what the same work cost on other jobs,
+              and edit the proposal's title and text.
             </p>
             <div className="ai-suggestions">
               {SUGGESTIONS.map((s) => (
