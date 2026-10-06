@@ -162,8 +162,12 @@ class RentalPropertyOut(BaseModel):
     estimated_monthly_cash_flow: Optional[float] = None
     # Computed from the most recent row in rental_property_visits -- same
     # derive-don't-store convention as equity/cash-flow above.
+    # For a property with several units this describes the unit that has gone
+    # longest without a visit (a property needs a visit if any unit does),
+    # and stalest_unit_label names it. Single-unit properties leave it None.
     last_visited_at: Optional[str] = None
     days_since_visit: Optional[int] = None
+    stalest_unit_label: Optional[str] = None
     units: list["RentalUnitOut"] = []
 
 
@@ -276,6 +280,7 @@ class RentalLeaseOut(BaseModel):
 
 
 class RentalPaymentUpdate(BaseModel):
+    amount_due: Optional[float] = None
     amount_paid: Optional[float] = None
     paid_date: Optional[str] = None
     status: Optional[str] = None
@@ -343,6 +348,10 @@ class RentalFileCreate(BaseModel):
     storage_path: str
 
 
+class RentalFileUpdate(BaseModel):
+    lease_id: Optional[str] = None
+
+
 class RentalFileOut(BaseModel):
     id: str
     property_id: Optional[str] = None
@@ -359,19 +368,30 @@ class RentalFileOut(BaseModel):
 
 class RentalPropertyVisitCreate(BaseModel):
     visited_at: Optional[str] = None  # defaults to today server-side if omitted
+    # Which unit was visited. Optional only so a property with a single unit
+    # (or none) needs no extra step; a property with several units must say.
+    unit_id: Optional[str] = None
     visited_by: Optional[str] = None
     notes: Optional[str] = None
 
 
 class RentalPropertyVisitUpdate(BaseModel):
     visited_at: Optional[str] = None
+    unit_id: Optional[str] = None
     visited_by: Optional[str] = None
     notes: Optional[str] = None
+
+
+class VisitUnitBrief(BaseModel):
+    unit_label: str
 
 
 class RentalPropertyVisitOut(BaseModel):
     id: str
     property_id: str
+    # None on a visit logged before visits were tracked per unit.
+    unit_id: Optional[str] = None
+    rental_units: Optional[VisitUnitBrief] = None
     visited_at: str
     visited_by: Optional[str] = None
     notes: Optional[str] = None
@@ -401,6 +421,10 @@ class RentRollRow(BaseModel):
     current_month_paid: float = 0
     past_due_total: float = 0
     is_late: bool = False
+    # This month's payment row, so the list can record a payment against it
+    # directly. None when the lease has no due date falling this month.
+    current_payment_id: Optional[str] = None
+    current_payment_due_date: Optional[str] = None
     last_visited_at: Optional[str] = None
     days_since_visit: Optional[int] = None
     lease_end_date: Optional[str] = None

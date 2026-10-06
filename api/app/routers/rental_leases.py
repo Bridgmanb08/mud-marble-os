@@ -82,10 +82,13 @@ async def get_lease(lease_id: str, _: CurrentUser = Depends(get_current_user)):
 
 @router.patch("/rental-leases/{lease_id}", response_model=RentalLeaseOut)
 async def update_lease(lease_id: str, body: RentalLeaseUpdate, _: CurrentUser = Depends(get_current_user)):
-    await db_patch("rental_leases", lease_id, body.model_dump(exclude_unset=True))
+    updates = body.model_dump(exclude_unset=True)
+    await db_patch("rental_leases", lease_id, updates)
     rows = await db_get("rental_leases", f"?id=eq.{lease_id}&select={LEASE_SELECT}")
     if not rows:
         raise HTTPException(status_code=404, detail="Lease not found")
+    if updates.get("monthly_rent") is not None or updates.get("rent_due_day") is not None:
+        await _apply_terms_to_unpaid_payments(rows[0], updates)
     return _attach_lease_status(rows[0])
 
 
@@ -115,6 +118,33 @@ def _months_through(start_year: int, start_month: int, end_year: int, end_month:
         months.append((y, m))
         y, m = _next_month(y, m)
     return months
+
+
+async def _apply_terms_to_unpaid_payments(lease: dict, updates: dict) -> None:
+    """A rent or due-day change on a lease only used to affect payment rows
+    created AFTER it -- every row already generated for this and next month
+    kept the old amount and date, so editing the rent on the list left
+    "Current due" unchanged. Carry it onto the current and upcoming months'
+    rows that nothing has been paid against yet. Past months and anything
+    already (even partly) paid are history and stay as they were."""
+    month_start = date.today().replace(day=1).isoformat()
+    rows = await db_get(
+        "rental_payments",
+        f"?lease_id=eq.{lease['id']}&due_date=gte.{month_start}&status=eq.due&select=id,due_date,amount_paid",
+    )
+    for r in rows:
+        if r.get("amount_paid"):
+            continue
+        change: dict = {}
+        if updates.get("monthly_rent") is not None:
+            change["amount_due"] = lease["monthly_rent"]
+        if updates.get("rent_due_day") is not None:
+            year, month = int(r["due_date"][:4]), int(r["due_date"][5:7])
+            new_due = _due_date_for_month(year, month, lease["rent_due_day"])
+            if lease["start_date"] <= new_due <= lease["end_date"]:
+                change["due_date"] = new_due
+        if change:
+            await db_patch("rental_payments", r["id"], change)
 
 
 async def _ensure_payments_for_lease(lease: dict) -> None:
@@ -186,10 +216,27 @@ async def list_payments(lease_id: str, _: CurrentUser = Depends(get_current_user
     return [_attach_is_late(r) for r in rows]
 
 
+def _payment_status(amount_due: float, amount_paid: Optional[float]) -> str:
+    paid = amount_paid or 0
+    if paid + 0.005 >= amount_due and (paid > 0 or amount_due <= 0):
+        return "paid"
+    return "partial" if paid > 0 else "due"
+
+
 @router.patch("/rental-payments/{payment_id}", response_model=RentalPaymentOut)
 async def update_payment(payment_id: str, body: RentalPaymentUpdate, _: CurrentUser = Depends(get_current_user)):
-    await db_patch("rental_payments", payment_id, body.model_dump(exclude_unset=True))
-    rows = await db_get("rental_payments", f"?id=eq.{payment_id}")
-    if not rows:
+    existing = await db_get("rental_payments", f"?id=eq.{payment_id}")
+    if not existing:
         raise HTTPException(status_code=404, detail="Payment not found")
+    updates = body.model_dump(exclude_unset=True)
+    merged = {**existing[0], **updates}
+    # Status follows the amounts instead of being whatever the caller says:
+    # a short payment used to be saved as "paid", which hid the balance that
+    # was still owed from every past-due total.
+    if ("amount_paid" in updates or "amount_due" in updates) and "status" not in updates:
+        updates["status"] = _payment_status(merged["amount_due"], merged.get("amount_paid"))
+    if "amount_paid" in updates and not (updates["amount_paid"] or 0) and "paid_date" not in updates:
+        updates["paid_date"] = None
+    await db_patch("rental_payments", payment_id, updates)
+    rows = await db_get("rental_payments", f"?id=eq.{payment_id}")
     return _attach_is_late(rows[0])

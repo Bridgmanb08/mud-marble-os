@@ -11,8 +11,9 @@ import { LeaseRentLedgerModal } from '../components/rentals/LeaseRentLedgerModal
 import { NewRentalWorkOrderModal } from '../components/rentals/NewRentalWorkOrderModal';
 import { MoneyField } from '../components/rentals/MoneyField';
 import { VisitLogModal } from '../components/rentals/VisitLogModal';
+import { RentalUnitModal } from '../components/rentals/RentalUnitModal';
 import { useAuth } from '../auth/AuthContext';
-import type { RentalLease, RentalProperty, RentalPropertyVisit, RentalWorkOrder } from '../types';
+import type { RentalLease, RentalProperty, RentalPropertyVisit, RentalUnit, RentalWorkOrder } from '../types';
 
 const TABS = ['Overview', 'Financials', 'Units & Tenants', 'Leases', 'Maintenance', 'Home Details', 'Visit Log'];
 
@@ -85,6 +86,8 @@ export default function RentalPropertyDetail() {
   const [ledgerLease, setLedgerLease] = useState<RentalLease | null>(null);
   const [editingVisit, setEditingVisit] = useState<RentalPropertyVisit | null>(null);
   const [loggingVisit, setLoggingVisit] = useState(false);
+  const [pickingVisitUnit, setPickingVisitUnit] = useState(false);
+  const [unitModal, setUnitModal] = useState<RentalUnit | null>(null);
   const [financials, setFinancials] = useState<Record<FinancialField, string>>(
     () => Object.fromEntries(FINANCIAL_FIELDS.map((f) => [f, ''])) as Record<FinancialField, string>
   );
@@ -176,12 +179,22 @@ export default function RentalPropertyDetail() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [id]);
 
-  async function startNewVisit() {
+  // A visit belongs to one unit. With several units the person picks which
+  // (a visit to A says nothing about B); a single-unit property just logs it.
+  function requestNewVisit() {
+    if (!property) return;
+    if (property.units.length > 1) setPickingVisitUnit((v) => !v);
+    else startNewVisit(property.units[0]?.id);
+  }
+
+  async function startNewVisit(unitId?: string) {
     if (!id) return;
     setLoggingVisit(true);
+    setPickingVisitUnit(false);
     try {
-      const created = await api.post<RentalPropertyVisit>(`/rental-properties/${id}/visits`, {});
+      const created = await api.post<RentalPropertyVisit>(`/rental-properties/${id}/visits`, unitId ? { unit_id: unitId } : {});
       loadVisits();
+      loadProperty();
       setEditingVisit(created);
     } catch {
       toast('Failed to log visit', true);
@@ -409,7 +422,14 @@ export default function RentalPropertyDetail() {
             <div style={{ fontSize: 13, color: 'var(--t2)' }}>No units yet.</div>
           ) : (
             property.units.map((u) => (
-              <div key={u.id} className="cc" style={{ width: '100%' }}>
+              <button
+                key={u.id}
+                type="button"
+                className="cc btn-reset"
+                style={{ width: '100%', textAlign: 'left', cursor: 'pointer' }}
+                onClick={() => setUnitModal(u)}
+                title="Open this unit's tenant and lease"
+              >
                 <div className="av">
                   <IconUsers size={16} />
                 </div>
@@ -418,15 +438,15 @@ export default function RentalPropertyDetail() {
                   <div style={{ fontSize: 12, color: 'var(--t2)', marginTop: 2 }}>
                     {[u.bedrooms ? `${u.bedrooms} bd` : null, u.bathrooms ? `${u.bathrooms} ba` : null, u.square_feet ? `${u.square_feet} sqft` : null]
                       .filter(Boolean)
-                      .join(' · ')}
+                      .join(' · ') || 'Click to manage tenant and lease'}
                   </div>
                 </div>
                 {u.current_tenant_name ? (
                   <span className="badge bg-green">Occupied — {u.current_tenant_name}</span>
                 ) : (
-                  <span className="badge bg-gray">Vacant</span>
+                  <span className="badge bg-gray">Vacant — add a tenant</span>
                 )}
-              </div>
+              </button>
             ))
           )}
         </div>
@@ -577,10 +597,22 @@ export default function RentalPropertyDetail() {
             <div className="ibt" style={{ fontSize: 13, textTransform: 'none', letterSpacing: 0, border: 'none', padding: 0 }}>
               Visit Log
             </div>
-            <button className="btn btn-sm" onClick={startNewVisit} disabled={loggingVisit}>
+            <button className="btn btn-sm" onClick={requestNewVisit} disabled={loggingVisit}>
               <IconCamera size={14} /> Log visit
             </button>
           </div>
+          {pickingVisitUnit && (
+            <div className="card" style={{ padding: 12, marginBottom: 12 }}>
+              <div style={{ fontSize: 12.5, color: 'var(--t2)', marginBottom: 8 }}>Which unit did you visit?</div>
+              <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+                {property.units.map((u) => (
+                  <button key={u.id} className="btn btn-sm" onClick={() => startNewVisit(u.id)} disabled={loggingVisit}>
+                    {u.unit_label}
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
           {visits.length === 0 ? (
             <div style={{ fontSize: 13, color: 'var(--t2)' }}>No visits logged yet.</div>
           ) : (
@@ -595,6 +627,7 @@ export default function RentalPropertyDetail() {
                 <div style={{ flex: 1, minWidth: 0 }}>
                   <div style={{ fontSize: 13, fontWeight: 500 }}>
                     {fmtD(v.visited_at)}
+                    {property.units.length > 1 || v.rental_units ? ` · ${v.rental_units?.unit_label || 'All units'}` : ''}
                     {v.visited_by ? ` · ${v.visited_by}` : ''}
                   </div>
                   {v.notes ? (
@@ -659,10 +692,26 @@ export default function RentalPropertyDetail() {
       {editingVisit && (
         <VisitLogModal
           visit={editingVisit}
-          onClose={() => setEditingVisit(null)}
+          units={property.units}
+          onClose={() => {
+            setEditingVisit(null);
+            loadVisits();
+          }}
           onSaved={() => {
             setEditingVisit(null);
             loadVisits();
+            loadProperty();
+          }}
+        />
+      )}
+      {unitModal && (
+        <RentalUnitModal
+          unit={unitModal}
+          propertyAddress={property.address}
+          onClose={() => setUnitModal(null)}
+          onChanged={() => {
+            loadProperty();
+            loadLeases();
           }}
         />
       )}

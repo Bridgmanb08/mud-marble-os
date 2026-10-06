@@ -5,9 +5,9 @@ from fastapi import APIRouter, Depends, HTTPException
 
 from ..deps import CurrentUser, get_current_user
 from ..schemas.files import DownloadUrlResponse, UploadUrlRequest, UploadUrlResponse
-from ..schemas.rentals import RentalFileCreate, RentalFileOut
+from ..schemas.rentals import RentalFileCreate, RentalFileOut, RentalFileUpdate
 from ..storage_client import create_signed_download_url, create_signed_upload_url, remove_objects
-from ..supabase_client import db_delete, db_get, db_post
+from ..supabase_client import db_delete, db_get, db_patch, db_post
 
 router = APIRouter(prefix="/rental-files", tags=["rentals"])
 
@@ -44,6 +44,19 @@ async def create_file(body: RentalFileCreate, current_user: CurrentUser = Depend
             "storage_path": body.storage_path,
         },
     )
+    return rows[0]
+
+
+@router.patch("/{file_id}", response_model=RentalFileOut)
+async def update_file(file_id: str, body: RentalFileUpdate, _: CurrentUser = Depends(get_current_user)):
+    """Attaches an already-uploaded file to a lease. A lease document dropped
+    into the New lease form uploads immediately (before the lease exists, so
+    against the property); saving the lease then moves it onto the lease."""
+    if not body.lease_id:
+        raise HTTPException(status_code=400, detail="lease_id is required")
+    rows = await db_patch("rental_files", file_id, {"lease_id": body.lease_id})
+    if not rows:
+        raise HTTPException(status_code=404, detail="File not found")
     return rows[0]
 
 

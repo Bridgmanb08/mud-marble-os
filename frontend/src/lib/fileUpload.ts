@@ -110,6 +110,30 @@ export async function uploadRentalFile(leaseId: string, file: File): Promise<Ren
   });
 }
 
+// A lease document dropped into the New lease form, before the lease exists:
+// stored against the property so it's saved the instant it lands, then moved
+// onto the lease (attachRentalFileToLease) when the lease is saved.
+export async function uploadRentalPropertyFile(propertyId: string, file: File): Promise<RentalFile> {
+  const { upload_url, storage_path } = await api.post<UploadUrlResponse>('/rental-files/upload-url', {
+    file_name: file.name,
+    file_type: 'lease',
+    mime_type: file.type || null,
+  });
+  await putToSignedUrl(upload_url, file);
+  return api.post<RentalFile>('/rental-files', {
+    property_id: propertyId,
+    file_name: file.name,
+    file_type: 'lease',
+    mime_type: file.type || null,
+    size_bytes: file.size,
+    storage_path,
+  });
+}
+
+export function attachRentalFileToLease(fileId: string, leaseId: string): Promise<RentalFile> {
+  return api.patch<RentalFile>(`/rental-files/${fileId}`, { lease_id: leaseId });
+}
+
 // Photos/video attached to a specific property visit -- reuses the same
 // rental-files bucket/upload flow as lease documents, just tagged with
 // visit_id instead of lease_id.

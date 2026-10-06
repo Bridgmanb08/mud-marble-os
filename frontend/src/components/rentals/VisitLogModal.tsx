@@ -1,27 +1,41 @@
 import { useEffect, useState } from 'react';
-import { IconFile, IconPlayerPlay, IconTrash } from '@tabler/icons-react';
+import { IconFile, IconPlayerPlay, IconX } from '@tabler/icons-react';
 import { api } from '../../api/client';
 import { Modal } from '../ui/Modal';
 import { useToast } from '../ui/Toast';
 import { openDatePicker } from '../../lib/datePicker';
-import { FileDropzone } from '../ui/FileDropzone';
+import { AutoUploadDropzone } from '../ui/AutoUploadDropzone';
 import { uploadRentalVisitFile } from '../../lib/fileUpload';
-import type { DownloadUrlResponse, RentalFile, RentalPropertyVisit } from '../../types';
+import type { DownloadUrlResponse, RentalFile, RentalPropertyVisit, RentalUnit } from '../../types';
 
 // Edits a single logged visit -- a quick pin-icon log from the Rent Roll
 // creates one of these with no notes/files yet; this modal is where the
 // "what did it look like" record (a summary + photos/video) actually gets
 // added, matching Brent's ask for the visit log to carry a status snapshot,
 // not just a bare timestamp.
-export function VisitLogModal({ visit, onClose, onSaved }: { visit: RentalPropertyVisit; onClose: () => void; onSaved: () => void }) {
+//
+// Photos and video are saved the moment they're dropped -- there is no
+// separate upload step -- and the X removes one. Save only saves the date,
+// unit, visited-by and summary text, so closing the window after dropping a
+// file never loses it.
+export function VisitLogModal({
+  visit,
+  units,
+  onClose,
+  onSaved,
+}: {
+  visit: RentalPropertyVisit;
+  units: RentalUnit[];
+  onClose: () => void;
+  onSaved: () => void;
+}) {
   const toast = useToast();
   const [visitedAt, setVisitedAt] = useState(visit.visited_at);
+  const [unitId, setUnitId] = useState(visit.unit_id || '');
   const [visitedBy, setVisitedBy] = useState(visit.visited_by || '');
   const [notes, setNotes] = useState(visit.notes || '');
   const [saving, setSaving] = useState(false);
   const [files, setFiles] = useState<RentalFile[]>([]);
-  const [pendingFile, setPendingFile] = useState<File | null>(null);
-  const [uploading, setUploading] = useState(false);
 
   function loadFiles() {
     api
@@ -37,6 +51,7 @@ export function VisitLogModal({ visit, onClose, onSaved }: { visit: RentalProper
     try {
       await api.patch(`/rental-properties/visits/${visit.id}`, {
         visited_at: visitedAt,
+        ...(unitId ? { unit_id: unitId } : {}),
         visited_by: visitedBy.trim() || null,
         notes: notes.trim() || null,
       });
@@ -49,19 +64,18 @@ export function VisitLogModal({ visit, onClose, onSaved }: { visit: RentalProper
     }
   }
 
-  async function handleUpload() {
-    if (!pendingFile) return;
-    setUploading(true);
-    try {
-      await uploadRentalVisitFile(visit.id, pendingFile);
-      setPendingFile(null);
-      toast('Photo uploaded');
-      loadFiles();
-    } catch {
-      toast('Failed to upload photo', true);
-    } finally {
-      setUploading(false);
+  async function handleFiles(dropped: File[]) {
+    let failed = 0;
+    for (const file of dropped) {
+      try {
+        await uploadRentalVisitFile(visit.id, file);
+      } catch {
+        failed += 1;
+      }
     }
+    loadFiles();
+    if (failed === 0) toast(dropped.length === 1 ? 'Saved' : `${dropped.length} files saved`);
+    else toast(`${failed} of ${dropped.length} failed to upload`, true);
   }
 
   async function downloadFile(f: RentalFile) {
@@ -89,6 +103,24 @@ export function VisitLogModal({ visit, onClose, onSaved }: { visit: RentalProper
         <label className="fl">Date visited</label>
         <input className="fi" type="date" value={visitedAt} onClick={openDatePicker} onChange={(e) => setVisitedAt(e.target.value)} />
       </div>
+      {units.length > 0 && (
+        <div className="fg">
+          <label className="fl">Unit</label>
+          <select className="fi" value={unitId} onChange={(e) => setUnitId(e.target.value)}>
+            {!visit.unit_id && <option value="">— Choose a unit —</option>}
+            {units.map((u) => (
+              <option key={u.id} value={u.id}>
+                {u.unit_label}
+              </option>
+            ))}
+          </select>
+          {!visit.unit_id && (
+            <div style={{ fontSize: 11, color: 'var(--amber)', marginTop: 4 }}>
+              Logged before visits were tracked per unit, so this currently counts as a visit to every unit here. Pick the unit it was for.
+            </div>
+          )}
+        </div>
+      )}
       <div className="fg">
         <label className="fl">Visited by</label>
         <input className="fi" value={visitedBy} onChange={(e) => setVisitedBy(e.target.value)} placeholder="e.g. Megan" />
@@ -156,33 +188,28 @@ export function VisitLogModal({ visit, onClose, onSaved }: { visit: RentalProper
                     color: 'var(--red)',
                   }}
                   onClick={() => deleteFile(f)}
+                  title="Remove"
+                  aria-label={`Remove ${f.file_name}`}
                 >
-                  <IconTrash size={11} />
+                  <IconX size={11} />
                 </button>
               </div>
             ))}
           </div>
         )}
-        <FileDropzone
+        <AutoUploadDropzone
           accept="image/*,video/*"
-          file={pendingFile}
-          onFileSelected={setPendingFile}
-          label="Drag and drop a photo or video here, or click to browse"
+          multiple
+          label="Drop photos or videos here, or click to browse -- they save right away"
+          onFiles={handleFiles}
         />
-        {pendingFile && (
-          <div style={{ marginTop: 8 }}>
-            <button className="btn btn-sm btn-p" onClick={handleUpload} disabled={uploading}>
-              {uploading ? 'Uploading…' : 'Upload'}
-            </button>
-          </div>
-        )}
       </div>
 
       <div className="ma">
         <button type="button" className="btn" onClick={onClose}>
           Close
         </button>
-        <button type="button" className="btn btn-p" onClick={save} disabled={saving}>
+        <button type="button" className="btn btn-p" onClick={save} disabled={saving} title="Saves the date, unit, and summary text -- photos are already saved">
           {saving ? 'Saving…' : 'Save'}
         </button>
       </div>

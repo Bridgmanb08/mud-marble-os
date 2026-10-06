@@ -490,10 +490,13 @@ export function TeamReminders() {
       // visibility the same day it first fires.
       shownRef.current.add(key);
       saveShown(shownRef.current);
+      // On a multi-unit property the staleness is the unit that's gone
+      // longest without a visit, so say which one.
+      const where = p.stalest_unit_label ? `${p.address} (${p.stalest_unit_label})` : p.address;
       const message =
         p.days_since_visit === null
-          ? `"${p.address}" has no recorded visits yet.`
-          : `"${p.address}" hasn't had a visit in ${p.days_since_visit} days -- might be time to swing by.`;
+          ? `"${where}" has no recorded visits yet.`
+          : `"${where}" hasn't had a visit in ${p.days_since_visit} days -- might be time to swing by.`;
       queueToast('visit_overdue', message, key, undefined, undefined, p.id);
     }
   }
