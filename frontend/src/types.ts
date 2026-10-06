@@ -1381,6 +1381,8 @@ export interface RentalProperty {
   estimated_monthly_cash_flow: number | null;
   last_visited_at: string | null;
   days_since_visit: number | null;
+  // Which unit has gone longest without a visit, on a multi-unit property.
+  stalest_unit_label: string | null;
   // Fixed "house facts" fields, each a plain-text value plus its own date --
   // "boxes like the financials", not an open-ended log.
   roof: string | null;
@@ -1409,6 +1411,9 @@ export interface RentalProperty {
 export interface RentalPropertyVisit {
   id: string;
   property_id: string;
+  // null on a visit logged before visits were tracked per unit.
+  unit_id: string | null;
+  rental_units: { unit_label: string } | null;
   visited_at: string;
   visited_by: string | null;
   notes: string | null;
@@ -1456,6 +1461,8 @@ export interface RentRollRow {
   current_month_paid: number;
   past_due_total: number;
   is_late: boolean;
+  current_payment_id: string | null;
+  current_payment_due_date: string | null;
   last_visited_at: string | null;
   days_since_visit: number | null;
   lease_end_date: string | null;

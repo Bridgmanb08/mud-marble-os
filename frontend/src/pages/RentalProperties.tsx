@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import { IconPlus, IconHome2, IconMapPin, IconChevronUp, IconChevronDown } from '@tabler/icons-react';
 import { api, ApiError } from '../api/client';
 import { useToast } from '../components/ui/Toast';
@@ -7,6 +7,9 @@ import { fmt, fmtD } from '../lib/format';
 import { NewRentalPropertyModal } from '../components/rentals/NewRentalPropertyModal';
 import { LeaseTimeline } from '../components/rentals/LeaseTimeline';
 import { MoneyField } from '../components/rentals/MoneyField';
+import { RecordPaymentModal } from '../components/rentals/RecordPaymentModal';
+import { RentalUnitModal } from '../components/rentals/RentalUnitModal';
+import { LeaseRentLedgerModal } from '../components/rentals/LeaseRentLedgerModal';
 import { DesktopOnlyNotice } from '../components/ui/DesktopOnlyNotice';
 import { useIsMobile } from '../hooks/useMediaQuery';
 import { useAuth } from '../auth/AuthContext';
@@ -27,7 +30,7 @@ function leaseEndColor(endDate: string | null): string | undefined {
   return undefined;
 }
 
-type SortKey = 'property' | 'tenant' | 'rent' | 'current_due' | 'past_due' | 'last_visited' | 'lease_end' | 'renewal' | 'rent_increase';
+type SortKey = 'property' | 'tenant' | 'rent' | 'due_day' | 'current_due' | 'past_due' | 'last_visited' | 'lease_end' | 'renewal' | 'rent_increase';
 
 const RENEWAL_RANK: Record<string, number> = { renewing: 0, undecided: 1, not_renewing: 2 };
 
@@ -39,6 +42,8 @@ function sortValue(r: RentRollRow, key: SortKey): string | number | null {
       return r.tenant_name;
     case 'rent':
       return r.monthly_rent;
+    case 'due_day':
+      return r.rent_due_day;
     case 'current_due':
       return r.lease_id ? r.current_month_due - r.current_month_paid : null;
     case 'past_due':
@@ -123,6 +128,12 @@ function EditableCell({
   );
 }
 
+function ordinal(n: number): string {
+  const v = n % 100;
+  if (v >= 11 && v <= 13) return `${n}th`;
+  return `${n}${({ 1: 'st', 2: 'nd', 3: 'rd' } as Record<number, string>)[n % 10] || 'th'}`;
+}
+
 const theadThStyle = { top: 0 };
 
 // Hoisted to module scope (not defined inside RentalProperties()) so it
@@ -158,6 +169,7 @@ function SortTh({
 
 export default function RentalProperties() {
   const toast = useToast();
+  const navigate = useNavigate();
   const { user } = useAuth();
   const isMobile = useIsMobile();
   const [properties, setProperties] = useState<RentalProperty[] | null>(null);
@@ -166,6 +178,9 @@ export default function RentalProperties() {
   const [showNew, setShowNew] = useState(false);
   const [sortKey, setSortKey] = useState<SortKey>('property');
   const [sortDir, setSortDir] = useState<'asc' | 'desc'>('asc');
+  const [payRow, setPayRow] = useState<RentRollRow | null>(null);
+  const [unitRow, setUnitRow] = useState<RentRollRow | null>(null);
+  const [ledgerLease, setLedgerLease] = useState<RentalLease | null>(null);
 
   function load() {
     api
@@ -216,9 +231,10 @@ export default function RentalProperties() {
   // data they're allowed to see, just because the two hidden fields sum to 0.
   const hasFinancials = financialTotals.value > 0 || financialTotals.debt > 0 || financialTotals.targetRent > 0 || financialTotals.cashFlow !== 0;
 
-  async function logVisit(propertyId: string) {
+  // Per unit: a visit to 1409 unit A is not a visit to unit B.
+  async function logVisit(propertyId: string, unitId: string) {
     try {
-      await api.post(`/rental-properties/${propertyId}/visits`, {});
+      await api.post(`/rental-properties/${propertyId}/visits`, { unit_id: unitId });
       toast('Visit logged');
       loadRentRoll();
     } catch (err) {
@@ -237,6 +253,14 @@ export default function RentalProperties() {
     } catch (err) {
       toast(err instanceof ApiError ? err.message : 'Failed to save', true);
       loadRentRoll();
+    }
+  }
+
+  async function openLedger(leaseId: string) {
+    try {
+      setLedgerLease(await api.get<RentalLease>(`/rental-leases/${leaseId}`));
+    } catch {
+      toast('Failed to open the rent ledger', true);
     }
   }
 
@@ -404,6 +428,7 @@ export default function RentalProperties() {
                   <SortTh label="Property / Unit" sortKeyValue="property" sortKey={sortKey} sortDir={sortDir} onToggle={toggleSort} sticky />
                   <SortTh label="Tenant" sortKeyValue="tenant" sortKey={sortKey} sortDir={sortDir} onToggle={toggleSort} />
                   <SortTh label="Rent" sortKeyValue="rent" sortKey={sortKey} sortDir={sortDir} onToggle={toggleSort} />
+ <SortTh label="Due day" sortKeyValue="due_day" sortKey={sortKey} sortDir={sortDir} onToggle={toggleSort} />
                   <SortTh label="Current due" sortKeyValue="current_due" sortKey={sortKey} sortDir={sortDir} onToggle={toggleSort} />
                   <SortTh label="Past due" sortKeyValue="past_due" sortKey={sortKey} sortDir={sortDir} onToggle={toggleSort} />
                   <SortTh label="Last visited" sortKeyValue="last_visited" sortKey={sortKey} sortDir={sortDir} onToggle={toggleSort} />
@@ -415,24 +440,36 @@ export default function RentalProperties() {
               <tbody>
                 {rentRoll === null ? (
                   <tr>
-                    <td colSpan={9} style={{ color: 'var(--t2)' }}>
+                    <td colSpan={10} style={{ color: 'var(--t2)' }}>
                       Loading…
                     </td>
                   </tr>
                 ) : (
                   sortedRentRoll.map((r) => (
-                    <tr key={r.unit_id}>
+                    <tr
+                      key={r.unit_id}
+                      onClick={() => navigate(`/rentals/${r.property_id}`)}
+                      style={{ cursor: 'pointer' }}
+                      title="Open this property"
+                    >
                       <td className="sticky-col">
-                        <Link to={`/rentals/${r.property_id}`} style={{ color: 'var(--blue)', fontWeight: 500 }}>
+                        <Link to={`/rentals/${r.property_id}`} onClick={(e) => e.stopPropagation()} style={{ color: 'var(--blue)', fontWeight: 500 }}>
                           {r.property_address}
                         </Link>
                         <div style={{ fontSize: 11, color: 'var(--t3)' }}>{r.unit_label}</div>
                       </td>
-                      <td>
+                      <td
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setUnitRow(r);
+                        }}
+                        style={{ cursor: 'pointer' }}
+                        title={r.tenant_name ? "Open this unit's tenant and lease" : 'Add a tenant to this unit'}
+                      >
                         {r.tenant_name ? (
-                          <span title="Change the tenant from the property's Units & Tenants tab">{r.tenant_name}</span>
+                          <span>{r.tenant_name}</span>
                         ) : (
-                          <span className="badge bg-gray">Vacant</span>
+                          <span className="badge bg-gray">Vacant — add tenant</span>
                         )}
                       </td>
                       <td onClick={(e) => e.stopPropagation()} style={{ minWidth: 100 }}>
@@ -445,16 +482,50 @@ export default function RentalProperties() {
                           '—'
                         )}
                       </td>
-                      <td>
+                      <td onClick={(e) => e.stopPropagation()} style={{ minWidth: 80 }}>
+                        {r.lease_id ? (
+                          <EditableCell
+                            value={r.rent_due_day !== null ? String(r.rent_due_day) : ''}
+                            type="number"
+                            displayValue={<span>{r.rent_due_day !== null ? `${ordinal(r.rent_due_day)}` : '—'}</span>}
+                            onCommit={(v) => {
+                              const day = parseInt(v, 10);
+                              if (day >= 1 && day <= 31) updateLease(r.lease_id!, { rent_due_day: day });
+                            }}
+                          />
+                        ) : (
+                          '—'
+                        )}
+                      </td>
+                      <td
+                        onClick={(e) => {
+                          if (!r.lease_id || !r.current_payment_id) return;
+                          e.stopPropagation();
+                          setPayRow(r);
+                        }}
+                        style={{ cursor: r.current_payment_id ? 'pointer' : undefined }}
+                        title={r.current_payment_id ? 'Click to record a payment' : undefined}
+                      >
                         {r.lease_id ? (
                           <span style={{ color: r.current_month_paid >= r.current_month_due ? undefined : 'var(--red)' }}>
                             {fmt(r.current_month_due - r.current_month_paid)}
+                            {r.current_month_paid > 0 && r.current_month_paid < r.current_month_due && (
+                              <span style={{ fontSize: 11, color: 'var(--t3)' }}> ({fmt(r.current_month_paid)} paid)</span>
+                            )}
                           </span>
                         ) : (
                           '—'
                         )}
                       </td>
-                      <td>
+                      <td
+                        onClick={(e) => {
+                          if (!r.lease_id) return;
+                          e.stopPropagation();
+                          openLedger(r.lease_id);
+                        }}
+                        style={{ cursor: r.lease_id ? 'pointer' : undefined }}
+                        title={r.lease_id ? 'Click to open the rent ledger and record payments' : undefined}
+                      >
                         {r.past_due_total > 0 ? (
                           <span className="badge bg-red">{fmt(r.past_due_total)} late</span>
                         ) : r.lease_id ? (
@@ -471,10 +542,13 @@ export default function RentalProperties() {
                           <button
                             type="button"
                             className="btn-reset hover-tip"
-                            data-tip="Click to record visit for today"
+                            data-tip="Click to record a visit to this unit today"
                             aria-label="Log a visit today"
                             style={{ color: 'var(--t3)', cursor: 'pointer', display: 'inline-flex' }}
-                            onClick={() => logVisit(r.property_id)}
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              logVisit(r.property_id, r.unit_id);
+                            }}
                           >
                             <IconMapPin size={14} />
                           </button>
@@ -531,6 +605,33 @@ export default function RentalProperties() {
         </div>
       )}
 
+      {payRow && (
+        <RecordPaymentModal
+          row={payRow}
+          onClose={() => setPayRow(null)}
+          onSaved={() => {
+            setPayRow(null);
+            loadRentRoll();
+          }}
+        />
+      )}
+      {unitRow && (
+        <RentalUnitModal
+          unit={{ id: unitRow.unit_id, property_id: unitRow.property_id, unit_label: unitRow.unit_label }}
+          propertyAddress={unitRow.property_address}
+          onClose={() => setUnitRow(null)}
+          onChanged={load}
+        />
+      )}
+      {ledgerLease && (
+        <LeaseRentLedgerModal
+          lease={ledgerLease}
+          onClose={() => {
+            setLedgerLease(null);
+            loadRentRoll();
+          }}
+        />
+      )}
       {showNew && (
         <NewRentalPropertyModal
           onClose={() => setShowNew(false)}

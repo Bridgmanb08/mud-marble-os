@@ -5,7 +5,7 @@ import { Modal } from '../ui/Modal';
 import { useToast } from '../ui/Toast';
 import { fmt, fmtD } from '../../lib/format';
 import { openDatePicker } from '../../lib/datePicker';
-import { FileDropzone } from '../ui/FileDropzone';
+import { AutoUploadDropzone } from '../ui/AutoUploadDropzone';
 import { uploadRentalFile, fmtBytes } from '../../lib/fileUpload';
 import type { DownloadUrlResponse, RentalFile, RentalLease, RentalPayment } from '../../types';
 
@@ -18,8 +18,6 @@ export function LeaseRentLedgerModal({ lease, onClose }: { lease: RentalLease; o
   const [amountPaid, setAmountPaid] = useState('');
   const [paidDate, setPaidDate] = useState('');
   const [files, setFiles] = useState<RentalFile[]>([]);
-  const [pendingFile, setPendingFile] = useState<File | null>(null);
-  const [uploading, setUploading] = useState(false);
 
   function load() {
     api
@@ -38,19 +36,19 @@ export function LeaseRentLedgerModal({ lease, onClose }: { lease: RentalLease; o
   useEffect(load, [lease.id]);
   useEffect(loadFiles, [lease.id]);
 
-  async function handleUpload() {
-    if (!pendingFile) return;
-    setUploading(true);
-    try {
-      await uploadRentalFile(lease.id, pendingFile);
-      setPendingFile(null);
-      toast('Document uploaded');
-      loadFiles();
-    } catch {
-      toast('Failed to upload document', true);
-    } finally {
-      setUploading(false);
+  // Saved the moment it's dropped -- no separate upload step.
+  async function handleFiles(dropped: File[]) {
+    let failed = 0;
+    for (const file of dropped) {
+      try {
+        await uploadRentalFile(lease.id, file);
+      } catch {
+        failed += 1;
+      }
     }
+    loadFiles();
+    if (failed === 0) toast('Document saved');
+    else toast('Failed to upload document', true);
   }
 
   async function downloadFile(f: RentalFile) {
@@ -74,7 +72,7 @@ export function LeaseRentLedgerModal({ lease, onClose }: { lease: RentalLease; o
 
   function startMarkPaid(p: RentalPayment) {
     setEditingId(p.id);
-    setAmountPaid(String(p.amount_paid ?? p.amount_due));
+    setAmountPaid(String(p.amount_paid || p.amount_due));
     setPaidDate(p.paid_date || new Date().toISOString().slice(0, 10));
   }
 
@@ -83,7 +81,7 @@ export function LeaseRentLedgerModal({ lease, onClose }: { lease: RentalLease; o
       await api.patch(`/rental-payments/${p.id}`, {
         amount_paid: parseFloat(amountPaid) || 0,
         paid_date: paidDate,
-        status: 'paid',
+        // Status (paid / partial) is worked out from the amounts server-side.
       });
       setEditingId(null);
       toast('Payment recorded');
@@ -168,11 +166,9 @@ export function LeaseRentLedgerModal({ lease, onClose }: { lease: RentalLease; o
                       </button>
                     </div>
                   ) : (
-                    p.status !== 'paid' && (
-                      <button className="btn btn-sm" onClick={() => startMarkPaid(p)}>
-                        Mark paid
-                      </button>
-                    )
+                    <button className="btn btn-sm" onClick={() => startMarkPaid(p)}>
+                      {p.status === 'due' ? 'Mark paid' : 'Edit'}
+                    </button>
                   )}
                 </td>
               </tr>
@@ -202,14 +198,11 @@ export function LeaseRentLedgerModal({ lease, onClose }: { lease: RentalLease; o
             ))}
           </div>
         )}
-        <FileDropzone file={pendingFile} onFileSelected={setPendingFile} label="Drag and drop a lease document here, or click to browse" />
-        {pendingFile && (
-          <div style={{ marginTop: 8 }}>
-            <button className="btn btn-sm btn-p" onClick={handleUpload} disabled={uploading}>
-              {uploading ? 'Uploading…' : 'Upload'}
-            </button>
-          </div>
-        )}
+        <AutoUploadDropzone
+          multiple
+          label="Drop a lease document here, or click to browse -- it saves right away"
+          onFiles={handleFiles}
+        />
       </div>
 
       <div className="ma">

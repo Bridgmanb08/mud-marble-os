@@ -17,16 +17,23 @@ function stalenessColor(days: number | null): string {
 // first, with an animated bar per property (how full = how overdue) so
 // staleness reads visually. Shares the rent-roll fetch (via useRentRoll)
 // with the other four rental dashboard widgets instead of each
-// independently re-fetching it; dedupes by property since rent-roll is one
-// row per unit but visits are logged per property.
+// independently re-fetching it; shows each property's stalest unit since
+// rent-roll is one row per unit and visits are logged per unit.
 export function RentalVisitsWidget() {
   const navigate = useNavigate();
   const { rows, error } = useRentRoll();
 
+  // Rent roll is one row per unit and visits are per unit too, so a property
+  // is represented by its stalest unit (never visited counts as stalest) --
+  // it's due for a visit if any one unit is.
+  const stalenessOf = (r: RentRollRow) => (r.days_since_visit === null ? Infinity : r.days_since_visit);
   const byProperty = new Map<string, RentRollRow>();
   for (const r of rows ?? []) {
-    if (!byProperty.has(r.property_id)) byProperty.set(r.property_id, r);
+    const existing = byProperty.get(r.property_id);
+    if (!existing || stalenessOf(r) > stalenessOf(existing)) byProperty.set(r.property_id, r);
   }
+  const multiUnit = new Map<string, number>();
+  for (const r of rows ?? []) multiUnit.set(r.property_id, (multiUnit.get(r.property_id) ?? 0) + 1);
   const properties = [...byProperty.values()].sort((a, b) => {
     if (a.days_since_visit === null && b.days_since_visit === null) return 0;
     if (a.days_since_visit === null) return -1;
@@ -53,7 +60,10 @@ export function RentalVisitsWidget() {
         return (
           <div key={r.property_id} style={{ padding: '6px 0', borderBottom: '1px solid var(--border)' }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 12.5, marginBottom: 4 }}>
-              <span>{r.property_address}</span>
+              <span>
+                {r.property_address}
+                {(multiUnit.get(r.property_id) ?? 0) > 1 ? ` (${r.unit_label})` : ''}
+              </span>
               <span style={{ color: stalenessColor(days) }}>{days === null ? 'Never' : `${days}d ago`}</span>
             </div>
             <AnimatedBar pct={pct} color={stalenessColor(days)} delayMs={i * 70} />

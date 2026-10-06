@@ -6,7 +6,7 @@ from fastapi import APIRouter, Depends
 
 from ..deps import CurrentUser, get_current_user
 from ..notification_settings_store import get_or_create_notification_settings
-from ..routers.rental_properties import _last_visited_by_property
+from ..routers.rental_properties import load_visit_info
 from ..schemas.rentals import RentalDashboardSummary
 from ..supabase_client import db_get
 
@@ -36,10 +36,10 @@ async def get_dashboard_summary(_: CurrentUser = Depends(get_current_user)):
     )
 
     threshold_days = settings.get("visit_reminder_days", 30)
-    last_visited_by_property = await _last_visited_by_property([p["id"] for p in active_properties])
+    _, visit_summary = await load_visit_info([p["id"] for p in active_properties])
     needing_visit = 0
     for p in active_properties:
-        last_visited = last_visited_by_property.get(p["id"])
+        last_visited = (visit_summary.get(p["id"]) or {}).get("last_visited_at")
         days_since = (date.today() - date.fromisoformat(last_visited)).days if last_visited else None
         if days_since is None or days_since >= threshold_days:
             needing_visit += 1

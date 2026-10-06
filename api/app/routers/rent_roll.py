@@ -1,5 +1,6 @@
 import asyncio
 from datetime import date
+from typing import Optional
 
 from fastapi import APIRouter, Depends
 
@@ -7,7 +8,7 @@ from ..deps import CurrentUser, get_current_user
 from ..schemas.rentals import RentRollRow
 from ..supabase_client import db_get
 from .rental_leases import _ensure_payments_for_lease, _lease_status
-from .rental_properties import _last_visited_by_property
+from .rental_properties import compute_visit_info
 
 router = APIRouter(prefix="/rentals", tags=["rentals"])
 
@@ -26,13 +27,19 @@ async def get_rent_roll(_: CurrentUser = Depends(get_current_user)):
     units = [u for u in units if u["property_id"] in address_by_property]
 
     unit_ids = [u["id"] for u in units]
-    leases, last_visited_by_property = await asyncio.gather(
+    leases, visits = await asyncio.gather(
         db_get(
             "rental_leases",
             f"?unit_id=in.({','.join(unit_ids)})&select=*,tenants:rental_tenants(name)" if unit_ids else "?limit=0",
         ),
-        _last_visited_by_property(property_ids),
+        db_get("rental_property_visits", f"?property_id=in.({','.join(property_ids)})&select=property_id,unit_id,visited_at")
+        if property_ids
+        else asyncio.sleep(0, result=[]),
     )
+    # Per UNIT, not per address -- 1409 unit A and unit B are visited (or not)
+    # independently. See compute_visit_info for how pre-existing visits with
+    # no unit are treated.
+    last_visited_by_unit, _ = compute_visit_info(property_ids, units, visits)
 
     # Today's active lease per unit -- same "occupied" definition used
     # everywhere else in this module (exactly one current lease per unit,
@@ -58,6 +65,12 @@ async def get_rent_roll(_: CurrentUser = Depends(get_current_user)):
     for p in payments:
         payments_by_lease.setdefault(p["lease_id"], []).append(p)
 
+    def _current_payment(lease_id: str) -> Optional[dict]:
+        for r in payments_by_lease.get(lease_id, []):
+            if r["due_date"][:7] == current_month:
+                return r
+        return None
+
     def _arrears(lease_id: str) -> tuple[float, float, float, bool]:
         rows = payments_by_lease.get(lease_id, [])
         current_month_due = sum(r["amount_due"] for r in rows if r["due_date"][:7] == current_month)
@@ -75,7 +88,7 @@ async def get_rent_roll(_: CurrentUser = Depends(get_current_user)):
     rows: list[RentRollRow] = []
     for u in units:
         lease = active_lease_by_unit.get(u["id"])
-        last_visited = last_visited_by_property.get(u["property_id"])
+        last_visited = last_visited_by_unit.get(u["id"])
         days_since_visit = (date.fromisoformat(today) - date.fromisoformat(last_visited)).days if last_visited else None
 
         if lease is None:
@@ -92,6 +105,7 @@ async def get_rent_roll(_: CurrentUser = Depends(get_current_user)):
             continue
 
         current_month_due, current_month_paid, past_due_total, is_late = _arrears(lease["id"])
+        current_payment = _current_payment(lease["id"])
         rows.append(
             RentRollRow(
                 property_id=u["property_id"],
@@ -107,6 +121,8 @@ async def get_rent_roll(_: CurrentUser = Depends(get_current_user)):
                 current_month_paid=current_month_paid,
                 past_due_total=past_due_total,
                 is_late=is_late,
+                current_payment_id=current_payment["id"] if current_payment else None,
+                current_payment_due_date=current_payment["due_date"] if current_payment else None,
                 last_visited_at=last_visited,
                 days_since_visit=days_since_visit,
                 lease_end_date=lease["end_date"],
