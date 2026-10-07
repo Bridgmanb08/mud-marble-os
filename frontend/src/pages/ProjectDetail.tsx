@@ -5,6 +5,7 @@ import { api, ApiError } from '../api/client';
 import { useToast } from '../components/ui/Toast';
 import { fmt, fmtCents, fmtD } from '../lib/format';
 import { useReferenceData } from '../reference-data/ReferenceDataContext';
+import { sortInvoices, type InvoiceSortKey, type SortDir } from '../lib/sortInvoices';
 import type { CalendarEvent, ChangeOrder, CostCodeVariance, Estimate, FinancialSummary, Invoice, Project, ProjectNote, Task } from '../types';
 import { NewNoteModal } from '../components/projects/NewNoteModal';
 import { NewProjectModal } from '../components/projects/NewProjectModal';
@@ -27,6 +28,41 @@ import { FathomImportWidget } from '../components/projects/FathomImportWidget';
 import { PhaseTracker } from '../components/projects/PhaseTracker';
 import { PermitsChecklist } from '../components/projects/PermitsChecklist';
 import { DumpsterCard } from '../components/projects/DumpsterCard';
+
+// Hoisted so the header keeps a stable identity across renders.
+function InvoiceTh({
+  label,
+  sortKey,
+  active,
+  dir,
+  onSort,
+  align,
+  sticky,
+}: {
+  label: string;
+  sortKey: InvoiceSortKey;
+  active: InvoiceSortKey;
+  dir: SortDir;
+  onSort: (k: InvoiceSortKey) => void;
+  align?: 'right';
+  sticky?: boolean;
+}) {
+  const on = active === sortKey;
+  return (
+    <th className={sticky ? 'sticky-col' : undefined} style={{ textAlign: align }} aria-sort={on ? (dir === 'asc' ? 'ascending' : 'descending') : 'none'}>
+      <button
+        type="button"
+        className="btn-reset"
+        onClick={() => onSort(sortKey)}
+        title={`Sort by ${label.toLowerCase()}`}
+        style={{ font: 'inherit', color: 'inherit', fontWeight: 'inherit', textTransform: 'inherit', letterSpacing: 'inherit', cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: 3, whiteSpace: 'nowrap' }}
+      >
+        {label}
+        {on ? dir === 'asc' ? <IconChevronUp size={12} /> : <IconChevronDown size={12} /> : null}
+      </button>
+    </th>
+  );
+}
 
 const TABS = ['Overview', 'Notes', 'Estimate', 'Budget', 'Change Orders', 'Invoices', 'Tasks', 'Schedule', 'Files'];
 
@@ -87,6 +123,9 @@ export default function ProjectDetail() {
   // Expanding it is still one click away, and jumping here from the Budget
   // tab (or a deep link) opens it automatically.
   const [showBudgetDetail, setShowBudgetDetail] = useState(false);
+  // Oldest/lowest invoice number first -- 1, 2, 3 from the top -- until a
+  // column header is clicked.
+  const [invoiceSort, setInvoiceSort] = useState<{ key: InvoiceSortKey; dir: SortDir }>({ key: 'number', dir: 'asc' });
   const { subcontractors: subcontractorsData } = useReferenceData();
   const subcontractors = subcontractorsData ?? [];
   const [subFilter, setSubFilter] = useState('');
@@ -217,6 +256,10 @@ export default function ProjectDetail() {
     setActiveTab(t);
     if (t === 'Budget') setShowBudgetDetail(true);
     document.getElementById(sectionId(t))?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  }
+
+  function toggleInvoiceSort(key: InvoiceSortKey) {
+    setInvoiceSort((cur) => (cur.key === key ? { key, dir: cur.dir === 'asc' ? 'desc' : 'asc' } : { key, dir: 'asc' }));
   }
 
   function openNewTask(status: string) {
@@ -725,17 +768,17 @@ export default function ProjectDetail() {
               <table className="tbl tbl-zebra">
                 <thead>
                   <tr>
-                    <th className="sticky-col">Invoice #</th>
-                    <th>Type</th>
-                    <th style={{ textAlign: 'right' }}>Amount due</th>
-                    <th style={{ textAlign: 'right' }}>Paid</th>
-                    <th>Due</th>
-                    <th>Status</th>
+                    <InvoiceTh label="Invoice #" sortKey="number" active={invoiceSort.key} dir={invoiceSort.dir} onSort={toggleInvoiceSort} sticky />
+                    <InvoiceTh label="Type" sortKey="type" active={invoiceSort.key} dir={invoiceSort.dir} onSort={toggleInvoiceSort} />
+                    <InvoiceTh label="Amount due" sortKey="amount_due" active={invoiceSort.key} dir={invoiceSort.dir} onSort={toggleInvoiceSort} align="right" />
+                    <InvoiceTh label="Paid" sortKey="paid" active={invoiceSort.key} dir={invoiceSort.dir} onSort={toggleInvoiceSort} align="right" />
+                    <InvoiceTh label="Due" sortKey="due" active={invoiceSort.key} dir={invoiceSort.dir} onSort={toggleInvoiceSort} />
+                    <InvoiceTh label="Status" sortKey="status" active={invoiceSort.key} dir={invoiceSort.dir} onSort={toggleInvoiceSort} />
                     <th></th>
                   </tr>
                 </thead>
                 <tbody>
-                  {invoices.map((inv) => (
+                  {sortInvoices(invoices, invoiceSort.key, invoiceSort.dir).map((inv) => (
                     <tr key={inv.id} style={{ cursor: 'pointer' }} onClick={() => setSelectedInvoiceId(inv.id)}>
                       <td className="sticky-col" style={{ fontWeight: 500 }}>
                         {inv.title || inv.invoice_number || 'Draft'}
