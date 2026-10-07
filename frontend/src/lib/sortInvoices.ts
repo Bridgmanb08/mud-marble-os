@@ -1,7 +1,13 @@
 import type { Invoice } from '../types';
 
-export type InvoiceSortKey = 'number' | 'type' | 'amount_due' | 'paid' | 'due' | 'status';
+export type InvoiceSortKey = 'number' | 'type' | 'amount_due' | 'paid' | 'unpaid' | 'due' | 'status';
 export type SortDir = 'asc' | 'desc';
+
+// What's still owed on an invoice. An overpayment isn't "unpaid", so it
+// bottoms out at zero rather than going negative.
+export function unpaidAmount(inv: Invoice): number {
+  return Math.max(0, (inv.amount_due ?? 0) - (inv.amount_paid ?? 0));
+}
 
 const STATUS_RANK: Record<string, number> = { draft: 0, sent: 1, overdue: 2, paid: 3 };
 
@@ -26,6 +32,8 @@ function value(inv: Invoice, key: InvoiceSortKey): string | number | null {
       return inv.amount_due ?? 0;
     case 'paid':
       return inv.amount_paid ?? 0;
+    case 'unpaid':
+      return unpaidAmount(inv);
     case 'due':
       return inv.due_date || null;
     case 'status':
