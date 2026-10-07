@@ -5,7 +5,8 @@ import { api, ApiError } from '../api/client';
 import { useToast } from '../components/ui/Toast';
 import { fmt, fmtCents, fmtD } from '../lib/format';
 import { useReferenceData } from '../reference-data/ReferenceDataContext';
-import type { CalendarEvent, ChangeOrder, CostCodeVariance, Estimate, FinancialSummary, Invoice, Project, ProjectNote, Task } from '../types';
+import { sortInvoices, unpaidAmount, type InvoiceSortKey, type SortDir } from '../lib/sortInvoices';
+import type { CalendarEvent, ChangeOrder, CostCodeVariance, Estimate, FinancialSummary, Invoice, InvoiceableItem, Project, ProjectNote, Task } from '../types';
 import { NewNoteModal } from '../components/projects/NewNoteModal';
 import { NewProjectModal } from '../components/projects/NewProjectModal';
 import { statusOptionsIncluding } from '../lib/projectStatuses';
@@ -27,6 +28,46 @@ import { FathomImportWidget } from '../components/projects/FathomImportWidget';
 import { PhaseTracker } from '../components/projects/PhaseTracker';
 import { PermitsChecklist } from '../components/projects/PermitsChecklist';
 import { DumpsterCard } from '../components/projects/DumpsterCard';
+
+// Spreadsheet-style totals row under a table: light gray, never competing
+// with the rows above it.
+const TOTAL_ROW_STYLE = { color: 'var(--t3)', fontSize: 12.5, borderTop: '1px solid var(--border)' } as const;
+const TOTAL_CELL_STYLE = { color: 'var(--t3)', fontWeight: 400, background: 'transparent' } as const;
+
+// Hoisted so the header keeps a stable identity across renders.
+function InvoiceTh({
+  label,
+  sortKey,
+  active,
+  dir,
+  onSort,
+  align,
+  sticky,
+}: {
+  label: string;
+  sortKey: InvoiceSortKey;
+  active: InvoiceSortKey;
+  dir: SortDir;
+  onSort: (k: InvoiceSortKey) => void;
+  align?: 'right';
+  sticky?: boolean;
+}) {
+  const on = active === sortKey;
+  return (
+    <th className={sticky ? 'sticky-col' : undefined} style={{ textAlign: align }} aria-sort={on ? (dir === 'asc' ? 'ascending' : 'descending') : 'none'}>
+      <button
+        type="button"
+        className="btn-reset"
+        onClick={() => onSort(sortKey)}
+        title={`Sort by ${label.toLowerCase()}`}
+        style={{ font: 'inherit', color: 'inherit', fontWeight: 'inherit', textTransform: 'inherit', letterSpacing: 'inherit', cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: 3, whiteSpace: 'nowrap' }}
+      >
+        {label}
+        {on ? dir === 'asc' ? <IconChevronUp size={12} /> : <IconChevronDown size={12} /> : null}
+      </button>
+    </th>
+  );
+}
 
 const TABS = ['Overview', 'Notes', 'Estimate', 'Budget', 'Change Orders', 'Invoices', 'Tasks', 'Schedule', 'Files'];
 
@@ -63,6 +104,7 @@ export default function ProjectDetail() {
   const [changeOrders, setChangeOrders] = useState<ChangeOrder[]>([]);
   const [invoices, setInvoices] = useState<Invoice[]>([]);
   const [financialSummary, setFinancialSummary] = useState<FinancialSummary | null>(null);
+  const [invoiceableItems, setInvoiceableItems] = useState<InvoiceableItem[]>([]);
   const [variance, setVariance] = useState<CostCodeVariance | null>(null);
   const [tasks, setTasks] = useState<Task[]>([]);
   const [calendarEvents, setCalendarEvents] = useState<CalendarEvent[]>([]);
@@ -87,6 +129,9 @@ export default function ProjectDetail() {
   // Expanding it is still one click away, and jumping here from the Budget
   // tab (or a deep link) opens it automatically.
   const [showBudgetDetail, setShowBudgetDetail] = useState(false);
+  // Oldest/lowest invoice number first -- 1, 2, 3 from the top -- until a
+  // column header is clicked.
+  const [invoiceSort, setInvoiceSort] = useState<{ key: InvoiceSortKey; dir: SortDir }>({ key: 'number', dir: 'asc' });
   const { subcontractors: subcontractorsData } = useReferenceData();
   const subcontractors = subcontractorsData ?? [];
   const [subFilter, setSubFilter] = useState('');
@@ -154,6 +199,9 @@ export default function ProjectDetail() {
     // table isn't just a flat list with no way to sanity-check it against
     // what the project's actually worth.
     setFinancialSummary(await api.get<FinancialSummary>(`/projects/${id}/financial-summary`).catch(() => null));
+    // What's been invoiced against each approved change order -- the change
+    // order table's Invoiced / Left to invoice columns read from this.
+    setInvoiceableItems(await api.get<InvoiceableItem[]>(`/projects/${id}/invoiceable-items`).catch(() => []));
   }
 
   async function renameInvoice(invoiceId: string, newNumber: string) {
@@ -217,6 +265,27 @@ export default function ProjectDetail() {
     setActiveTab(t);
     if (t === 'Budget') setShowBudgetDetail(true);
     document.getElementById(sectionId(t))?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  }
+
+  // Billing per change order, from the invoiceable lines of approved change
+  // orders ("CO-001"...). A change order that isn't approved, or has no line
+  // items (an older flat-price one), can't be invoiced, so it has no figures.
+  const coBillingByLabel = new Map<string, { invoiced: number; left: number }>();
+  for (const it of invoiceableItems) {
+    if (it.source_type !== 'change_order') continue;
+    const cur = coBillingByLabel.get(it.source_label) ?? { invoiced: 0, left: 0 };
+    cur.invoiced += it.invoiced_amount;
+    cur.left += it.remaining_amount;
+    coBillingByLabel.set(it.source_label, cur);
+  }
+  const coBilling = (co: ChangeOrder) => coBillingByLabel.get(`CO-${String(co.co_number ?? '?').padStart(3, '0')}`) ?? null;
+  const coBillingTotals = [...coBillingByLabel.values()].reduce(
+    (t, b) => ({ invoiced: t.invoiced + b.invoiced, left: t.left + b.left }),
+    { invoiced: 0, left: 0 }
+  );
+
+  function toggleInvoiceSort(key: InvoiceSortKey) {
+    setInvoiceSort((cur) => (cur.key === key ? { key, dir: cur.dir === 'asc' ? 'desc' : 'asc' } : { key, dir: 'asc' }));
   }
 
   function openNewTask(status: string) {
@@ -651,6 +720,8 @@ export default function ProjectDetail() {
                     <th className="sticky-col">Title</th>
                     <th>Type</th>
                     <th style={{ textAlign: 'right' }}>Owner price</th>
+                    <th style={{ textAlign: 'right' }}>Invoiced</th>
+                    <th style={{ textAlign: 'right' }}>Left to invoice</th>
                     <th>Status</th>
                     <th></th>
                   </tr>
@@ -662,6 +733,8 @@ export default function ProjectDetail() {
                       <td className="sticky-col" style={{ fontWeight: 500 }}>{co.title}</td>
                       <td><span className={`badge ${CO_TYPE_BADGE[co.co_type] || 'bg-gray'}`}>{co.co_type.replace('_', ' ')}</span></td>
                       <td style={{ textAlign: 'right' }}>{fmt(co.owner_price)}</td>
+                      <td style={{ textAlign: 'right' }}>{coBilling(co) ? fmt(coBilling(co)!.invoiced) : <span style={{ color: 'var(--t3)' }}>—</span>}</td>
+                      <td style={{ textAlign: 'right' }}>{coBilling(co) ? fmt(coBilling(co)!.left) : <span style={{ color: 'var(--t3)' }}>—</span>}</td>
                       <td>
                         <select
                           className={`badge ${CO_STATUS_BADGE[co.status] || 'bg-gray'}`}
@@ -685,6 +758,28 @@ export default function ProjectDetail() {
                     </tr>
                   ))}
                 </tbody>
+                <tfoot>
+                  <tr style={TOTAL_ROW_STYLE}>
+                    <td style={TOTAL_CELL_STYLE} />
+                    <td className="sticky-col" style={TOTAL_CELL_STYLE}>Total</td>
+                    <td style={TOTAL_CELL_STYLE} />
+                    <td style={{ ...TOTAL_CELL_STYLE, textAlign: 'right' }}>{fmt(changeOrders.reduce((t, c) => t + (c.owner_price || 0), 0))}</td>
+                    <td style={{ ...TOTAL_CELL_STYLE, textAlign: 'right' }}>{fmt(coBillingTotals.invoiced)}</td>
+                    <td style={{ ...TOTAL_CELL_STYLE, textAlign: 'right' }}>{fmt(coBillingTotals.left)}</td>
+                    <td style={TOTAL_CELL_STYLE} />
+                    <td style={TOTAL_CELL_STYLE} />
+                  </tr>
+                  <tr style={{ color: 'var(--t3)', fontSize: 12.5 }}>
+                    <td style={TOTAL_CELL_STYLE} />
+                    <td className="sticky-col" style={TOTAL_CELL_STYLE}>Approved</td>
+                    <td style={TOTAL_CELL_STYLE} />
+                    <td style={{ ...TOTAL_CELL_STYLE, textAlign: 'right' }}>{fmt(changeOrders.filter((c) => c.status === 'approved').reduce((t, c) => t + (c.owner_price || 0), 0))}</td>
+                    <td style={TOTAL_CELL_STYLE} />
+                    <td style={TOTAL_CELL_STYLE} />
+                    <td style={TOTAL_CELL_STYLE} />
+                    <td style={TOTAL_CELL_STYLE} />
+                  </tr>
+                </tfoot>
               </table>
             </div>
           )}
@@ -710,12 +805,6 @@ export default function ProjectDetail() {
                 <span style={{ color: 'var(--t2)' }}>Invoiced to date: </span>
                 <strong>{fmtCents(financialSummary.invoiced_to_date)}</strong>
               </div>
-              <div>
-                <span style={{ color: 'var(--t2)' }}>Remaining to invoice: </span>
-                <strong style={{ color: financialSummary.remaining_to_invoice < 0 ? 'var(--red)' : undefined }}>
-                  {fmtCents(financialSummary.remaining_to_invoice)}
-                </strong>
-              </div>
             </div>
           )}
           {invoices.length === 0 ? (
@@ -725,17 +814,18 @@ export default function ProjectDetail() {
               <table className="tbl tbl-zebra">
                 <thead>
                   <tr>
-                    <th className="sticky-col">Invoice #</th>
-                    <th>Type</th>
-                    <th style={{ textAlign: 'right' }}>Amount due</th>
-                    <th style={{ textAlign: 'right' }}>Paid</th>
-                    <th>Due</th>
-                    <th>Status</th>
+                    <InvoiceTh label="Invoice #" sortKey="number" active={invoiceSort.key} dir={invoiceSort.dir} onSort={toggleInvoiceSort} sticky />
+                    <InvoiceTh label="Type" sortKey="type" active={invoiceSort.key} dir={invoiceSort.dir} onSort={toggleInvoiceSort} />
+                    <InvoiceTh label="Invoiced" sortKey="amount_due" active={invoiceSort.key} dir={invoiceSort.dir} onSort={toggleInvoiceSort} align="right" />
+                    <InvoiceTh label="Paid" sortKey="paid" active={invoiceSort.key} dir={invoiceSort.dir} onSort={toggleInvoiceSort} align="right" />
+                    <InvoiceTh label="Unpaid" sortKey="unpaid" active={invoiceSort.key} dir={invoiceSort.dir} onSort={toggleInvoiceSort} align="right" />
+                    <InvoiceTh label="Due" sortKey="due" active={invoiceSort.key} dir={invoiceSort.dir} onSort={toggleInvoiceSort} />
+                    <InvoiceTh label="Status" sortKey="status" active={invoiceSort.key} dir={invoiceSort.dir} onSort={toggleInvoiceSort} />
                     <th></th>
                   </tr>
                 </thead>
                 <tbody>
-                  {invoices.map((inv) => (
+                  {sortInvoices(invoices, invoiceSort.key, invoiceSort.dir).map((inv) => (
                     <tr key={inv.id} style={{ cursor: 'pointer' }} onClick={() => setSelectedInvoiceId(inv.id)}>
                       <td className="sticky-col" style={{ fontWeight: 500 }}>
                         {inv.title || inv.invoice_number || 'Draft'}
@@ -744,6 +834,7 @@ export default function ProjectDetail() {
                       <td>{inv.invoice_type}</td>
                       <td style={{ textAlign: 'right' }}>{fmtCents(inv.amount_due)}</td>
                       <td style={{ textAlign: 'right' }}>{fmtCents(inv.amount_paid)}</td>
+                      <td style={{ textAlign: 'right', color: unpaidAmount(inv) > 0 ? 'var(--red)' : undefined }}>{fmtCents(unpaidAmount(inv))}</td>
                       <td>{fmtD(inv.due_date)}</td>
                       <td><span className={`badge ${INVOICE_STATUS_BADGE[inv.status] || 'bg-gray'}`}>{inv.status}</span></td>
                       <td style={{ textAlign: 'right' }}>
@@ -756,6 +847,18 @@ export default function ProjectDetail() {
                     </tr>
                   ))}
                 </tbody>
+                <tfoot>
+                  <tr style={TOTAL_ROW_STYLE}>
+                    <td className="sticky-col" style={TOTAL_CELL_STYLE}>Total</td>
+                    <td style={TOTAL_CELL_STYLE} />
+                    <td style={{ ...TOTAL_CELL_STYLE, textAlign: 'right' }}>{fmtCents(invoices.reduce((t, i) => t + (i.amount_due || 0), 0))}</td>
+                    <td style={{ ...TOTAL_CELL_STYLE, textAlign: 'right' }}>{fmtCents(invoices.reduce((t, i) => t + (i.amount_paid || 0), 0))}</td>
+                    <td style={{ ...TOTAL_CELL_STYLE, textAlign: 'right' }}>{fmtCents(invoices.reduce((t, i) => t + unpaidAmount(i), 0))}</td>
+                    <td style={TOTAL_CELL_STYLE} />
+                    <td style={TOTAL_CELL_STYLE} />
+                    <td style={TOTAL_CELL_STYLE} />
+                  </tr>
+                </tfoot>
               </table>
             </div>
           )}
