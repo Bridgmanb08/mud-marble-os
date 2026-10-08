@@ -18,6 +18,9 @@
   --font:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;
 }
 *{box-sizing:border-box;margin:0;padding:0;}
+/* Number fields are type-in only: no up/down spinner arrows (scrolling over a focused one is also blocked in main.tsx). */
+input[type=number]{-moz-appearance:textfield;appearance:textfield;}
+input[type=number]::-webkit-inner-spin-button,input[type=number]::-webkit-outer-spin-button{-webkit-appearance:none;appearance:none;margin:0;}
 body{font-family:var(--font);background:var(--bg);color:var(--text);font-size:14px;}
 #root{min-height:100vh;}
 
