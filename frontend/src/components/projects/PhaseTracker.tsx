@@ -3,6 +3,7 @@ import { IconAlertTriangle, IconPlus } from '@tabler/icons-react';
 import { api, ApiError } from '../../api/client';
 import { useToast } from '../ui/Toast';
 import { openDatePicker } from '../../lib/datePicker';
+import { holdScroll } from '../../lib/holdScroll';
 import { mergeCustomPhases, projectPhaseLabel } from '../../lib/projectPhases';
 import type { CustomPhase, Project, ProjectPhaseProgress } from '../../types';
 
@@ -78,6 +79,7 @@ export function PhaseTracker({
   }, [progress]);
 
   async function savePhaseDate(phase: string, value: string) {
+    holdScroll();
     setPhaseDates((prev) => ({ ...prev, [phase]: value }));
     try {
       await api.put(`/projects/${projectId}/phase-progress/${phase}/date`, { date: value || null });
@@ -124,6 +126,7 @@ export function PhaseTracker({
   }, [insertAfter]);
 
   async function setPhase(phase: string) {
+    holdScroll();
     onPhaseChange(phase); // optimistic, parent owns the source of truth for display elsewhere on the page
     try {
       await api.patch(`/projects/${projectId}`, { current_phase: phase });
@@ -190,7 +193,7 @@ export function PhaseTracker({
   const rowByPhase = new Map((progress?.phases || []).map((r) => [r.phase, r]));
 
   return (
-    <div>
+    <div onPointerDownCapture={() => holdScroll()}>
       <div className="phase-tracker-track">
         {phaseKeys.map((phase, i) => {
           const row = rowByPhase.get(phase);
