@@ -16,6 +16,14 @@ document.addEventListener(
   { passive: true },
 )
 
+// Same for the up/down arrow keys, which step a number field. Left/right still move the caret.
+document.addEventListener('keydown', (e) => {
+  const el = e.target
+  if (el instanceof HTMLInputElement && el.type === 'number' && (e.key === 'ArrowUp' || e.key === 'ArrowDown')) {
+    e.preventDefault()
+  }
+})
+
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
     <BrowserRouter>
