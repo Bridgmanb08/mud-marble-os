@@ -44,6 +44,8 @@ function round2(n: number): number {
   return Math.round(n * 100) / 100;
 }
 
+const NEW_GROUP = '__new_group__';
+
 export function LineItemModal({
   estimateId,
   templateId,
@@ -74,6 +76,10 @@ export function LineItemModal({
   const [costCodeId, setCostCodeId] = useState(item?.cost_code_id || defaultCostCodeId || '');
   const [bucket, setBucket] = useState(item?.bucket || defaultBucket || 'construction');
   const [groupName, setGroupName] = useState(item?.group_name || defaultGroupName || '');
+  const [newGroup, setNewGroup] = useState(false);
+  // Every group already in use on this estimate, plus this item's own current
+  // group even if nothing else uses it (so it always shows as selected).
+  const groupOptions = Array.from(new Set([...(existingGroups || []), ...(groupName.trim() && !newGroup ? [groupName.trim()] : [])]));
   const [title, setTitle] = useState(item?.title || defaultTitle || '');
   const [quantity, setQuantity] = useState(String(item?.quantity ?? 1));
   const [unit, setUnit] = useState(item?.unit || '');
@@ -376,18 +382,41 @@ export function LineItemModal({
             </div>
             <div className="fg">
               <label className="fl">Group</label>
-              <input
+              {/* A real dropdown, not an <input list>: a text box with a
+                  suggestion list only suggests names that match what is already
+                  typed, so once a group was filled in it offered just that one
+                  group and switching to another looked impossible. */}
+              <select
                 className="fi"
-                list="line-item-group-options"
-                value={groupName}
-                onChange={(e) => setGroupName(e.target.value)}
-                placeholder="e.g. Mechanicals"
-              />
-              <datalist id="line-item-group-options">
-                {(existingGroups || []).map((g) => (
-                  <option key={g} value={g} />
+                value={newGroup ? NEW_GROUP : groupName}
+                onChange={(e) => {
+                  if (e.target.value === NEW_GROUP) {
+                    setNewGroup(true);
+                    setGroupName('');
+                  } else {
+                    setNewGroup(false);
+                    setGroupName(e.target.value);
+                  }
+                }}
+              >
+                <option value="">— No group —</option>
+                {groupOptions.map((g) => (
+                  <option key={g} value={g}>
+                    {g}
+                  </option>
                 ))}
-              </datalist>
+                <option value={NEW_GROUP}>+ New group…</option>
+              </select>
+              {newGroup && (
+                <input
+                  className="fi"
+                  style={{ marginTop: 6 }}
+                  autoFocus
+                  value={groupName}
+                  onChange={(e) => setGroupName(e.target.value)}
+                  placeholder="New group name, e.g. Mechanicals"
+                />
+              )}
             </div>
             <div className="fg">
               <label className="fl">Bucket</label>
