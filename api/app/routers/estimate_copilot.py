@@ -1,6 +1,7 @@
 import json
+import time
 
-from anthropic import AsyncAnthropic, BadRequestError, NotFoundError, PermissionDeniedError
+from anthropic import APIError, AsyncAnthropic, BadRequestError, NotFoundError, PermissionDeniedError
 from fastapi import APIRouter, Depends, HTTPException
 
 from ..config import settings
@@ -31,6 +32,13 @@ COPILOT_MODEL = "claude-sonnet-5"
 DEEP_MODEL = "claude-opus-5"
 THINKING_BUDGET = 6000
 DEEP_MAX_TOKENS = 12000
+# Think harder is slow, and the whole request has to finish inside the server's
+# time limit -- a request that runs out of time comes back as an empty error
+# with nothing for the person to act on. So the deep model gets a bounded time
+# per call, and once the whole reply has used up DEEP_TIME_BUDGET it finishes
+# on the regular model instead of starting another slow call.
+DEEP_CALL_TIMEOUT = 45.0
+DEEP_TIME_BUDGET = 40.0
 MAX_TOOL_ITERATIONS = 12
 MAX_TOKENS = 4096
 TOOL_RESULT_CHARS = 16000
@@ -50,30 +58,43 @@ def _strip_thinking(messages: list[dict]) -> list[dict]:
 
 
 async def _create_message(client: AsyncAnthropic, deep: bool = False, **kwargs):
-    """One model call, walking down the model list until one is available. In
-    deep mode the first attempt also turns on extended thinking; if the API
-    rejects that (the model or SDK doesn't support it), it's switched off and
-    the same call is retried without it."""
+    """One model call, walking down the model list until one works. In deep
+    mode the first attempt uses the strongest model with extended thinking; if
+    the API rejects thinking (the model or SDK doesn't support it) it's
+    switched off and the call retried, and if the deep model is unavailable,
+    overloaded, or too slow, the call is made on the regular model instead --
+    ticking Think harder can make an answer better but never makes it fail."""
     global _thinking_supported
     chain = ([DEEP_MODEL] if deep else []) + [COPILOT_MODEL, MODEL]
     for model in chain[:-1]:
         if model in _unavailable_models:
             continue
+        is_deep_model = deep and model == DEEP_MODEL
         try:
-            if deep and _thinking_supported:
+            if is_deep_model and _thinking_supported:
                 try:
                     return await client.messages.create(
                         model=model,
                         extra_body={"thinking": {"type": "enabled", "budget_tokens": THINKING_BUDGET}},
+                        timeout=DEEP_CALL_TIMEOUT,
                         **{**kwargs, "max_tokens": max(kwargs.get("max_tokens", 0), DEEP_MAX_TOKENS)},
                     )
                 except BadRequestError:
                     _thinking_supported = False
-                    kwargs = {**kwargs, "messages": _strip_thinking(kwargs["messages"])}
-            return await client.messages.create(model=model, **kwargs)
+            if is_deep_model:
+                return await client.messages.create(
+                    model=model, timeout=DEEP_CALL_TIMEOUT, **{**kwargs, "messages": _strip_thinking(kwargs["messages"])}
+                )
+            return await client.messages.create(model=model, **{**kwargs, "messages": _strip_thinking(kwargs["messages"])})
         except (NotFoundError, PermissionDeniedError):
             _unavailable_models.add(model)
-    return await client.messages.create(model=chain[-1], **kwargs)
+        except APIError:
+            # Overloaded, rate limited, timed out, or a server error. Not a
+            # reason to mark the model gone for good -- just answer this one
+            # on the next model down.
+            if not is_deep_model:
+                raise
+    return await client.messages.create(model=chain[-1], **{**kwargs, "messages": _strip_thinking(kwargs["messages"])})
 
 
 SYSTEM_PROMPT_TEMPLATE = """You are Mud & Marble's estimating assistant, working alongside {user_name} to \
@@ -187,15 +208,26 @@ async def copilot_chat(
 
     tool_log: list[ToolCallLog] = []
     items_changed = False
+    started = time.monotonic()
     for _ in range(MAX_TOOL_ITERATIONS):
-        response = await _create_message(
-            client,
-            deep=body.deep,
-            max_tokens=MAX_TOKENS,
-            system=system_prompt,
-            tools=ESTIMATE_TOOLS,
-            messages=messages,
-        )
+        # Once the time budget is spent, finish on the regular model.
+        deep_now = body.deep and (time.monotonic() - started) < DEEP_TIME_BUDGET
+        try:
+            response = await _create_message(
+                client,
+                deep=deep_now,
+                max_tokens=MAX_TOKENS,
+                system=system_prompt,
+                tools=ESTIMATE_TOOLS,
+                messages=messages,
+            )
+        except APIError as exc:
+            # Say what happened instead of letting it become an empty 500.
+            raise HTTPException(
+                status_code=502,
+                detail=f"The AI service had a problem ({type(exc).__name__}: {getattr(exc, 'message', str(exc))[:200]}). "
+                "Try again in a moment" + (", or untick Think harder." if body.deep else "."),
+            ) from exc
 
         if response.stop_reason != "tool_use":
             reply = "".join(b.text for b in response.content if b.type == "text")

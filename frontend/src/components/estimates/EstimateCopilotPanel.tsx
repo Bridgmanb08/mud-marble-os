@@ -81,7 +81,13 @@ export function EstimateCopilotPanel({
       setMessages((prev) => [...prev, { role: 'assistant', content: res.reply, toolCalls: res.tool_calls }]);
       if (res.items_changed) onItemAdded();
     } catch (e) {
-      const message = e instanceof ApiError ? e.message : 'Something went wrong reaching the estimating copilot.';
+      // A server timeout or crash comes back with no text at all, which used to
+      // show up as an empty red bubble -- always say something.
+      const message =
+        (e instanceof ApiError && e.message.trim()) ||
+        `The copilot didn't answer${e instanceof ApiError ? ` (error ${e.status})` : ''} -- it most likely ran out of time.${
+          deep ? ' Try again, or untick Think harder for a faster reply.' : ' Try again in a moment.'
+        }`;
       setMessages((prev) => [...prev, { role: 'assistant', content: message, isError: true }]);
     } finally {
       setSending(false);
