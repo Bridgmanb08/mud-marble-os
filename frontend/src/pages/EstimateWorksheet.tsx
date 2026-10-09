@@ -88,13 +88,15 @@ export default function EstimateWorksheet() {
   const [newGroupName, setNewGroupName] = useState('');
   const [showSaveAsTemplate, setShowSaveAsTemplate] = useState(false);
   const [showInsertFromTemplate, setShowInsertFromTemplate] = useState(false);
-  const { sensors, collisionDetection, onDragStart, onDragOver, onDragEnd, onDragCancel, groups, groupKeys } = useGroupedLineItemDrag({
+  const { sensors, collisionDetection, onDragStart, onDragOver, onDragEnd, onDragCancel, groups, groupKeys, dragging } = useGroupedLineItemDrag({
     items,
     setItems,
     searchActive: !!searchQuery.trim(),
     patchItem: (itemId, body) => api.patch(`/estimates/${id}/items/${itemId}`, body),
     onSaveError: (message) => toast(message, true),
     onSettled: load,
+    groupOrder: estimate?.group_order,
+    onGroupOrderChange: (keys) => saveGroupOrder(keys),
   });
 
   async function load() {
@@ -156,6 +158,34 @@ export default function EstimateWorksheet() {
       </div>
     );
   }
+
+  // Saves the group order (top to bottom) on the estimate itself, so it stays
+  // where it was put no matter what happens to individual line items.
+  function saveGroupOrder(keys: string[], quiet = false): Promise<void> {
+    if (!id) return Promise.resolve();
+    setEstimate((prev) => (prev ? { ...prev, group_order: keys } : prev));
+    return api
+      .patch(`/estimates/${id}`, { group_order: keys })
+      .then(() => undefined)
+      .catch((e) => {
+        if (!quiet) toast(e instanceof ApiError ? e.message : 'Failed to save the group order', true);
+      });
+  }
+
+  // Whenever the order on screen isn't the saved one (an estimate from before
+  // group order existed, a brand-new group), save it as it is now -- so from
+  // here on it can't shift when a line item is moved, regrouped or added.
+  const lockedOrderRef = useRef('');
+  useEffect(() => {
+    if (!estimate || !estimate.group_order || dragging || searchQuery.trim() || groupKeys.length === 0) return;
+    const saved = estimate.group_order;
+    if (saved.length === groupKeys.length && saved.every((k, i) => k === groupKeys[i])) return;
+    const signature = `${estimate.id}|${groupKeys.join('\u0001')}`;
+    if (lockedOrderRef.current === signature) return;
+    lockedOrderRef.current = signature;
+    saveGroupOrder(groupKeys, true);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [estimate, groupKeys, dragging, searchQuery]);
 
   const existingGroups = Array.from(new Set(items.map((i) => i.group_name).filter((g): g is string => !!g))).sort();
   const allCollapsed = groupKeys.length > 0 && groupKeys.every((k) => collapsedGroups[k]);
@@ -307,6 +337,8 @@ export default function EstimateWorksheet() {
     if (!id || !newName || newName === oldKey) return;
     try {
       await Promise.all(groupItems.map((it) => api.patch(`/estimates/${id}/items/${it.id}`, { group_name: newName })));
+      // The renamed group keeps its place.
+      await saveGroupOrder(groupKeys.map((k) => (k === oldKey ? newName : k)));
       toast('Group renamed');
       load();
     } catch (e) {

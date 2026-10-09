@@ -95,6 +95,12 @@ async def create_item(parent_column: str, parent_id: str, body: LineItemCreate) 
         "builder_cost": builder_cost,
         "owner_price": owner_price,
     }
+    # A new line goes at the END. Left at the default 0 it sorted to the very top
+    # of the list (tied with every other unnumbered line, in no stable order),
+    # which dragged its group to the top and scrambled the order people had set.
+    if "sort_order" not in body.model_fields_set:
+        last = await db_get(TABLE, f"?{parent_column}=eq.{parent_id}&select=sort_order&order=sort_order.desc&limit=1")
+        data["sort_order"] = ((last[0].get("sort_order") or 0) + 1) if last else 0
     rows = await db_post(TABLE, data)
     full = await db_get(TABLE, f"?id=eq.{rows[0]['id']}&select={SELECT}")
     return full[0]

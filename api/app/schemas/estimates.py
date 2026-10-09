@@ -33,10 +33,12 @@ class EstimateUpdate(BaseModel):
     closing_text: Optional[str] = None
     sent_at: Optional[str] = None
     is_archived: Optional[bool] = None
+    # Group names, top to bottom, as the worksheet and exports show them.
+    group_order: Optional[list[str]] = None
 
     @model_validator(mode="after")
     def _validate_no_null_required(self):
-        forbid_null(self, {"status", "is_archived"})
+        forbid_null(self, {"status", "is_archived", "group_order"})
         return self
 
 
@@ -57,6 +59,7 @@ class EstimateOut(BaseModel):
     construction_total_owner_price: Optional[float] = None
     allowance_total: Optional[float] = None
     is_archived: Optional[bool] = None
+    group_order: Optional[list[str]] = None
     created_at: str
     projects: Optional[ProjectBrief] = None
 
