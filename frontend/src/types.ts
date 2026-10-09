@@ -236,6 +236,8 @@ export interface Estimate {
   construction_total_owner_price: number | null;
   allowance_total: number | null;
   is_archived: boolean | null;
+  /** Group names top to bottom; undefined until the group_order column exists. */
+  group_order?: string[];
   created_at: string;
   projects?: ProjectBrief;
 }

@@ -19,6 +19,14 @@ export interface GroupableLineItem {
   sort_order: number;
 }
 
+// The saved group order first (skipping any group that no longer exists), then
+// any group not in it -- a brand-new one -- in the order it first appears.
+export function orderGroupKeys(keys: string[], saved: string[] | undefined): string[] {
+  if (!saved || saved.length === 0) return keys;
+  const present = saved.filter((k) => keys.includes(k));
+  return [...present, ...keys.filter((k) => !present.includes(k))];
+}
+
 export function groupKeyForItem(item: GroupableLineItem): string {
   return item.group_name || BUCKET_LABEL[item.bucket] || 'Ungrouped';
 }
@@ -50,6 +58,8 @@ export function useGroupedLineItemDrag<T extends GroupableLineItem>({
   patchItem,
   onSaveError,
   onSettled,
+  groupOrder,
+  onGroupOrderChange,
 }: {
   items: T[];
   setItems: (updater: (prev: T[]) => T[]) => void;
@@ -60,6 +70,11 @@ export function useGroupedLineItemDrag<T extends GroupableLineItem>({
   patchItem: (itemId: string, body: { sort_order?: number; group_name?: string; bucket?: string }) => Promise<unknown>;
   onSaveError: (message: string) => void;
   onSettled: () => void;
+  // The saved order of the groups, and how to save a new one. Without these a
+  // group's position is only implied by where its first item sits in the list,
+  // so moving or re-grouping one line item could reshuffle every group.
+  groupOrder?: string[];
+  onGroupOrderChange?: (keys: string[]) => void | Promise<void>;
 }) {
   const snapshotRef = useRef<T[] | null>(null);
   // Every group that existed at the moment a drag started, in their
@@ -89,8 +104,8 @@ export function useGroupedLineItemDrag<T extends GroupableLineItem>({
       }
       g[k].push(item);
     }
-    return { groups: g, groupKeys: order };
-  }, [items, phantomGroups]);
+    return { groups: g, groupKeys: orderGroupKeys(order, groupOrder) };
+  }, [items, phantomGroups, groupOrder]);
 
   const sensors = useDndSensors();
 
@@ -245,7 +260,10 @@ export function useGroupedLineItemDrag<T extends GroupableLineItem>({
       const flattened: T[] = [];
       for (const k of reorderedKeys) flattened.push(...groups[k]);
       setItems(() => flattened);
-      persist(flattened, rollback);
+      // Save the new group order BEFORE the item order's refetch (persist ends
+      // with onSettled/load), or the refetch could land first, bring back the
+      // old order, and undo the move.
+      Promise.resolve(onGroupOrderChange?.(reorderedKeys)).finally(() => persist(flattened, rollback));
       return;
     }
 
@@ -282,5 +300,5 @@ export function useGroupedLineItemDrag<T extends GroupableLineItem>({
     persist(finalItems, rollback);
   }
 
-  return { sensors, collisionDetection, onDragStart, onDragOver, onDragEnd, onDragCancel, groups, groupKeys };
+  return { sensors, collisionDetection, onDragStart, onDragOver, onDragEnd, onDragCancel, groups, groupKeys, dragging: phantomGroups.length > 0 };
 }

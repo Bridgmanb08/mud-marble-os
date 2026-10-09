@@ -291,6 +291,9 @@ async def duplicate_estimate(estimate_id: str, _: CurrentUser = Depends(get_curr
                 "approval_deadline": original.get("approval_deadline"),
                 "introductory_text": original.get("introductory_text"),
                 "closing_text": original.get("closing_text") or DEFAULT_CLOSING_TEXT,
+                # Only when the column exists (migration 0082), so duplicating
+                # never breaks on a database that hasn't run it yet.
+                **({"group_order": original["group_order"]} if "group_order" in original else {}),
             },
         )
     )[0]
@@ -364,6 +367,15 @@ GROUP_LABEL_FALLBACK = "Ungrouped"
 BUCKET_LABEL = {"pm_fee": "PM Fee", "construction": "Construction", "allowance": "Allowance"}
 
 
+def order_groups(groups: dict[str, list[dict]], saved_order: Optional[list]) -> dict[str, list[dict]]:
+    """The groups in the order the worksheet shows them: the saved group order
+    first, then any group not in it (a brand-new one) in the order its first item
+    appears. Same rule as the worksheet, so the PDF/Excel match the screen."""
+    saved = [k for k in (saved_order or []) if k in groups]
+    rest = [k for k in groups if k not in saved]
+    return {k: groups[k] for k in saved + rest}
+
+
 async def _gather_export_data(estimate_id: str):
     estimates = await db_get("estimates", f"?id=eq.{estimate_id}&select=*,projects(name,address,clients(first_name,last_name))")
     if not estimates:
@@ -376,7 +388,7 @@ async def _gather_export_data(estimate_id: str):
     for item in items:
         key = item.get("group_name") or BUCKET_LABEL.get(item.get("bucket")) or GROUP_LABEL_FALLBACK
         groups.setdefault(key, []).append(item)
-    return estimate, groups
+    return estimate, order_groups(groups, estimate.get("group_order"))
 
 
 @router.get("/{estimate_id}/export/pdf")
