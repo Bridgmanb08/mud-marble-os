@@ -26,6 +26,7 @@ from ..schemas.projects import (
     ProjectOut,
     ProjectUpdate,
 )
+from .. import change_log
 from ..supabase_client import db_delete, db_delete_query, db_get, db_patch, db_post
 
 router = APIRouter(prefix="/projects", tags=["projects"])
@@ -132,12 +133,14 @@ async def get_project(project_id: str, _: CurrentUser = Depends(get_current_user
 
 
 @router.patch("/{project_id}", response_model=ProjectOut)
-async def update_project(project_id: str, body: ProjectUpdate, _: CurrentUser = Depends(get_current_user)):
+async def update_project(project_id: str, body: ProjectUpdate, current_user: CurrentUser = Depends(get_current_user)):
     # exclude_unset (not exclude_none) -- the frontend sends an explicit null to
     # clear a field (e.g. clearing start_date), and that null has to reach the
     # database. exclude_none would silently drop it instead.
     updates = body.model_dump(exclude_unset=True)
+    before = await change_log.fetch_before("projects", project_id, updates.keys())
     await db_patch("projects", project_id, updates)
+    await change_log.log_changes("projects", project_id, before, updates, current_user)
     await _sync_project_dates(project_id, updates)
     full = await db_get("projects", f"?id=eq.{project_id}&select=*,clients(id,first_name,last_name,preferred_contact_method,is_advocate,is_repeat_client,notes),sms_contacts(id,phone_number,name)")
     return full[0]

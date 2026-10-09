@@ -186,16 +186,32 @@ export default function EstimateWorksheet() {
   const hasDays = items.some((i) => i.estimated_days != null);
 
   async function saveMeta() {
-    if (!id) return;
+    if (!id || !estimate) return;
+    // Send only what this person changed. These boxes were filled when the page
+    // loaded, which can be hours ago; sending all of them would overwrite a
+    // title or text someone else saved since with the old value shown here.
+    const next = {
+      title: title.trim() || null,
+      approval_deadline: approvalDeadline || null,
+      notes_internal: notesInternal.trim() || null,
+      introductory_text: introductoryText.trim() || null,
+      closing_text: closingText.trim() || null,
+    };
+    const current: typeof next = {
+      title: estimate.title?.trim() || null,
+      approval_deadline: estimate.approval_deadline?.slice(0, 10) || null,
+      notes_internal: estimate.notes_internal?.trim() || null,
+      introductory_text: estimate.introductory_text?.trim() || null,
+      closing_text: estimate.closing_text?.trim() || null,
+    };
+    const changed = Object.fromEntries(Object.entries(next).filter(([k, v]) => v !== current[k as keyof typeof current]));
+    if (Object.keys(changed).length === 0) {
+      toast('Saved');
+      return;
+    }
     setSavingMeta(true);
     try {
-      await api.patch(`/estimates/${id}`, {
-        title: title.trim() || null,
-        approval_deadline: approvalDeadline || null,
-        notes_internal: notesInternal.trim() || null,
-        introductory_text: introductoryText.trim() || null,
-        closing_text: closingText.trim() || null,
-      });
+      await api.patch(`/estimates/${id}`, changed);
       toast('Saved');
       load();
     } catch (e) {
