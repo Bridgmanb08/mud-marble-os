@@ -11,6 +11,57 @@ interface NewProjectModalProps {
   project?: Project;
 }
 
+interface ProjectFormValues {
+  name: string;
+  address: string;
+  city: string;
+  state: string;
+  zip: string;
+  status: string;
+  projectType: string;
+  clientId: string;
+  contractValue: string;
+  startDate: string;
+  estimatedCompletion: string;
+  notes: string;
+}
+
+function valuesFromProject(project: Project): ProjectFormValues {
+  return {
+    name: project.name || '',
+    address: project.address || '',
+    city: project.city || '',
+    state: project.state || '',
+    zip: project.zip || '',
+    status: project.status || 'lead',
+    projectType: project.project_type || '',
+    clientId: project.client_id || '',
+    contractValue: project.contract_value != null ? String(project.contract_value) : '',
+    startDate: project.start_date?.slice(0, 10) || '',
+    estimatedCompletion: project.estimated_completion?.slice(0, 10) || '',
+    notes: project.internal_notes || '',
+  };
+}
+
+// The same normalization for what the form holds now and what the project held
+// when the form opened, so the two can be compared field by field.
+function toPayload(v: ProjectFormValues) {
+  return {
+    name: v.name.trim(),
+    address: v.address.trim() || null,
+    city: v.city.trim() || null,
+    state: v.state.trim() || null,
+    zip: v.zip.trim() || null,
+    status: v.status,
+    project_type: v.projectType.trim() || null,
+    client_id: v.clientId || null,
+    contract_value: v.contractValue ? parseFloat(v.contractValue) : null,
+    start_date: v.startDate || null,
+    estimated_completion: v.estimatedCompletion || null,
+    internal_notes: v.notes.trim() || null,
+  };
+}
+
 export function NewProjectModal({ onClose, onCreated, project }: NewProjectModalProps) {
   const [name, setName] = useState(project?.name || '');
   const [address, setAddress] = useState(project?.address || '');
@@ -40,20 +91,34 @@ export function NewProjectModal({ onClose, onCreated, project }: NewProjectModal
     }
     setSaving(true);
     setError('');
-    const payload = {
-      name: name.trim(),
-      address: address.trim() || null,
-      city: city.trim() || null,
-      state: state.trim() || null,
-      zip: zip.trim() || null,
+    const values = {
+      name,
+      address,
+      city,
+      state,
+      zip,
       status,
-      project_type: projectType.trim() || null,
-      client_id: clientId || null,
-      contract_value: contractValue ? parseFloat(contractValue) : null,
-      start_date: startDate || null,
-      estimated_completion: estimatedCompletion || null,
-      internal_notes: notes.trim() || null,
+      projectType,
+      clientId,
+      contractValue,
+      startDate,
+      estimatedCompletion,
+      notes,
     };
+    const full = toPayload(values);
+    // Editing sends ONLY the fields this person actually changed. This form was
+    // opened from a copy of the project that can be hours old (a tab left open
+    // overnight), and sending every field back would silently overwrite
+    // anything someone else changed since -- a client just assigned, a new
+    // status, a date -- with the old value this copy still shows.
+    const original = project ? toPayload(valuesFromProject(project)) : null;
+    const payload = original
+      ? Object.fromEntries(Object.entries(full).filter(([k, v]) => v !== original[k as keyof typeof original]))
+      : full;
+    if (project && Object.keys(payload).length === 0) {
+      onClose();
+      return;
+    }
     try {
       const saved = project
         ? await api.patch<Project>(`/projects/${project.id}`, payload)

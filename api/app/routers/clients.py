@@ -2,6 +2,7 @@ from collections import defaultdict
 
 from fastapi import APIRouter, Depends, HTTPException
 
+from .. import change_log
 from ..deps import CurrentUser, get_current_user
 from ..schemas.clients import ClientBrief, ClientCreate, ClientOut, ClientProjectSummary, ClientUpdate
 from ..supabase_client import db_get, db_patch, db_post
@@ -86,11 +87,14 @@ async def create_client(body: ClientCreate, _: CurrentUser = Depends(get_current
 
 
 @router.patch("/{client_id}", response_model=ClientOut)
-async def update_client(client_id: str, body: ClientUpdate, _: CurrentUser = Depends(get_current_user)):
+async def update_client(client_id: str, body: ClientUpdate, current_user: CurrentUser = Depends(get_current_user)):
     # exclude_unset (not exclude_none) -- the frontend sends an explicit null to
     # clear a field (e.g. unlinking a referral, blanking out a note), and that
     # has to reach the database. exclude_none would silently drop it instead.
-    rows = await db_patch("clients", client_id, body.model_dump(exclude_unset=True))
+    updates = body.model_dump(exclude_unset=True)
+    before = await change_log.fetch_before("clients", client_id, updates.keys())
+    rows = await db_patch("clients", client_id, updates)
+    await change_log.log_changes("clients", client_id, before, updates, current_user)
     updated = (await _attach_referrers(rows))[0]
     referred_rows = await db_get(
         "clients", f"?referred_by_client_id=eq.{client_id}&select=id,first_name,last_name&order=first_name.asc"

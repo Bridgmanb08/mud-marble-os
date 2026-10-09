@@ -37,7 +37,7 @@ from ..schemas.estimates import (
     LineItemReference,
     LineItemUpdate,
 )
-from .. import deleted_records, line_items
+from .. import change_log, deleted_records, line_items
 from ..supabase_client import db_delete, db_delete_query, db_get, db_patch, db_post, db_post_many
 
 router = APIRouter(prefix="/estimates", tags=["estimates"])
@@ -195,7 +195,7 @@ async def create_estimate(body: EstimateCreate, _: CurrentUser = Depends(get_cur
 
 
 @router.patch("/{estimate_id}", response_model=EstimateOut)
-async def update_estimate(estimate_id: str, body: EstimateUpdate, _: CurrentUser = Depends(get_current_user)):
+async def update_estimate(estimate_id: str, body: EstimateUpdate, current_user: CurrentUser = Depends(get_current_user)):
     current = await db_get("estimates", f"?id=eq.{estimate_id}&select=status")
     if not current:
         raise HTTPException(status_code=404, detail="Estimate not found")
@@ -205,7 +205,10 @@ async def update_estimate(estimate_id: str, body: EstimateUpdate, _: CurrentUser
     # clear a field (e.g. removing an approval_deadline or closing_text),
     # and that null has to reach the database instead of being silently
     # dropped. Same fix already made for clients/projects/invoices/etc.
-    await db_patch("estimates", estimate_id, body.model_dump(exclude_unset=True))
+    updates = body.model_dump(exclude_unset=True)
+    before = await change_log.fetch_before("estimates", estimate_id, updates.keys())
+    await db_patch("estimates", estimate_id, updates)
+    await change_log.log_changes("estimates", estimate_id, before, updates, current_user)
     full = await db_get("estimates", f"?id=eq.{estimate_id}&select=*,projects(name,address)")
     if not full:
         raise HTTPException(status_code=404, detail="Estimate not found")
