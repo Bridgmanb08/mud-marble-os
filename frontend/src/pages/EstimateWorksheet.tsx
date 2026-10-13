@@ -151,6 +151,22 @@ export default function EstimateWorksheet() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [id, itemsSignature]);
 
+  // (Must stay above the `if (!estimate)` early return below -- hooks can't come after it.)
+  // Whenever the order on screen isn't the saved one (an estimate from before
+  // group order existed, a brand-new group), save it as it is now -- so from
+  // here on it can't shift when a line item is moved, regrouped or added.
+  const lockedOrderRef = useRef('');
+  useEffect(() => {
+    if (!estimate || !estimate.group_order || dragging || searchQuery.trim() || groupKeys.length === 0) return;
+    const saved = estimate.group_order;
+    if (saved.length === groupKeys.length && saved.every((k, i) => k === groupKeys[i])) return;
+    const signature = `${estimate.id}|${groupKeys.join('\u0001')}`;
+    if (lockedOrderRef.current === signature) return;
+    lockedOrderRef.current = signature;
+    saveGroupOrder(groupKeys, true);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [estimate, groupKeys, dragging, searchQuery]);
+
   if (!estimate) {
     return (
       <div className="empty">
@@ -171,21 +187,6 @@ export default function EstimateWorksheet() {
         if (!quiet) toast(e instanceof ApiError ? e.message : 'Failed to save the group order', true);
       });
   }
-
-  // Whenever the order on screen isn't the saved one (an estimate from before
-  // group order existed, a brand-new group), save it as it is now -- so from
-  // here on it can't shift when a line item is moved, regrouped or added.
-  const lockedOrderRef = useRef('');
-  useEffect(() => {
-    if (!estimate || !estimate.group_order || dragging || searchQuery.trim() || groupKeys.length === 0) return;
-    const saved = estimate.group_order;
-    if (saved.length === groupKeys.length && saved.every((k, i) => k === groupKeys[i])) return;
-    const signature = `${estimate.id}|${groupKeys.join('\u0001')}`;
-    if (lockedOrderRef.current === signature) return;
-    lockedOrderRef.current = signature;
-    saveGroupOrder(groupKeys, true);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [estimate, groupKeys, dragging, searchQuery]);
 
   const existingGroups = Array.from(new Set(items.map((i) => i.group_name).filter((g): g is string => !!g))).sort();
   const allCollapsed = groupKeys.length > 0 && groupKeys.every((k) => collapsedGroups[k]);
