@@ -8,7 +8,8 @@ import { fmtCents } from '../../lib/format';
 import { pdfExportFilename, triggerDownload } from '../../lib/download';
 import { InvoiceLineItemModal } from './InvoiceLineItemModal';
 import { AddLineItemsToInvoiceModal } from './AddLineItemsToInvoiceModal';
-import type { FinancialSummary, Invoice, InvoiceLineItem } from '../../types';
+import { lineBilling } from '../../lib/lineBilling';
+import type { FinancialSummary, Invoice, InvoiceLineItem, InvoiceableItem } from '../../types';
 
 const STATUS_OPTIONS = ['draft', 'sent', 'paid', 'overdue', 'void'];
 const STATUS_BADGE: Record<string, string> = {
@@ -24,6 +25,32 @@ const STATUS_BADGE: Record<string, string> = {
 // inside a modal too (Project Detail's Invoices tab opens one of these in a
 // popup instead of navigating away, per Brent's request -- same content
 // either way, just a different wrapper around it).
+const pctText = (n: number) => `${Math.round(n * 10) / 10}%`;
+
+// Gray = billed on earlier invoices, brown = billed on this one, empty = still
+// to bill. Over 100% turns the bar red.
+function BillingBar({ billing }: { billing: ReturnType<typeof lineBilling> }) {
+  if (!billing) return <span style={{ color: 'var(--t3)' }}>—</span>;
+  const prevW = Math.min(billing.previousPct, 100);
+  const curW = Math.min(billing.currentPct, 100 - prevW);
+  return (
+    <div
+      style={{ minWidth: 170 }}
+      title={`Earlier invoices ${fmtCents(billing.previous)} · This invoice ${fmtCents(billing.current)} · Line total ${fmtCents(billing.total)}`}
+    >
+      <div style={{ display: 'flex', height: 8, borderRadius: 4, background: 'var(--gray-bg)', overflow: 'hidden', border: '1px solid var(--border)' }}>
+        <div style={{ width: `${prevW}%`, background: 'var(--border-md)' }} />
+        <div style={{ width: `${curW}%`, background: billing.over > 0 ? 'var(--red)' : 'var(--brand-brown)' }} />
+      </div>
+      <div style={{ fontSize: 11, color: billing.over > 0 ? 'var(--rtx)' : 'var(--t2)', marginTop: 3, whiteSpace: 'nowrap' }}>
+        {billing.over > 0
+          ? `Over by ${fmtCents(billing.over)}`
+          : `${pctText(billing.previousPct)} before · ${pctText(billing.currentPct)} now · ${pctText(billing.leftPct)} left`}
+      </div>
+    </div>
+  );
+}
+
 export function InvoiceEditor({
   invoiceId,
   onInvoiceChanged,
@@ -53,6 +80,9 @@ export function InvoiceEditor({
   const [editingItem, setEditingItem] = useState<InvoiceLineItem | undefined>(undefined);
   const [showFromEstimate, setShowFromEstimate] = useState(false);
   const [financialSummary, setFinancialSummary] = useState<FinancialSummary | null>(null);
+  // The estimate / change order lines this invoice bills against, with how much
+  // of each has been billed so far -- drives the billing bar on each line.
+  const [sourceById, setSourceById] = useState<Map<string, InvoiceableItem>>(new Map());
 
   function load() {
     if (!invoiceId) return;
@@ -89,6 +119,10 @@ export function InvoiceEditor({
       .get<FinancialSummary>(`/projects/${invoice.project_id}/financial-summary`)
       .then(setFinancialSummary)
       .catch(() => setFinancialSummary(null));
+    api
+      .get<InvoiceableItem[]>(`/projects/${invoice.project_id}/invoiceable-items`)
+      .then((rows) => setSourceById(new Map(rows.map((r) => [r.id, r]))))
+      .catch(() => setSourceById(new Map()));
   }, [invoice?.project_id, items]);
 
   async function saveField(field: string, value: unknown) {
@@ -324,6 +358,7 @@ export function InvoiceEditor({
                     <th className="sticky-col">Title</th>
                     <th>Cost code</th>
                     <th>Description</th>
+                    <th style={{ minWidth: 190 }} title="Gray: billed on earlier invoices. Brown: billed on this invoice.">Billed</th>
                     <th>Amount</th>
                     <th></th>
                   </tr>
@@ -341,6 +376,9 @@ export function InvoiceEditor({
                       <td className="sticky-col">{it.title}</td>
                       <td>{it.cost_codes ? `${it.cost_codes.code} - ${it.cost_codes.name}` : '—'}</td>
                       <td style={{ color: 'var(--t2)' }}>{it.description || '—'}</td>
+                      <td>
+                        <BillingBar billing={lineBilling(it, items, sourceById)} />
+                      </td>
                       <td>{fmtCents(it.amount)}</td>
                       <td>
                         <button
