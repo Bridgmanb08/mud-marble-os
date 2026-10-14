@@ -8,17 +8,10 @@ import { fmtCents } from '../../lib/format';
 import { pdfExportFilename, triggerDownload } from '../../lib/download';
 import { InvoiceLineItemModal } from './InvoiceLineItemModal';
 import { AddLineItemsToInvoiceModal } from './AddLineItemsToInvoiceModal';
+import { INVOICE_STATUS_BADGE as STATUS_BADGE, INVOICE_STATUS_OPTIONS as STATUS_OPTIONS, invoiceStatusLabel } from '../../lib/invoiceStatus';
 import { lineBilling } from '../../lib/lineBilling';
 import type { FinancialSummary, Invoice, InvoiceLineItem, InvoiceableItem } from '../../types';
 
-const STATUS_OPTIONS = ['draft', 'sent', 'paid', 'overdue', 'void'];
-const STATUS_BADGE: Record<string, string> = {
-  draft: 'bg-gray',
-  sent: 'bg-amber',
-  paid: 'bg-green',
-  overdue: 'bg-red',
-  void: 'bg-gray',
-};
 
 // The full invoice editor -- header fields, line items, "Add from Estimate".
 // Extracted out of the standalone /invoices/:id page so it can be reused
@@ -186,7 +179,7 @@ export function InvoiceEditor({
             <IconDownload size={14} /> Excel
           </button>
           <span className={`badge ${STATUS_BADGE[invoice.status] || 'bg-gray'}`} style={{ fontSize: 13 }}>
-            {invoice.status}
+            {invoiceStatusLabel(invoice.status)}
           </span>
         </div>
       </div>
@@ -264,7 +257,7 @@ export function InvoiceEditor({
             >
               {STATUS_OPTIONS.map((s) => (
                 <option key={s} value={s}>
-                  {s}
+                  {invoiceStatusLabel(s)}
                 </option>
               ))}
             </select>
@@ -306,7 +299,7 @@ export function InvoiceEditor({
                 saveField('paid_date', e.target.value || null);
               }}
             />
-            <div className="m-sub">Auto-filled to today when status is set to "paid" -- editable if the real date was different.</div>
+            <div className="m-sub">Auto-filled to today when the invoice becomes paid -- editable if the real date was different. The status updates itself from the amount paid.</div>
           </div>
         </div>
         <div className="fg">

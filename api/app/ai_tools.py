@@ -376,7 +376,7 @@ TOOLS: list[dict] = [
             "type": "object",
             "properties": {
                 "project_name": {"type": "string", "description": "Substring of the project name to scope to"},
-                "status": {"type": "string", "description": "e.g. draft, sent, paid, overdue, void"},
+                "status": {"type": "string", "description": "e.g. draft, sent, partial, paid, overdue, void"},
                 "limit": {"type": "integer", "description": "Max rows (default 20, max 50)"},
             },
         },

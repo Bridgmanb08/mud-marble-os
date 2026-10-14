@@ -333,7 +333,7 @@ async def get_financial_summary(project_id: str, _: CurrentUser = Depends(get_cu
     # number that pre-fills a new invoice's amount) and could cause real
     # under-invoicing.
     existing_invoices = await db_get(
-        "invoices", f"?project_id=eq.{project_id}&status=in.(sent,paid,overdue)&select=amount_due"
+        "invoices", f"?project_id=eq.{project_id}&status=in.(sent,partial,paid,overdue)&select=amount_due"
     )
     invoiced_to_date = sum(i.get("amount_due") or 0 for i in existing_invoices)
 

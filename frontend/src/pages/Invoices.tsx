@@ -7,16 +7,10 @@ import { fmtCents, fmtD } from '../lib/format';
 import type { Invoice } from '../types';
 import { NewInvoiceModal } from '../components/invoices/NewInvoiceModal';
 import { InvoiceRowMenu } from '../components/invoices/InvoiceRowMenu';
+import { INVOICE_STATUS_BADGE as STATUS_BADGE, invoiceStatusLabel } from '../lib/invoiceStatus';
 
-const STATUS_BADGE: Record<string, string> = {
-  draft: 'bg-gray',
-  sent: 'bg-amber',
-  paid: 'bg-green',
-  overdue: 'bg-red',
-  void: 'bg-gray',
-};
 
-const FILTERS = ['all', 'overdue', 'sent', 'paid', 'draft'];
+const FILTERS = ['all', 'overdue', 'sent', 'partial', 'paid', 'draft'];
 
 export default function Invoices() {
   const navigate = useNavigate();
@@ -69,7 +63,7 @@ export default function Invoices() {
   const sent = invoices?.filter((i) => i.status === 'sent').length ?? 0;
   const paid = invoices?.filter((i) => i.status === 'paid').length ?? 0;
   const outstanding =
-    invoices?.filter((i) => ['sent', 'overdue'].includes(i.status)).reduce((s, i) => s + i.amount_due - (i.amount_paid || 0), 0) ?? 0;
+    invoices?.filter((i) => ['sent', 'partial', 'overdue'].includes(i.status)).reduce((s, i) => s + i.amount_due - (i.amount_paid || 0), 0) ?? 0;
 
   return (
     <>
@@ -112,7 +106,7 @@ export default function Invoices() {
         <div className="filters">
           {FILTERS.map((f) => (
             <button key={f} className={`fb${filter === f ? ' on' : ''}`} onClick={() => setFilter(f)}>
-              {f === 'all' ? `All (${invoices?.length ?? 0})` : f}
+              {f === 'all' ? `All (${invoices?.length ?? 0})` : invoiceStatusLabel(f)}
             </button>
           ))}
         </div>
@@ -146,7 +140,7 @@ export default function Invoices() {
             </div>
             <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexShrink: 0 }}>
               <span style={{ fontSize: 14, fontWeight: 600 }}>{fmtCents(i.amount_due)}</span>
-              <span className={`badge ${STATUS_BADGE[i.status] || 'bg-gray'}`}>{i.status}</span>
+              <span className={`badge ${STATUS_BADGE[i.status] || 'bg-gray'}`}>{invoiceStatusLabel(i.status)}</span>
               <InvoiceRowMenu
                 invoiceNumber={i.invoice_number}
                 onRename={(newNumber) => renameInvoice(i.id, newNumber)}
