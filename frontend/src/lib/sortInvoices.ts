@@ -9,7 +9,7 @@ export function unpaidAmount(inv: Invoice): number {
   return Math.max(0, (inv.amount_due ?? 0) - (inv.amount_paid ?? 0));
 }
 
-const STATUS_RANK: Record<string, number> = { draft: 0, sent: 1, overdue: 2, paid: 3 };
+const STATUS_RANK: Record<string, number> = { draft: 0, sent: 1, partial: 2, overdue: 3, paid: 4 };
 
 // Invoice numbers compare number-aware ("02" before "10", "INV-9" before
 // "INV-10"). A row with nothing to sort on -- a draft with no invoice number

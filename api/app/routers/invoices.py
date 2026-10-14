@@ -42,9 +42,23 @@ from ..supabase_client import db_delete, db_delete_query, db_get, db_patch, db_p
 # "Counts toward invoiced_to_date" -- the exact same status set financial-
 # summary already uses (projects.py) so this guard and that number never
 # disagree about what "invoiced" means.
-_COUNTED_STATUSES = ("sent", "paid", "overdue")
+_COUNTED_STATUSES = ("sent", "partial", "paid", "overdue")
 
 router = APIRouter(prefix="/invoices", tags=["invoices"])
+
+
+def payment_status(current_status: Optional[str], amount_due: Optional[float], amount_paid: Optional[float]) -> Optional[str]:
+    """The status a recorded payment implies, or None to leave the status alone.
+    Paid in full -> "paid"; some but not all -> "partial"; payment cleared back to
+    zero on an invoice that was paid/partial -> back to "sent". A void invoice, and
+    an invoice nobody has paid anything on, are never touched."""
+    if current_status == "void":
+        return None
+    paid = amount_paid or 0
+    due = amount_due or 0
+    if paid <= 0:
+        return "sent" if current_status in ("paid", "partial") else None
+    return "paid" if paid >= due - 0.005 else "partial"
 
 ITEM_SELECT = "*,cost_codes(code,name)"
 
@@ -206,7 +220,15 @@ async def _recalc_invoice_total(invoice_id: str) -> None:
     all, since nothing in that flow touches invoice_line_items."""
     items = await db_get("invoice_line_items", f"?invoice_id=eq.{invoice_id}&select=amount")
     total = round(sum(i.get("amount") or 0 for i in items), 2)
-    await db_patch("invoices", invoice_id, {"amount_due": total})
+    updates: dict = {"amount_due": total}
+    # A line added to / removed from an invoice that already has payments on it
+    # can change whether it is paid in full or only partly.
+    current = await db_get("invoices", f"?id=eq.{invoice_id}&select=status,amount_paid&limit=1")
+    if current and (current[0].get("amount_paid") or 0) > 0:
+        implied = payment_status(current[0].get("status"), total, current[0].get("amount_paid"))
+        if implied and implied != current[0].get("status"):
+            updates["status"] = implied
+    await db_patch("invoices", invoice_id, updates)
 
 
 @router.get("", response_model=list[InvoiceOut])
@@ -255,7 +277,7 @@ async def create_invoice(body: InvoiceCreate, _: CurrentUser = Depends(get_curre
 
 @router.patch("/{invoice_id}", response_model=InvoiceOut)
 async def update_invoice(invoice_id: str, body: InvoiceUpdate, _: CurrentUser = Depends(get_current_user)):
-    current = await db_get("invoices", f"?id=eq.{invoice_id}&select=project_id,status,amount_due,paid_date")
+    current = await db_get("invoices", f"?id=eq.{invoice_id}&select=project_id,status,amount_due,amount_paid,paid_date")
     if not current:
         raise HTTPException(status_code=404, detail="Invoice not found")
     existing = current[0]
@@ -266,9 +288,25 @@ async def update_invoice(invoice_id: str, body: InvoiceUpdate, _: CurrentUser = 
     updates = body.model_dump(exclude_unset=True)
 
     resulting_status = updates.get("status", existing["status"])
+    # The contract-total check below only applies to a status somebody chose (or
+    # an amount they changed on an already-counted invoice). A payment that
+    # moves a draft to partial/paid is real money received and must never be
+    # refused by it, so the status a payment implies is worked out AFTER it.
     if resulting_status in _COUNTED_STATUSES:
         resulting_amount = updates.get("amount_due", existing["amount_due"]) or 0
         await _validate_invoice_total(existing["project_id"], invoice_id, resulting_amount)
+
+    # Recording a payment sets the status for you (partial / paid), unless this
+    # same request is setting the status by hand.
+    if "status" not in updates and ("amount_paid" in updates or "amount_due" in updates):
+        implied = payment_status(
+            existing["status"],
+            updates.get("amount_due", existing["amount_due"]),
+            updates.get("amount_paid", existing.get("amount_paid")),
+        )
+        if implied and implied != existing["status"]:
+            updates["status"] = implied
+            resulting_status = implied
 
     # Newly marked paid and nobody already set a paid_date in this same
     # request (or a prior one) -- default it to today rather than leaving
@@ -401,7 +439,7 @@ async def export_invoice_pdf(invoice_id: str, _: CurrentUser = Depends(get_curre
     # totals band carry, instead of a bare row of unstyled text. Status is
     # colored to match its on-screen badge (STATUS_BADGE in Invoices.tsx)
     # so "paid" reads as unmistakably good news and "overdue" as a flag.
-    status_color_key = {"paid": "green", "overdue": "red", "sent": "amber", "draft": "gray", "void": "gray"}.get(invoice.get("status"))
+    status_color_key = {"paid": "green", "partial": "amber", "overdue": "red", "sent": "amber", "draft": "gray", "void": "gray"}.get(invoice.get("status"))
     info_fields = [
         ("Type", xml_escape((invoice.get("invoice_type") or "").title()), None),
         ("Status", xml_escape((invoice.get("status") or "").title()), STATUS_COLORS.get(status_color_key)),

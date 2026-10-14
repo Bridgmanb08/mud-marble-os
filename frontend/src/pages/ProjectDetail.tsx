@@ -5,6 +5,7 @@ import { api, ApiError } from '../api/client';
 import { useToast } from '../components/ui/Toast';
 import { fmt, fmtCents, fmtD } from '../lib/format';
 import { useReferenceData } from '../reference-data/ReferenceDataContext';
+import { INVOICE_STATUS_BADGE, invoiceStatusLabel } from '../lib/invoiceStatus';
 import { sortInvoices, unpaidAmount, type InvoiceSortKey, type SortDir } from '../lib/sortInvoices';
 import type { CalendarEvent, ChangeOrder, CostCodeVariance, Estimate, FinancialSummary, Invoice, InvoiceableItem, Project, ProjectNote, Task } from '../types';
 import { NewNoteModal } from '../components/projects/NewNoteModal';
@@ -90,7 +91,6 @@ const NOTE_COLORS: Record<string, string> = {
 const CO_TYPE_BADGE: Record<string, string> = { oversight: 'bg-amber', client_addition: 'bg-blue', unforeseen: 'bg-red' };
 const CO_STATUS_BADGE: Record<string, string> = { pending: 'bg-gray', sent: 'bg-amber', approved: 'bg-green', rejected: 'bg-red' };
 const CO_STATUS_OPTIONS = ['pending', 'sent', 'approved', 'rejected'];
-const INVOICE_STATUS_BADGE: Record<string, string> = { draft: 'bg-gray', sent: 'bg-amber', paid: 'bg-green', overdue: 'bg-red', void: 'bg-gray' };
 const ESTIMATE_STATUS_BADGE: Record<string, string> = { draft: 'bg-gray', sent_to_client: 'bg-blue', approved: 'bg-green', rejected: 'bg-red' };
 
 export default function ProjectDetail() {
@@ -836,7 +836,7 @@ export default function ProjectDetail() {
                       <td style={{ textAlign: 'right' }}>{fmtCents(inv.amount_paid)}</td>
                       <td style={{ textAlign: 'right', color: unpaidAmount(inv) > 0 ? 'var(--red)' : undefined }}>{fmtCents(unpaidAmount(inv))}</td>
                       <td>{fmtD(inv.due_date)}</td>
-                      <td><span className={`badge ${INVOICE_STATUS_BADGE[inv.status] || 'bg-gray'}`}>{inv.status}</span></td>
+                      <td><span className={`badge ${INVOICE_STATUS_BADGE[inv.status] || 'bg-gray'}`}>{invoiceStatusLabel(inv.status)}</span></td>
                       <td style={{ textAlign: 'right' }}>
                         <InvoiceRowMenu
                           invoiceNumber={inv.invoice_number}
