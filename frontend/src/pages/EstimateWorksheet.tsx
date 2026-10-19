@@ -11,6 +11,7 @@ import {
   IconSearch,
   IconTemplate,
   IconVideo,
+  IconFileImport,
   IconSparkles,
   IconX,
   IconChevronDown,
@@ -20,6 +21,8 @@ import { api, ApiError } from '../api/client';
 import { useToast } from '../components/ui/Toast';
 import { EditableTitle } from '../components/ui/EditableTitle';
 import { SiteWalkModal } from '../components/estimates/SiteWalkModal';
+import { ImportSheetModal } from '../components/estimates/ImportSheetModal';
+import type { FileDetection } from '../lib/importHandoff';
 import { takePendingSiteWalk } from '../lib/siteWalkHandoff';
 import { openDatePicker } from '../lib/datePicker';
 import { fmt, fmtD } from '../lib/format';
@@ -91,6 +94,8 @@ export default function EstimateWorksheet() {
   const [newGroupName, setNewGroupName] = useState('');
   const [showSaveAsTemplate, setShowSaveAsTemplate] = useState(false);
   const [showSiteWalk, setShowSiteWalk] = useState(false);
+  // Import an Excel estimate into this estimate; the file may arrive pre-chosen from the site walk window.
+  const [importSheet, setImportSheet] = useState<{ file: File | null; detection: FileDetection | null } | null>(null);
   // Files chosen in the new-project steps arrive here and start the draft straight away.
   const [handedOffFiles, setHandedOffFiles] = useState<File[] | null>(null);
   const [showInsertFromTemplate, setShowInsertFromTemplate] = useState(false);
@@ -529,6 +534,9 @@ export default function EstimateWorksheet() {
           <button className="btn btn-sm" onClick={() => setShowSiteWalk(true)}>
             <IconVideo size={14} /> Draft from site walk video
           </button>
+          <button className="btn btn-sm" onClick={() => setImportSheet({ file: null, detection: null })}>
+            <IconFileImport size={14} /> Import from Excel
+          </button>
           <button className="btn btn-sm" onClick={() => setShowInsertFromTemplate(true)}>
             <IconTemplate size={14} /> Insert from template or job
           </button>
@@ -702,6 +710,11 @@ export default function EstimateWorksheet() {
           estimateId={id}
           initialFiles={handedOffFiles ?? undefined}
           autoStart={!!handedOffFiles}
+          onImportFile={(file, detection) => {
+            setShowSiteWalk(false);
+            setHandedOffFiles(null);
+            setImportSheet({ file, detection });
+          }}
           onClose={() => {
             setShowSiteWalk(false);
             setHandedOffFiles(null);
@@ -711,6 +724,17 @@ export default function EstimateWorksheet() {
             setHandedOffFiles(null);
             load();
           }}
+        />
+      )}
+
+      {importSheet && id && estimate && (
+        <ImportSheetModal
+          projectId={estimate.project_id}
+          estimateId={id}
+          initialFile={importSheet.file}
+          detection={importSheet.detection}
+          onClose={() => setImportSheet(null)}
+          onImported={() => load()}
         />
       )}
 

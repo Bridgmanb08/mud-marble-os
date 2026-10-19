@@ -1,6 +1,7 @@
 import asyncio
 import io
 import uuid
+from typing import Optional
 
 import openpyxl
 import xlrd
@@ -193,8 +194,13 @@ async def get_status(_: CurrentUser = Depends(get_current_user)):
 
 @router.post("/{project_id}/estimate-sheet/preview", response_model=EstimateSheetPreview)
 async def preview_estimate_sheet(
-    project_id: str, file: UploadFile = File(...), current_user: CurrentUser = Depends(get_current_user)
+    project_id: str,
+    file: UploadFile = File(...),
+    estimate_id: Optional[str] = None,
+    current_user: CurrentUser = Depends(get_current_user),
 ):
+    """estimate_id: import into THIS estimate (the one open on screen) instead of
+    the project's latest. Without it the latest non-archived estimate is used."""
     content = await file.read()
     ext = _ext(file.filename or "")
     if ext not in EXCEL_EXTS and ext not in SCAN_EXTS:
@@ -206,11 +212,18 @@ async def preview_estimate_sheet(
         # from the list, not silently adopted as the draft an import appends
         # into; without this, archiving whichever version happens to be
         # highest would redirect an import into a stale, hidden estimate.
-        db_get("estimates", f"?project_id=eq.{project_id}&is_archived=eq.false&order=version.desc&limit=1"),
+        db_get(
+            "estimates",
+            f"?id=eq.{estimate_id}&project_id=eq.{project_id}&limit=1"
+            if estimate_id
+            else f"?project_id=eq.{project_id}&is_archived=eq.false&order=version.desc&limit=1",
+        ),
         db_get("cost_codes", "?is_active=eq.true&select=id,code"),
     )
     if not project_rows:
         raise HTTPException(status_code=404, detail="Project not found")
+    if estimate_id and not existing_estimates:
+        raise HTTPException(status_code=404, detail="Estimate not found on this project")
     project_name = project_rows[0]["name"].split("|")[0].strip()
     codes_by_code = {c["code"].strip().lower(): c["id"] for c in cost_codes if c.get("code")}
 
