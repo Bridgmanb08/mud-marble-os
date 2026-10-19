@@ -12,6 +12,7 @@ from .routers import (
     dashboard,
     deleted_records,
     estimate_copilot,
+    site_walk,
     estimate_templates,
     estimate_text_defaults,
     estimates,
@@ -79,6 +80,7 @@ app.include_router(cost_codes.router, prefix="/api")
 app.include_router(estimates.router, prefix="/api")
 app.include_router(estimate_text_defaults.router, prefix="/api")
 app.include_router(estimate_copilot.router, prefix="/api")
+app.include_router(site_walk.router, prefix="/api")
 app.include_router(estimate_templates.router, prefix="/api")
 app.include_router(files.router, prefix="/api")
 app.include_router(invoices.router, prefix="/api")

@@ -10,6 +10,7 @@ import {
   IconCopy,
   IconSearch,
   IconTemplate,
+  IconVideo,
   IconSparkles,
   IconX,
   IconChevronDown,
@@ -18,6 +19,7 @@ import {
 import { api, ApiError } from '../api/client';
 import { useToast } from '../components/ui/Toast';
 import { EditableTitle } from '../components/ui/EditableTitle';
+import { SiteWalkModal } from '../components/estimates/SiteWalkModal';
 import { openDatePicker } from '../lib/datePicker';
 import { fmt, fmtD } from '../lib/format';
 import { pdfExportFilename, triggerDownload } from '../lib/download';
@@ -87,6 +89,7 @@ export default function EstimateWorksheet() {
   const [showNewGroupPrompt, setShowNewGroupPrompt] = useState(false);
   const [newGroupName, setNewGroupName] = useState('');
   const [showSaveAsTemplate, setShowSaveAsTemplate] = useState(false);
+  const [showSiteWalk, setShowSiteWalk] = useState(false);
   const [showInsertFromTemplate, setShowInsertFromTemplate] = useState(false);
   const { sensors, collisionDetection, onDragStart, onDragOver, onDragEnd, onDragCancel, groups, groupKeys, dragging } = useGroupedLineItemDrag({
     items,
@@ -512,6 +515,9 @@ export default function EstimateWorksheet() {
       <div className="sh" style={{ flexWrap: 'wrap', gap: 8 }}>
         <div className="st">Worksheet</div>
         <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+          <button className="btn btn-sm" onClick={() => setShowSiteWalk(true)}>
+            <IconVideo size={14} /> Draft from site walk video
+          </button>
           <button className="btn btn-sm" onClick={() => setShowInsertFromTemplate(true)}>
             <IconTemplate size={14} /> Insert from template or job
           </button>
@@ -675,6 +681,17 @@ export default function EstimateWorksheet() {
           onDeleted={() => {
             setShowItemModal(false);
             toast('Line item deleted');
+            load();
+          }}
+        />
+      )}
+
+      {showSiteWalk && id && (
+        <SiteWalkModal
+          estimateId={id}
+          onClose={() => setShowSiteWalk(false)}
+          onApplied={() => {
+            setShowSiteWalk(false);
             load();
           }}
         />
