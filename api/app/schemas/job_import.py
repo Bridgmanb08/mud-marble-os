@@ -125,3 +125,13 @@ class ChangeOrderScanRow(BaseModel):
 
 class ChangeOrderScanPreview(BaseModel):
     row: ChangeOrderScanRow
+
+
+class FileDetection(BaseModel):
+    """What an uploaded file is, worked out from its structure, so the import
+    can be routed without asking which kind it is."""
+    kind: str  # "workbook" | "scan" | "unsupported"
+    has_estimate: bool = False
+    has_inhouse: bool = False  # a Quickbooks and/or Contractors sheet
+    sheets: list[str] = []
+    label: str

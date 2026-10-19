@@ -10,6 +10,7 @@ import { EstimateImportSection } from '../components/job-import/EstimateImportSe
 import { InHouseImportSection } from '../components/job-import/InHouseImportSection';
 import { InvoiceImportSection } from '../components/job-import/InvoiceImportSection';
 import { ChangeOrderImportSection } from '../components/job-import/ChangeOrderImportSection';
+import { takePendingImport } from '../lib/importHandoff';
 import type { ChangeOrder, Invoice, Project } from '../types';
 
 const INVOICE_STATUS_BADGE: Record<string, string> = { draft: 'bg-gray', sent: 'bg-amber', paid: 'bg-green', overdue: 'bg-red', void: 'bg-gray' };
@@ -26,6 +27,9 @@ export default function JobImportWizard() {
   const [showNewCO, setShowNewCO] = useState(false);
   const [showInvoiceScan, setShowInvoiceScan] = useState(false);
   const [showCOScan, setShowCOScan] = useState(false);
+  // Files chosen in the new-project steps, already routed to the section they belong to.
+  const [estimateFile, setEstimateFile] = useState<File | null>(null);
+  const [inhouseFile, setInhouseFile] = useState<File | null>(null);
 
   function loadFinancials() {
     if (!projectId) return;
@@ -42,6 +46,19 @@ export default function JobImportWizard() {
     loadFinancials();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [projectId]);
+
+  useEffect(() => {
+    const files = takePendingImport();
+    if (!files) return;
+    const estimate = files.find((f) => f.detection.has_estimate);
+    const inhouse = files.find((f) => f.detection.has_inhouse);
+    setEstimateFile(estimate?.file ?? null);
+    setInhouseFile(inhouse?.file ?? null);
+    const used = new Set([estimate?.file, inhouse?.file]);
+    const left = files.filter((f) => !used.has(f.file));
+    if (left.length > 0) toast(`${left.length} more file${left.length === 1 ? '' : 's'} not opened -- add ${left.length === 1 ? 'it' : 'them'} with the upload boxes below`, true);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   if (!projectId) return null;
 
@@ -66,7 +83,7 @@ export default function JobImportWizard() {
         <div className="ibt" style={{ fontSize: 13, textTransform: 'none', letterSpacing: 0, border: 'none', padding: 0, marginBottom: 14 }}>
           Estimate
         </div>
-        <EstimateImportSection projectId={projectId} />
+        <EstimateImportSection projectId={projectId} initialFile={estimateFile} />
       </div>
 
       <div className="card" style={{ padding: 20, marginBottom: 16 }}>
@@ -155,7 +172,7 @@ export default function JobImportWizard() {
         <div className="ibt" style={{ fontSize: 13, textTransform: 'none', letterSpacing: 0, border: 'none', padding: 0, marginBottom: 14 }}>
           In-House Sheet
         </div>
-        <InHouseImportSection projectId={projectId} />
+        <InHouseImportSection projectId={projectId} initialFile={inhouseFile} />
       </div>
 
       {showNewInvoice && (

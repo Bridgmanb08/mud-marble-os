@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { api, ApiError } from '../../api/client';
 import { useToast } from '../ui/Toast';
 import { FileDropzone } from '../ui/FileDropzone';
@@ -7,7 +7,7 @@ import type { ContractItemRow, ContractorBlock, InHouseSheetPreview, Subcontract
 
 type RowAction = 'add' | 'skip' | 'update';
 
-export function InHouseImportSection({ projectId }: { projectId: string }) {
+export function InHouseImportSection({ projectId, initialFile }: { projectId: string; initialFile?: File | null }) {
   const toast = useToast();
   const [file, setFile] = useState<File | null>(null);
   const [preview, setPreview] = useState<InHouseSheetPreview | null>(null);
@@ -26,8 +26,19 @@ export function InHouseImportSection({ projectId }: { projectId: string }) {
     setImportedSummary(null);
   }
 
-  async function handlePreview() {
-    if (!file) {
+  // A file already chosen elsewhere (the new-project steps): previewed as soon as this opens.
+  const consumedInitial = useRef(false);
+  useEffect(() => {
+    if (!initialFile || consumedInitial.current) return;
+    consumedInitial.current = true;
+    handleFileChange(initialFile);
+    void handlePreview(initialFile);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [initialFile]);
+
+  async function handlePreview(fileToPreview?: File) {
+    const target = fileToPreview ?? file;
+    if (!target) {
       setError('Choose a file first.');
       return;
     }
@@ -35,7 +46,7 @@ export function InHouseImportSection({ projectId }: { projectId: string }) {
     setError('');
     try {
       const formData = new FormData();
-      formData.append('file', file);
+      formData.append('file', target);
       const result = await api.postForm<InHouseSheetPreview>(`/job-import/${projectId}/inhouse-sheet/preview`, formData);
       setPreview(result);
       // Conflicting/duplicate rows default to "skip" -- Shannon has to actively
@@ -163,7 +174,7 @@ export function InHouseImportSection({ projectId }: { projectId: string }) {
             label="Drag and drop your In-House sheet (Excel, PDF, or photo) here, or click to browse"
           />
           <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginTop: 10 }}>
-            <button className="btn btn-sm" onClick={handlePreview} disabled={!file || loadingPreview}>
+            <button className="btn btn-sm" onClick={() => handlePreview()} disabled={!file || loadingPreview}>
               {loadingPreview ? 'Reading…' : 'Preview'}
             </button>
             {importedSummary && <span style={{ fontSize: 12, color: 'var(--green)' }}>{importedSummary}</span>}
