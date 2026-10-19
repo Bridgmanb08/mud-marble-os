@@ -120,8 +120,17 @@ def parse_estimate_sheet(ws, existing_by_key: dict) -> list[dict]:
             unit_cost = float(cell(row, "Unit Cost") or 0)
             quantity = float(cell(row, "Quantity") or 1)
             markup_raw = float(cell(row, "Markup") or 0)
+            # Optional labor / material split of the unit cost. When only the
+            # split is given, the unit cost is their sum.
+            labor_raw = cell(row, "Unit Cost Labor")
+            material_raw = cell(row, "Unit Cost Material")
+            unit_cost_labor = float(labor_raw) if labor_raw is not None else None
+            unit_cost_material = float(material_raw) if material_raw is not None else None
         except (TypeError, ValueError):
             continue
+        if not unit_cost and (unit_cost_labor is not None or unit_cost_material is not None):
+            unit_cost = round((unit_cost_labor or 0) + (unit_cost_material or 0), 2)
+        unit_raw = cell(row, "Unit")
         category = cell(row, "Category") or ""
         raw_cost_code = cell(row, "Cost Code") or ""
         markup_type_raw = cell(row, "Markup Type") or "%"
@@ -135,6 +144,9 @@ def parse_estimate_sheet(ws, existing_by_key: dict) -> list[dict]:
             "description": description,
             "internal_notes": internal_notes,
             "bucket": bucket_for(category, title),
+            "unit": str(unit_raw).strip() if unit_raw is not None else None,
+            "unit_cost_labor": unit_cost_labor,
+            "unit_cost_material": unit_cost_material,
         }
         rows.append(diff_and_wrap_estimate_row(title, unit_cost, category, raw_cost_code, incoming, existing_by_key))
     return rows

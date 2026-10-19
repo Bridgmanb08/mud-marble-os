@@ -93,7 +93,11 @@ export function EstimateImportSection({
           title: row.title,
           description: row.description,
           quantity: row.quantity,
+          unit: row.unit ?? undefined,
           unit_cost: row.unit_cost,
+          // Present only when the sheet had labor / material columns.
+          ...(row.unit_cost_labor != null ? { unit_cost_labor: row.unit_cost_labor } : {}),
+          ...(row.unit_cost_material != null ? { unit_cost_material: row.unit_cost_material } : {}),
           cost_type: 'none',
           markup_type: row.markup_type,
           markup_value: row.markup_value,
@@ -231,7 +235,7 @@ export function EstimateImportSection({
                     }
                   />
                   <span style={{ flex: 1 }}>{row.title}</span>
-                  <span style={{ color: 'var(--t2)' }}>{row.quantity} × ${row.unit_cost.toLocaleString()}</span>
+                  <span style={{ color: 'var(--t2)' }}>{row.quantity}{row.unit ? ` ${row.unit}` : ''} × ${row.unit_cost.toLocaleString()}{row.unit_cost_labor != null || row.unit_cost_material != null ? ` (labor $${(row.unit_cost_labor ?? 0).toLocaleString()} + material $${(row.unit_cost_material ?? 0).toLocaleString()})` : ''}</span>
                   {row.already_present && <span style={{ color: 'var(--t3)' }}>already imported</span>}
                   {row.cost_code && !row.matched_cost_code_id && (
                     <span style={{ color: 'var(--amber)' }}>code "{row.cost_code}" not matched</span>

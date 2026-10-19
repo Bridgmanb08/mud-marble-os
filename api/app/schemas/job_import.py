@@ -23,6 +23,11 @@ class EstimateSheetRow(BaseModel):
     cost_code: Optional[str] = None
     quantity: float
     unit_cost: float
+    # Optional columns of the import sheet: the unit of measure and the labor /
+    # material split of the unit cost.
+    unit: Optional[str] = None
+    unit_cost_labor: Optional[float] = None
+    unit_cost_material: Optional[float] = None
     markup_type: str
     markup_value: float
     description: Optional[str] = None
