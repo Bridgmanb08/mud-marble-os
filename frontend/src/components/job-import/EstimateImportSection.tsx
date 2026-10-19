@@ -9,10 +9,14 @@ type RowAction = 'add' | 'skip' | 'update';
 
 export function EstimateImportSection({
   projectId,
+  estimateId: targetEstimateId,
   onImported,
   initialFile,
 }: {
   projectId: string;
+  // Import into this specific estimate (the one open on screen) rather than the
+  // project's latest.
+  estimateId?: string;
   // Lets a caller that already has its own estimates list (Project
   // Detail's Estimate tab) refresh it after an import, instead of only
   // the standalone Job Import wizard page ever finding out an import
@@ -60,7 +64,7 @@ export function EstimateImportSection({
     try {
       const formData = new FormData();
       formData.append('file', target);
-      const result = await api.postForm<EstimateSheetPreview>(`/job-import/${projectId}/estimate-sheet/preview`, formData);
+      const result = await api.postForm<EstimateSheetPreview>(`/job-import/${projectId}/estimate-sheet/preview${targetEstimateId ? `?estimate_id=${targetEstimateId}` : ''}`, formData);
       setPreview(result);
       // Conflicting rows default to "skip" (keep the existing record) -- Shannon
       // has to actively opt into overwriting a record with the imported values --

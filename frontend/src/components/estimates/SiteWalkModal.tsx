@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import { IconAlertTriangle, IconVideo, IconX } from '@tabler/icons-react';
 import { api, ApiError } from '../../api/client';
 import { Modal } from '../ui/Modal';
+import type { FileDetection } from '../../lib/importHandoff';
 import { useToast } from '../ui/Toast';
 import {
   MAX_VIDEO_BYTES,
@@ -61,6 +62,7 @@ export function SiteWalkModal({
   onApplied,
   initialFiles,
   autoStart,
+  onImportFile,
 }: {
   estimateId: string;
   onClose: () => void;
@@ -69,6 +71,9 @@ export function SiteWalkModal({
   // draft begins as soon as they're loaded and speech-to-text availability is known.
   initialFiles?: File[];
   autoStart?: boolean;
+  // A spreadsheet or scan dropped here isn't a site walk -- it's an estimate to
+  // import. Handed to the page, which opens the import window for it.
+  onImportFile?: (file: File, detection: FileDetection) => void;
 }) {
   const toast = useToast();
   const [clips, setClips] = useState<Clip[]>([]);
@@ -106,9 +111,25 @@ export function SiteWalkModal({
   }
 
   function addFiles(list: FileList | File[]) {
+    // A spreadsheet or scan goes to the estimate import instead.
+    const importable = Array.from(list).find((f) => /\.(xlsx|xlsm|xls|pdf|jpe?g|png)$/i.test(f.name));
+    if (importable && onImportFile) {
+      if (Array.from(list).some((f) => isVideoFile(f) || isAudioFile(f))) toast('Importing the spreadsheet first -- add your video afterwards.');
+      if (/\.(xlsx|xlsm|xls)$/i.test(importable.name)) {
+        const form = new FormData();
+        form.append('file', importable);
+        api
+          .postForm<FileDetection>('/job-import/detect', form)
+          .then((detection) => onImportFile(importable, detection))
+          .catch((e) => setError(e instanceof ApiError ? e.message : "Couldn't read that spreadsheet."));
+      } else {
+        onImportFile(importable, { kind: 'scan', has_estimate: true, has_inhouse: false, sheets: [], label: 'Scanned document' });
+      }
+      return;
+    }
     const videos = Array.from(list).filter((f) => isVideoFile(f) || isAudioFile(f));
     if (videos.length === 0) {
-      setError('Add a video (.mov or .mp4) or a voice memo (.m4a).');
+      setError('Add a video (.mov or .mp4), a voice memo (.m4a), or an Excel estimate.');
       return;
     }
     const tooBig = videos.find((f) => f.size > MAX_VIDEO_BYTES);
@@ -257,7 +278,7 @@ export function SiteWalkModal({
       {phase === 'pick' && (
         <>
           <p style={{ fontSize: 13, color: 'var(--t2)', marginBottom: 12 }}>
-            Drop one or more narrated walk-through videos or voice memos. Say what you see and what the scope is (room, sizes, what comes out, what
+            Drop one or more narrated walk-through videos or voice memos (or an Excel estimate to import). Say what you see and what the scope is (room, sizes, what comes out, what
             goes in) -- the more you say, the better the draft. You'll review every line before anything is added, and no prices are set.
           </p>
           {transcriptionAvailable === false && (
@@ -287,10 +308,10 @@ export function SiteWalkModal({
             }}
           >
             <IconVideo size={28} style={{ color: 'var(--t3)' }} />
-            <div style={{ margin: '6px 0 10px', fontSize: 13 }}>Drop videos or voice memos here</div>
+            <div style={{ margin: '6px 0 10px', fontSize: 13 }}>Drop videos, voice memos or an Excel estimate here</div>
             <label className="btn btn-sm" style={{ cursor: 'pointer' }}>
               Choose files
-              <input type="file" accept="video/*,audio/*,.mov,.mp4,.m4v,.m4a,.mp3,.wav" multiple style={{ display: 'none' }} onChange={(e) => e.target.files && addFiles(e.target.files)} />
+              <input type="file" accept="video/*,audio/*,.mov,.mp4,.m4v,.m4a,.mp3,.wav,.xlsx,.xlsm,.xls,.pdf,.jpg,.jpeg,.png" multiple style={{ display: 'none' }} onChange={(e) => e.target.files && addFiles(e.target.files)} />
             </label>
           </div>
           {clips.length > 0 && (
