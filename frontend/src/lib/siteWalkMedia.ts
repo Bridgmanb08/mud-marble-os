@@ -24,6 +24,9 @@ export const MAX_VIDEO_BYTES = 800 * 1024 * 1024;
 
 const SEEK_TIMEOUT_MS = 10000;
 
+export const isAudioFile = (file: File): boolean => file.type.startsWith('audio/') || /\.(m4a|mp3|wav|aac|caf|ogg)$/i.test(file.name);
+export const isVideoFile = (file: File): boolean => file.type.startsWith('video/') || /\.(mov|mp4|m4v)$/i.test(file.name);
+
 export const fmtClock = (seconds: number): string => {
   const s = Math.max(0, Math.floor(seconds));
   return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`;

@@ -20,6 +20,7 @@ import { api, ApiError } from '../api/client';
 import { useToast } from '../components/ui/Toast';
 import { EditableTitle } from '../components/ui/EditableTitle';
 import { SiteWalkModal } from '../components/estimates/SiteWalkModal';
+import { takePendingSiteWalk } from '../lib/siteWalkHandoff';
 import { openDatePicker } from '../lib/datePicker';
 import { fmt, fmtD } from '../lib/format';
 import { pdfExportFilename, triggerDownload } from '../lib/download';
@@ -90,6 +91,8 @@ export default function EstimateWorksheet() {
   const [newGroupName, setNewGroupName] = useState('');
   const [showSaveAsTemplate, setShowSaveAsTemplate] = useState(false);
   const [showSiteWalk, setShowSiteWalk] = useState(false);
+  // Files chosen in the new-project steps arrive here and start the draft straight away.
+  const [handedOffFiles, setHandedOffFiles] = useState<File[] | null>(null);
   const [showInsertFromTemplate, setShowInsertFromTemplate] = useState(false);
   const { sensors, collisionDetection, onDragStart, onDragOver, onDragEnd, onDragCancel, groups, groupKeys, dragging } = useGroupedLineItemDrag({
     items,
@@ -127,6 +130,14 @@ export default function EstimateWorksheet() {
     load();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [id]);
+
+  useEffect(() => {
+    const files = takePendingSiteWalk();
+    if (files && files.length > 0) {
+      setHandedOffFiles(files);
+      setShowSiteWalk(true);
+    }
+  }, []);
 
   // Sorted id list, not the items array itself, so a pure reorder/rename
   // (ids unchanged) doesn't refire the suggestion -- only an actual add or
@@ -689,9 +700,15 @@ export default function EstimateWorksheet() {
       {showSiteWalk && id && (
         <SiteWalkModal
           estimateId={id}
-          onClose={() => setShowSiteWalk(false)}
+          initialFiles={handedOffFiles ?? undefined}
+          autoStart={!!handedOffFiles}
+          onClose={() => {
+            setShowSiteWalk(false);
+            setHandedOffFiles(null);
+          }}
           onApplied={() => {
             setShowSiteWalk(false);
+            setHandedOffFiles(null);
             load();
           }}
         />

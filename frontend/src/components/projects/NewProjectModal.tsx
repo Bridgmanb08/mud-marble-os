@@ -3,6 +3,7 @@ import { api, ApiError } from '../../api/client';
 import { Modal } from '../ui/Modal';
 import { openDatePicker } from '../../lib/datePicker';
 import { statusOptionsIncluding } from '../../lib/projectStatuses';
+import { NewProjectWizard } from './NewProjectWizard';
 import type { Client, Project } from '../../types';
 
 interface NewProjectModalProps {
@@ -63,6 +64,12 @@ function toPayload(v: ProjectFormValues) {
 }
 
 export function NewProjectModal({ onClose, onCreated, project }: NewProjectModalProps) {
+  // Starting a project is a guided, step-by-step flow; the full form below is for editing one.
+  if (!project) return <NewProjectWizard onClose={onClose} onCreated={onCreated} />;
+  return <EditProjectModal onClose={onClose} onCreated={onCreated} project={project} />;
+}
+
+function EditProjectModal({ onClose, onCreated, project }: NewProjectModalProps & { project: Project }) {
   const [name, setName] = useState(project?.name || '');
   const [address, setAddress] = useState(project?.address || '');
   const [city, setCity] = useState(project?.city || '');

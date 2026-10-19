@@ -6,6 +6,8 @@ import { useToast } from '../ui/Toast';
 import {
   MAX_VIDEO_BYTES,
   extractAudioPieces,
+  isAudioFile,
+  isVideoFile,
   sampleFrames,
   segmentsToText,
   videoDuration,
@@ -57,10 +59,16 @@ export function SiteWalkModal({
   estimateId,
   onClose,
   onApplied,
+  initialFiles,
+  autoStart,
 }: {
   estimateId: string;
   onClose: () => void;
   onApplied: () => void;
+  // Files already chosen elsewhere (the new-project steps). With autoStart the
+  // draft begins as soon as they're loaded and speech-to-text availability is known.
+  initialFiles?: File[];
+  autoStart?: boolean;
 }) {
   const toast = useToast();
   const [clips, setClips] = useState<Clip[]>([]);
@@ -77,12 +85,17 @@ export function SiteWalkModal({
   const [dragOver, setDragOver] = useState(false);
   const cancelled = useRef(false);
   const labelCount = useRef(0); // numbers videos 1, 2, 3... even when several are added at once
+  const memoCount = useRef(0);
+  const seeded = useRef(false);
+  const autoStarted = useRef(false);
+  const [statusChecked, setStatusChecked] = useState(false);
 
   useEffect(() => {
     api
       .get<{ transcription_available: boolean }>(`/estimates/${estimateId}/site-walk/status`)
       .then((s) => setTranscriptionAvailable(s.transcription_available))
-      .catch(() => setTranscriptionAvailable(null));
+      .catch(() => setTranscriptionAvailable(null))
+      .finally(() => setStatusChecked(true));
     return () => {
       cancelled.current = true;
     };
@@ -93,9 +106,9 @@ export function SiteWalkModal({
   }
 
   function addFiles(list: FileList | File[]) {
-    const videos = Array.from(list).filter((f) => f.type.startsWith('video/') || /\.(mov|mp4|m4v)$/i.test(f.name));
+    const videos = Array.from(list).filter((f) => isVideoFile(f) || isAudioFile(f));
     if (videos.length === 0) {
-      setError('Add video files (.mov or .mp4).');
+      setError('Add a video (.mov or .mp4) or a voice memo (.m4a).');
       return;
     }
     const tooBig = videos.find((f) => f.size > MAX_VIDEO_BYTES);
@@ -106,7 +119,7 @@ export function SiteWalkModal({
     setError('');
     const added = videos.map((file) => ({
       id: nextClipId++,
-      label: `Video ${++labelCount.current}`,
+      label: isAudioFile(file) ? `Voice memo ${++memoCount.current}` : `Video ${++labelCount.current}`,
       file,
       status: 'queued' as const,
       transcript: '',
@@ -152,19 +165,21 @@ export function SiteWalkModal({
     try {
       // Work out the frame spacing from the total length first, so a long walk
       // still lands at about MAX_FRAMES frames overall.
-      const durations = await Promise.all(work.map((c) => (c.file ? videoDuration(c.file).catch(() => 0) : Promise.resolve(0))));
+      const durations = await Promise.all(work.map((c) => (c.file && !isAudioFile(c.file) ? videoDuration(c.file).catch(() => 0) : Promise.resolve(0))));
       const total = durations.reduce((a, b) => a + b, 0);
       const everySec = Math.max(MIN_FRAME_GAP_SECONDS, Math.ceil(total / MAX_FRAMES));
       const allFrames: SampledFrame[] = [];
       for (const clip of work) {
         if (!clip.file) continue;
         if (cancelled.current) return;
-        setStage(`${clip.label}: reading the video…`);
-        updateClip(clip.id, { status: 'reading', message: 'Reading frames…' });
-        try {
-          allFrames.push(...(await sampleFrames(clip.file, clip.label, { everySec })));
-        } catch (e) {
-          updateClip(clip.id, { message: e instanceof Error ? e.message : 'Could not read frames.' });
+        if (!isAudioFile(clip.file)) {
+          setStage(`${clip.label}: reading the video…`);
+          updateClip(clip.id, { status: 'reading', message: 'Reading frames…' });
+          try {
+            allFrames.push(...(await sampleFrames(clip.file, clip.label, { everySec })));
+          } catch (e) {
+            updateClip(clip.id, { message: e instanceof Error ? e.message : 'Could not read frames.' });
+          }
         }
         if (transcriptionAvailable === false) {
           updateClip(clip.id, { status: 'error', message: 'Speech-to-text is not set up -- paste what was said below.' });
@@ -220,6 +235,20 @@ export function SiteWalkModal({
     }
   }
 
+  useEffect(() => {
+    if (seeded.current || !initialFiles || initialFiles.length === 0) return;
+    seeded.current = true;
+    addFiles(initialFiles);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  useEffect(() => {
+    if (!autoStart || autoStarted.current || !statusChecked || clips.length === 0 || phase !== 'pick') return;
+    autoStarted.current = true;
+    void start();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [autoStart, statusChecked, clips, phase]);
+
   const canStart = clips.length > 0 || pasted.trim().length > 0;
   const keptCount = rows.filter((r) => r.keep).length;
 
@@ -228,7 +257,7 @@ export function SiteWalkModal({
       {phase === 'pick' && (
         <>
           <p style={{ fontSize: 13, color: 'var(--t2)', marginBottom: 12 }}>
-            Drop one or more narrated walk-through videos. Say what you see and what the scope is (room, sizes, what comes out, what
+            Drop one or more narrated walk-through videos or voice memos. Say what you see and what the scope is (room, sizes, what comes out, what
             goes in) -- the more you say, the better the draft. You'll review every line before anything is added, and no prices are set.
           </p>
           {transcriptionAvailable === false && (
@@ -258,10 +287,10 @@ export function SiteWalkModal({
             }}
           >
             <IconVideo size={28} style={{ color: 'var(--t3)' }} />
-            <div style={{ margin: '6px 0 10px', fontSize: 13 }}>Drop videos here</div>
+            <div style={{ margin: '6px 0 10px', fontSize: 13 }}>Drop videos or voice memos here</div>
             <label className="btn btn-sm" style={{ cursor: 'pointer' }}>
-              Choose videos
-              <input type="file" accept="video/*,.mov,.mp4,.m4v" multiple style={{ display: 'none' }} onChange={(e) => e.target.files && addFiles(e.target.files)} />
+              Choose files
+              <input type="file" accept="video/*,audio/*,.mov,.mp4,.m4v,.m4a,.mp3,.wav" multiple style={{ display: 'none' }} onChange={(e) => e.target.files && addFiles(e.target.files)} />
             </label>
           </div>
           {clips.length > 0 && (
