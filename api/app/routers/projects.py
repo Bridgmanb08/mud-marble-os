@@ -89,6 +89,10 @@ async def list_projects(
 @router.post("", response_model=ProjectOut)
 async def create_project(body: ProjectCreate, _: CurrentUser = Depends(get_current_user)):
     data = body.model_dump(exclude_none=True)
+    # The projects table requires an address (NOT NULL), but a job doesn't always
+    # have one yet (a lead, a commercial space). A blank address is stored as an
+    # empty string instead of failing the save.
+    data.setdefault("address", "")
     rows = await db_post("projects", data)
     project_id = rows[0]["id"]
     await _sync_project_dates(project_id, data)
@@ -138,6 +142,8 @@ async def update_project(project_id: str, body: ProjectUpdate, current_user: Cur
     # clear a field (e.g. clearing start_date), and that null has to reach the
     # database. exclude_none would silently drop it instead.
     updates = body.model_dump(exclude_unset=True)
+    if "address" in updates and updates["address"] is None:
+        updates["address"] = ""  # clearing the address blanks it; the column can't hold null
     before = await change_log.fetch_before("projects", project_id, updates.keys())
     await db_patch("projects", project_id, updates)
     await change_log.log_changes("projects", project_id, before, updates, current_user)
