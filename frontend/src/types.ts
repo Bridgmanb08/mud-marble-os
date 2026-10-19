@@ -1259,6 +1259,9 @@ export interface EstimateSheetRow {
   cost_code: string | null;
   quantity: number;
   unit_cost: number;
+  unit?: string | null;
+  unit_cost_labor?: number | null;
+  unit_cost_material?: number | null;
   markup_type: string;
   markup_value: number;
   description: string | null;
