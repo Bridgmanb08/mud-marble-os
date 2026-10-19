@@ -1,14 +1,27 @@
 import { useEffect, useRef, useState, type FormEvent } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { IconMicrophone, IconVideo, IconX } from '@tabler/icons-react';
+import { IconFileSpreadsheet, IconMicrophone, IconVideo, IconX } from '@tabler/icons-react';
 import { api, ApiError } from '../../api/client';
 import { Modal } from '../ui/Modal';
 import { useToast } from '../ui/Toast';
 import { isAudioFile, isVideoFile } from '../../lib/siteWalkMedia';
 import { setPendingSiteWalk } from '../../lib/siteWalkHandoff';
+import { setPendingImport, type FileDetection } from '../../lib/importHandoff';
 import type { Client, Estimate, Project } from '../../types';
 
 type Step = 'address' | 'name' | 'media';
+
+// One file the person added on the last step, and what it was worked out to be.
+interface PickedFile {
+  file: File;
+  kind: 'media' | 'import';
+  label: string; // shown next to the name: "Video", "Estimate sheet", "In-house workbook (...)"
+  detection?: FileDetection;
+  detecting?: boolean;
+}
+
+const SPREADSHEET = /\.(xlsx|xlsm|xls)$/i;
+const SCAN = /\.(pdf|jpe?g|png)$/i;
 const STEPS: Step[] = ['address', 'name', 'media'];
 
 // A guided, one-question-at-a-time way to start a project: the address, what to
@@ -32,7 +45,7 @@ export function NewProjectWizard({
   const [nameEdited, setNameEdited] = useState(false);
   const [clientId, setClientId] = useState('');
   const [clients, setClients] = useState<Client[]>([]);
-  const [files, setFiles] = useState<File[]>([]);
+  const [files, setFiles] = useState<PickedFile[]>([]);
   const [dragOver, setDragOver] = useState(false);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
@@ -69,13 +82,38 @@ export function NewProjectWizard({
   }
 
   function addFiles(list: FileList | File[]) {
-    const picked = Array.from(list).filter((f) => isVideoFile(f) || isAudioFile(f));
-    if (picked.length === 0) {
-      setError('Add a video (.mov or .mp4) or a voice memo (.m4a).');
+    const added: PickedFile[] = [];
+    for (const file of Array.from(list)) {
+      if (isVideoFile(file)) added.push({ file, kind: 'media', label: 'Video' });
+      else if (isAudioFile(file)) added.push({ file, kind: 'media', label: 'Voice memo' });
+      else if (SPREADSHEET.test(file.name)) added.push({ file, kind: 'import', label: 'Spreadsheet', detecting: true });
+      else if (SCAN.test(file.name)) {
+        added.push({
+          file,
+          kind: 'import',
+          label: 'Scanned document (will be read as an estimate)',
+          detection: { kind: 'scan', has_estimate: true, has_inhouse: false, sheets: [], label: 'Scanned document' },
+        });
+      }
+    }
+    if (added.length === 0) {
+      setError('Add a video, voice memo, spreadsheet (.xlsx or .xls), or a scan (PDF or photo).');
       return;
     }
     setError('');
-    setFiles((prev) => [...prev, ...picked]);
+    setFiles((prev) => [...prev, ...added]);
+    // Spreadsheets: ask the server what's in them (estimate sheet, in-house
+    // workbook...) so the right import runs without asking.
+    for (const item of added.filter((a) => a.detecting)) {
+      const form = new FormData();
+      form.append('file', item.file);
+      api
+        .postForm<FileDetection>('/job-import/detect', form)
+        .then((detection) =>
+          setFiles((prev) => prev.map((f) => (f.file === item.file ? { ...f, detecting: false, detection, label: detection.label } : f)))
+        )
+        .catch(() => setFiles((prev) => prev.map((f) => (f.file === item.file ? { ...f, detecting: false, label: "Couldn't read this file" } : f))));
+    }
   }
 
   async function create(withMedia: boolean) {
@@ -102,10 +140,23 @@ export function NewProjectWizard({
       onCreated(project);
       return;
     }
-    // Start the estimate and hand the files to its site walk window.
+    // Spreadsheets and scans go to the Job import screen, each routed to the
+    // import it belongs to (the estimate sheet, the in-house sheet).
+    const importFiles = files.filter((f) => f.kind === 'import' && f.detection && (f.detection.has_estimate || f.detection.has_inhouse));
+    if (importFiles.length > 0) {
+      setPendingImport(importFiles.map((f) => ({ file: f.file, detection: f.detection! })));
+      if (files.some((f) => f.kind === 'media')) {
+        toast('Add your video from the estimate afterwards: "Draft from site walk video"');
+      }
+      setSaving(false);
+      onClose();
+      navigate(`/job-import/${project.id}`);
+      return;
+    }
+    // Videos / voice memos: start the estimate and hand the files to its site walk window.
     try {
       const estimate = await api.post<Estimate>('/estimates', { project_id: project.id, version: 1, status: 'draft', pm_fee_total: 0 });
-      setPendingSiteWalk(files);
+      setPendingSiteWalk(files.filter((f) => f.kind === 'media').map((f) => f.file));
       setSaving(false);
       onClose();
       navigate(`/estimates/${estimate.id}`);
@@ -190,10 +241,10 @@ export function NewProjectWizard({
 
         {step === 'media' && (
           <>
-            <div style={{ fontSize: 22, fontWeight: 600, marginBottom: 4 }}>Got a video or voice memo of the job?</div>
+            <div style={{ fontSize: 22, fontWeight: 600, marginBottom: 4 }}>Got files for the job?</div>
             <p style={{ color: 'var(--t2)', fontSize: 14, marginBottom: 16 }}>
-              Upload a walk-through video, or a voice memo describing the work, and I'll draft the estimate from what you say and show. You review every
-              line before anything is added.
+              Drop a walk-through video or a voice memo and I'll draft the estimate from what you say and show. Or drop an estimate or in-house spreadsheet
+              (or a scan) and I'll import it. I work out which is which, and you review everything before it's added.
             </p>
             <div
               onDragOver={(e) => {
@@ -218,19 +269,20 @@ export function NewProjectWizard({
                 <IconVideo size={26} />
                 <IconMicrophone size={26} />
               </div>
-              <div style={{ margin: '6px 0 10px', fontSize: 13 }}>Drop a video or voice memo here</div>
+              <div style={{ margin: '6px 0 10px', fontSize: 13 }}>Drop videos, voice memos, spreadsheets or scans here</div>
               <label className="btn btn-sm" style={{ cursor: 'pointer' }}>
                 Choose files
-                <input type="file" accept="video/*,audio/*,.mov,.mp4,.m4v,.m4a,.mp3,.wav" multiple style={{ display: 'none' }} onChange={(e) => e.target.files && addFiles(e.target.files)} />
+                <input type="file" accept="video/*,audio/*,.mov,.mp4,.m4v,.m4a,.mp3,.wav,.xlsx,.xlsm,.xls,.pdf,.jpg,.jpeg,.png" multiple style={{ display: 'none' }} onChange={(e) => e.target.files && addFiles(e.target.files)} />
               </label>
             </div>
             {files.length > 0 && (
               <div style={{ marginTop: 10 }}>
                 {files.map((f, i) => (
                   <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '5px 0', fontSize: 13, borderBottom: '1px solid var(--border)' }}>
-                    {isAudioFile(f) ? <IconMicrophone size={14} /> : <IconVideo size={14} />}
-                    <span style={{ flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{f.name}</span>
-                    <span style={{ color: 'var(--t3)' }}>{(f.size / 1048576).toFixed(0)} MB</span>
+                    {f.kind === 'import' ? <IconFileSpreadsheet size={14} /> : isAudioFile(f.file) ? <IconMicrophone size={14} /> : <IconVideo size={14} />}
+                    <span style={{ flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{f.file.name}</span>
+                    <span className="badge bg-gray" title="What this file looks like">{f.detecting ? 'Checking…' : f.label}</span>
+                    <span style={{ color: 'var(--t3)' }}>{Math.max(1, Math.round(f.file.size / 1048576))} MB</span>
                     <button type="button" className="btn-reset" title="Remove" onClick={() => setFiles((prev) => prev.filter((_, j) => j !== i))}>
                       <IconX size={14} />
                     </button>
@@ -260,8 +312,8 @@ export function NewProjectWizard({
                 {saving && files.length === 0 ? 'Creating…' : 'Skip'}
               </button>
             )}
-            <button type="submit" className="btn btn-p" disabled={saving}>
-              {step === 'media' ? (saving ? 'Creating…' : files.length > 0 ? 'Create & draft the estimate' : 'Create project') : 'Next'}
+            <button type="submit" className="btn btn-p" disabled={saving || files.some((f) => f.detecting)}>
+              {step === 'media' ? (saving ? 'Creating…' : files.some((f) => f.kind === 'import') ? 'Create & import' : files.length > 0 ? 'Create & draft the estimate' : 'Create project') : 'Next'}
             </button>
           </div>
         </div>

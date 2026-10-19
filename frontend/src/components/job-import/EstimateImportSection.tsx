@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { api, ApiError } from '../../api/client';
 import { useToast } from '../ui/Toast';
 import { FileDropzone } from '../ui/FileDropzone';
@@ -10,6 +10,7 @@ type RowAction = 'add' | 'skip' | 'update';
 export function EstimateImportSection({
   projectId,
   onImported,
+  initialFile,
 }: {
   projectId: string;
   // Lets a caller that already has its own estimates list (Project
@@ -17,6 +18,8 @@ export function EstimateImportSection({
   // the standalone Job Import wizard page ever finding out an import
   // happened.
   onImported?: () => void;
+  // A file already chosen elsewhere (the new-project steps): previewed as soon as this opens.
+  initialFile?: File | null;
 }) {
   const toast = useToast();
   const [file, setFile] = useState<File | null>(null);
@@ -37,6 +40,14 @@ export function EstimateImportSection({
     // `file` state (which wouldn't be updated yet in this same tick).
     if (selected) handlePreview(selected);
   }
+
+  const consumedInitial = useRef(false);
+  useEffect(() => {
+    if (!initialFile || consumedInitial.current) return;
+    consumedInitial.current = true;
+    handleFileChange(initialFile);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [initialFile]);
 
   async function handlePreview(fileToPreview?: File) {
     const target = fileToPreview ?? file;

@@ -29,6 +29,7 @@ from ..schemas.job_import import (
     ContractorBlock,
     EstimateSheetPreview,
     EstimateSheetRow,
+    FileDetection,
     InHouseSheetPreview,
     InvoiceScanPreview,
     InvoiceScanRow,
@@ -108,6 +109,52 @@ def _find_sheet(wb, name: str):
         if sheet_name.strip().lower() == name.lower():
             return wb[sheet_name]
     return None
+
+
+def detect_workbook(wb) -> FileDetection:
+    """Mirrors how the two Excel imports find their data: the estimate import
+    uses a sheet named "Estimate" (or the only sheet in the file), the in-house
+    import uses sheets named "Quickbooks" and/or "Contractors"."""
+    names = list(wb.sheetnames)
+    has_inhouse = _find_sheet(wb, "Quickbooks") is not None or _find_sheet(wb, "Contractors") is not None
+    has_estimate = _find_sheet(wb, "Estimate") is not None
+    if not has_estimate and len(names) == 1:
+        first_row = next(wb[names[0]].iter_rows(min_row=1, max_row=1, values_only=True), ())
+        headers = {str(v).strip().lower() for v in first_row if v not in (None, "")}
+        has_estimate = "title" in headers and bool(headers & {"quantity", "unit cost", "unit cost labor", "unit cost material"})
+    parts = []
+    if has_estimate:
+        parts.append("estimate")
+    if _find_sheet(wb, "Quickbooks") is not None:
+        parts.append("QuickBooks transactions")
+    if _find_sheet(wb, "Contractors") is not None:
+        parts.append("contractors")
+    if len(parts) == 3 or (has_estimate and has_inhouse):
+        label = "In-house workbook (" + ", ".join(parts) + ")"
+    elif has_estimate:
+        label = "Estimate sheet"
+    elif has_inhouse:
+        label = "In-house sheet (" + ", ".join(parts) + ")"
+    else:
+        label = "Spreadsheet -- couldn't tell what's in it"
+    return FileDetection(kind="workbook", has_estimate=has_estimate, has_inhouse=has_inhouse, sheets=names, label=label)
+
+
+@router.post("/detect", response_model=FileDetection)
+async def detect_file(file: UploadFile = File(...), _: CurrentUser = Depends(get_current_user)):
+    """Works out what an uploaded file is (which import it belongs to) without
+    importing anything."""
+    ext = _ext(file.filename or "")
+    if ext in SCAN_EXTS:
+        return FileDetection(kind="scan", has_estimate=True, label="Scanned document (will be read as an estimate)")
+    if ext not in EXCEL_EXTS:
+        return FileDetection(kind="unsupported", label="Not a spreadsheet, scan, video, or voice memo")
+    content = await file.read()
+    try:
+        wb = _load_workbook(content, file.filename or "")
+    except Exception as e:  # noqa: BLE001
+        raise HTTPException(status_code=400, detail=f"Could not read that file: {e}") from e
+    return detect_workbook(wb)
 
 
 @router.get("/status", response_model=list[JobImportStatus])
