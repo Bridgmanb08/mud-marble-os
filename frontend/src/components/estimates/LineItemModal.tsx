@@ -4,6 +4,7 @@ import { api, ApiError } from '../../api/client';
 import { Modal } from '../ui/Modal';
 import { fmt, fmtD } from '../../lib/format';
 import { projectStatusLabel } from '../../lib/projectStatuses';
+import { convertMarkup, type MarkupType } from '../../lib/markupConvert';
 import { useReferenceData } from '../../reference-data/ReferenceDataContext';
 import { CostCodeSelect } from '../ui/CostCodeSelect';
 import type { CostCode, EstimateLineItem, EstimateTemplateItem, LineItemReference } from '../../types';
@@ -39,10 +40,6 @@ const COST_TYPES = [
   { value: 'material', label: 'Material' },
   { value: 'subcontractor', label: 'Subcontractor' },
 ];
-
-function round2(n: number): number {
-  return Math.round(n * 100) / 100;
-}
 
 const NEW_GROUP = '__new_group__';
 
@@ -188,32 +185,15 @@ export function LineItemModal({
   const profit = ownerPrice - builderCost;
   const margin = ownerPrice !== 0 ? (profit / ownerPrice) * 100 : 0;
 
-  // Converts markupValue so the resulting profit stays the same across a
-  // Flat<->Percent switch -- e.g. a $500 flat markup on a 100-unit line
-  // becomes $5/unit... no wait, becomes whatever percent equals $500, not a
-  // per-unit figure. Falls back to leaving the number as-is when there's no
-  // builder cost to convert against.
-  //
-  // Per-unit is deliberately NOT part of this preservation on either side of
-  // the switch. Converting *into* per_unit by dividing the old total by
-  // quantity produces a tiny, easy-to-miss decimal (e.g. $6 flat on 2625
-  // units becomes "0.0023") that silently reproduces the exact bug this
-  // markup type exists to fix: a line meant to read "$6/unit" that's really
-  // still "$6 total" underneath, just in a different field. Reset to blank
-  // instead, so switching to Profit per unit always means typing the real
-  // number.
+  // Switching the markup type re-expresses the markup so the line's profit stays
+  // the same: 35% on $10,800 of cost becomes $2.3625 per unit on 1,600 units (or
+  // $3,780 flat). The line under the value shows the math, so a small per-unit
+  // figure can't be mistaken for a total. With no quantity / cost to divide by the
+  // value is left blank to type in.
   function handleMarkupTypeChange(newType: string) {
     if (newType === markupType) return;
-    if (newType === 'per_unit' || markupType === 'per_unit') {
-      setMarkupValue('');
-    } else {
-      const currentProfit = markupType === 'flat' ? markup : builderCost * (markup / 100);
-      if (newType === 'flat') {
-        setMarkupValue(String(round2(currentProfit)));
-      } else if (builderCost !== 0) {
-        setMarkupValue(String(round2((currentProfit / builderCost) * 100)));
-      }
-    }
+    const converted = convertMarkup(markupType as MarkupType, newType as MarkupType, markup, qty, builderCost);
+    setMarkupValue(converted === null ? '' : String(converted));
     setMarkupType(newType);
   }
 
@@ -540,6 +520,11 @@ export function LineItemModal({
             <div className="fg">
               <label className="fl">Markup value{markupType === 'per_unit' ? ' (per unit)' : ''}</label>
               <input className="fi" type="number" value={markupValue} onChange={(e) => setMarkupValue(e.target.value)} />
+              {markupType === 'per_unit' && qty > 0 && markup !== 0 && (
+                <div className="m-sub">
+                  ${markup.toLocaleString(undefined, { maximumFractionDigits: 6 })} × {qty.toLocaleString()} = ${profit.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} profit
+                </div>
+              )}
             </div>
             <div className="fg" />
           </div>
