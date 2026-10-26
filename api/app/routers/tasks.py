@@ -88,9 +88,12 @@ async def _enrich(rows: list[dict]) -> list[TaskOut]:
 
 
 async def _gather_related(id_filter: str):
-    subtasks = await db_get("task_subtasks", f"?task_id=in.({id_filter})&select=task_id,is_complete")
-    comments = await db_get("task_comments", f"?task_id=in.({id_filter})&select=task_id,author,created_at")
-    deps = await db_get("task_dependencies", f"?task_id=in.({id_filter})&select=task_id,depends_on_id")
+    # The id list can be thousands long; db_get splits it into batches itself.
+    subtasks, comments, deps = await asyncio.gather(
+        db_get("task_subtasks", f"?task_id=in.({id_filter})&select=task_id,is_complete"),
+        db_get("task_comments", f"?task_id=in.({id_filter})&select=task_id,author,created_at"),
+        db_get("task_dependencies", f"?task_id=in.({id_filter})&select=task_id,depends_on_id"),
+    )
     return subtasks, comments, deps
 
 
