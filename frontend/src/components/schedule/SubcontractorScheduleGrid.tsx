@@ -1,7 +1,8 @@
 import { useMemo, useState } from 'react';
-import { IconAlertTriangle, IconChevronLeft, IconChevronRight } from '@tabler/icons-react';
+import { IconAlertTriangle, IconChevronLeft, IconChevronRight, IconRobot } from '@tabler/icons-react';
 import { useReferenceData } from '../../reference-data/ReferenceDataContext';
 import type { Task } from '../../types';
+import { botTouchName } from '../../lib/actor';
 
 const WEEKS_SHOWN = 6;
 
@@ -117,8 +118,9 @@ export function SubcontractorScheduleGrid({ tasks, onOpenTask }: SubcontractorSc
                           background: 'var(--bg)',
                           cursor: 'pointer',
                         }}
-                        title={t.title}
+                        title={botTouchName(t) ? `${t.title} · AI bot ${botTouchName(t)}` : t.title}
                       >
+                        {botTouchName(t) && <IconRobot size={11} aria-hidden style={{ marginRight: 3, verticalAlign: -1 }} />}
                         {t.projects?.name?.replace(/\|.*/, '').trim() || 'Unassigned'}
                       </button>
                     ))}

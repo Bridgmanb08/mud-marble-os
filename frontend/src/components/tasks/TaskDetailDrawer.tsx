@@ -12,6 +12,8 @@ import { ProjectPicker } from './ProjectPicker';
 import { openDatePicker } from '../../lib/datePicker';
 import { useReferenceData } from '../../reference-data/ReferenceDataContext';
 import { colorForPerson, initialsForPerson } from '../../lib/personColor';
+import { commentAuthor } from '../../lib/actor';
+import { ActivityFeed, BotBadge, TaskActorLine } from '../activity/ActivityTrail';
 import { markCommentsSeen } from '../../lib/commentSeen';
 import { mergeCustomPhases } from '../../lib/projectPhases';
 import type { Project, Task, TaskComment, TaskDependency, TaskSubtask, UserDirectoryEntry } from '../../types';
@@ -30,6 +32,7 @@ const REACTION_EMOJIS = ['❤️', '👍', '👎', '😂', '🎉', '👀'];
 // behavior).
 function CommentBubble({ comment, onReact }: { comment: TaskComment; onReact: (emoji: string) => void }) {
   const [pickerOpen, setPickerOpen] = useState(false);
+  const who = commentAuthor(comment.author);
 
   return (
     <div
@@ -67,7 +70,11 @@ function CommentBubble({ comment, onReact }: { comment: TaskComment; onReact: (e
         }}
       >
         <div style={{ display: 'flex', alignItems: 'baseline', gap: 6, flexWrap: 'wrap' }}>
-          <span style={{ fontSize: 12, fontWeight: 600 }}>{comment.author}</span>
+          {who.bot ? (
+            <BotBadge name={who.name} />
+          ) : (
+            <span style={{ fontSize: 12, fontWeight: 600 }}>{who.name}</span>
+          )}
           <span style={{ fontSize: 10, color: 'var(--t3)' }}>{new Date(comment.created_at).toLocaleString()}</span>
         </div>
         <div style={{ fontSize: 13, marginTop: 2, whiteSpace: 'pre-wrap' }}>{comment.content}</div>
@@ -241,6 +248,7 @@ export function TaskDetailDrawer({ task, allTasks, onClose, onSaved, onDeleted, 
   const [newDependencyId, setNewDependencyId] = useState('');
   const [comments, setComments] = useState<TaskComment[]>([]);
   const [newComment, setNewComment] = useState('');
+  const [activityRev, setActivityRev] = useState(0);
 
   const tasksById = new Map(allTasks.map((t) => [t.id, t]));
 
@@ -419,6 +427,7 @@ export function TaskDetailDrawer({ task, allTasks, onClose, onSaved, onDeleted, 
       setNewComment('');
       setComments((prev) => [created, ...prev]);
       markCommentsSeen(task.id, created.created_at);
+      setActivityRev((n) => n + 1);
       // The card behind the drawer shows comment_count and an unseen-comment
       // glow from the task list response -- refresh it so a new comment is
       // reflected there immediately instead of after an unrelated reload.
@@ -450,6 +459,9 @@ export function TaskDetailDrawer({ task, allTasks, onClose, onSaved, onDeleted, 
     <Modal title="Task detail" onClose={onClose} xl>
       <form onSubmit={handleSubmit}>
         {error && <div className="merr">{error}</div>}
+        <div style={{ marginBottom: 12 }}>
+          <TaskActorLine task={task} />
+        </div>
         <div className="fg">
           <label className="fl">Title</label>
           <input className="fi" value={title} onChange={(e) => setTitle(e.target.value)} />
@@ -643,6 +655,13 @@ export function TaskDetailDrawer({ task, allTasks, onClose, onSaved, onDeleted, 
             <button type="button" className="btn btn-sm" onClick={addDependency}>
               Add
             </button>
+          </div>
+        </div>
+
+        <div className="fg" style={{ marginTop: 14 }}>
+          <label className="fl">Change history</label>
+          <div style={{ maxHeight: 220, overflow: 'auto' }}>
+            <ActivityFeed path={`/activity/tasks/${task.id}`} refreshKey={activityRev} />
           </div>
         </div>
 

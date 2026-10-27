@@ -27,6 +27,7 @@ from ..schemas.projects import (
     ProjectUpdate,
 )
 from .. import change_log
+from ..activity import Actor
 from ..supabase_client import db_delete, db_delete_query, db_get, db_patch, db_post
 
 router = APIRouter(prefix="/projects", tags=["projects"])
@@ -40,10 +41,10 @@ _DATE_MILESTONES = {
 }
 
 
-async def _sync_project_dates(project_id: str, updates: dict) -> None:
+async def _sync_project_dates(project_id: str, updates: dict, actor: Optional[Actor] = None) -> None:
     for field, (auto_kind, title) in _DATE_MILESTONES.items():
         if field in updates:
-            await calendar_events.sync_auto_event(project_id, auto_kind, title, updates[field])
+            await calendar_events.sync_auto_event(project_id, auto_kind, title, updates[field], actor)
 
 
 async def _get_invoicing_estimate(project_id: str, select: str) -> Optional[dict]:
@@ -146,8 +147,9 @@ async def update_project(project_id: str, body: ProjectUpdate, current_user: Cur
         updates["address"] = ""  # clearing the address blanks it; the column can't hold null
     before = await change_log.fetch_before("projects", project_id, updates.keys())
     await db_patch("projects", project_id, updates)
-    await change_log.log_changes("projects", project_id, before, updates, current_user)
-    await _sync_project_dates(project_id, updates)
+    actor = Actor.human(current_user)
+    await change_log.log_changes("projects", project_id, before, updates, actor)
+    await _sync_project_dates(project_id, updates, actor)
     full = await db_get("projects", f"?id=eq.{project_id}&select=*,clients(id,first_name,last_name,preferred_contact_method,is_advocate,is_repeat_client,notes),sms_contacts(id,phone_number,name)")
     return full[0]
 
@@ -247,7 +249,7 @@ async def get_phase_progress(project_id: str, _: CurrentUser = Depends(get_curre
 
 
 @router.put("/{project_id}/phase-progress/{phase}/date")
-async def set_phase_date(project_id: str, phase: str, body: PhaseDateUpdate, _: CurrentUser = Depends(get_current_user)):
+async def set_phase_date(project_id: str, phase: str, body: PhaseDateUpdate, current_user: CurrentUser = Depends(get_current_user)):
     """The Phase Tracker's own small date box per phase -- independent of any
     task, per Brent's ask that a calendar entry not default to being linked
     to one. Kept as a calendar_events row (auto_kind "phase:<phase>"), which
@@ -259,7 +261,9 @@ async def set_phase_date(project_id: str, phase: str, body: PhaseDateUpdate, _: 
     if phase not in phase_keys:
         raise HTTPException(status_code=400, detail="Unknown phase")
     label = phase_labels.get(phase, phase)
-    await calendar_events.sync_auto_event(project_id, f"phase:{phase}", label, body.date)
+    await calendar_events.sync_auto_event(
+        project_id, f"phase:{phase}", label, body.date, Actor.human(current_user)
+    )
     return {"ok": True}
 
 

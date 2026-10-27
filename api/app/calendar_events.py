@@ -5,27 +5,50 @@ sync -- today that's a project's Start/Estimated Completion date and a
 phase's manual date on the Phase Tracker."""
 from typing import Optional
 
+from . import change_log
 from .supabase_client import db_delete, db_get, db_patch, db_post
 
 TABLE = "calendar_events"
 SELECT = "*,projects(name)"
 
 
-async def sync_auto_event(project_id: str, auto_kind: str, title: str, date_value: Optional[str]) -> None:
+async def sync_auto_event(project_id: str, auto_kind: str, title: str, date_value: Optional[str], actor=None) -> None:
     """Keeps exactly one event per (project_id, auto_kind) in step with
     whatever's driving it. date_value=None removes it -- a cleared date means
     the marker no longer means anything, so it comes off the calendar too
-    instead of being left stranded on a stale date."""
-    existing = await db_get(TABLE, f"?project_id=eq.{project_id}&auto_kind=eq.{auto_kind}&select=id")
+    instead of being left stranded on a stale date.
+
+    `actor` attributes the marker to whoever changed the source date. Omitted
+    by callers that are just repairing sync, which then leave the breadcrumb
+    alone."""
+    # Local import: activity imports nothing from this module, but keeping the
+    # dependency inside the function avoids pulling the write path into every
+    # read of auto dates.
+    from .activity import record_calendar_create, record_calendar_delete, record_calendar_update
+
+    existing = await db_get(TABLE, f"?project_id=eq.{project_id}&auto_kind=eq.{auto_kind}&select=id,title")
     if not date_value:
         if existing:
             await db_delete(TABLE, existing[0]["id"])
+            if actor:
+                await record_calendar_delete(existing[0]["id"], existing[0].get("title"), actor, project_id)
         return
     day = date_value[:10]
     if existing:
-        await db_patch(TABLE, existing[0]["id"], {"event_date": day, "title": title})
+        event_id = existing[0]["id"]
+        before = await change_log.fetch_before(TABLE, event_id, ["title", "event_date", "project_id"]) if actor else None
+        await db_patch(TABLE, event_id, {"event_date": day, "title": title})
+        if actor:
+            await record_calendar_update(event_id, before, {"event_date": day, "title": title}, actor, project_id)
     else:
-        await db_post(TABLE, {"project_id": project_id, "title": title, "event_date": day, "auto_kind": auto_kind})
+        rows = await db_post(TABLE, {"project_id": project_id, "title": title, "event_date": day, "auto_kind": auto_kind})
+        if actor and rows:
+            await record_calendar_create(
+                rows[0]["id"],
+                {"title": title, "event_date": day, "project_id": project_id},
+                actor,
+                project_id,
+            )
 
 
 async def auto_dates_by_kind(project_id: str) -> dict[str, str]:
