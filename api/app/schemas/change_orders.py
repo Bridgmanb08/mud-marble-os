@@ -1,6 +1,8 @@
 from typing import Optional
 
-from pydantic import BaseModel
+from pydantic import BaseModel, model_validator
+
+from ..schema_validators import forbid_null
 
 
 class ChangeOrderCreate(BaseModel):
@@ -32,6 +34,14 @@ class ChangeOrderUpdate(BaseModel):
     description: Optional[str] = None
     notes_internal: Optional[str] = None
     discovered_by: Optional[str] = None
+    # Payment tracking, like an invoice's amount paid / paid date.
+    amount_paid: Optional[float] = None
+    paid_date: Optional[str] = None
+
+    @model_validator(mode="after")
+    def _validate_no_null_required(self):
+        forbid_null(self, {"amount_paid"})
+        return self
 
 
 class ProjectBrief(BaseModel):
@@ -52,6 +62,8 @@ class ChangeOrderOut(BaseModel):
     discovered_by: Optional[str] = None
     status: str
     sent_at: Optional[str] = None
+    amount_paid: float = 0
+    paid_date: Optional[str] = None
     created_at: str
     projects: Optional[ProjectBrief] = None
     sop_breach: bool = False

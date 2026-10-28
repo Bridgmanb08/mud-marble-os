@@ -1,11 +1,13 @@
 import { useEffect, useState } from 'react';
 import { IconDownload, IconPlus } from '@tabler/icons-react';
 import { api, ApiError } from '../../api/client';
+import { openDatePicker } from '../../lib/datePicker';
 import { useToast } from '../ui/Toast';
 import { EditableTitle } from '../ui/EditableTitle';
 import { fmt } from '../../lib/format';
 import { pdfExportFilename, triggerDownload } from '../../lib/download';
 import { LineItemModal } from '../estimates/LineItemModal';
+import { CO_PAYMENT_BADGE, CO_PAYMENT_LABEL, coPaymentState, paymentPatch } from '../../lib/changeOrderPayment';
 import type { ChangeOrder, LineItem } from '../../types';
 
 const STATUS_OPTIONS = ['pending', 'sent', 'approved', 'rejected'];
@@ -30,6 +32,7 @@ export function ChangeOrderEditor({ coId, onChanged }: { coId: string; onChanged
   const [discoveredBy, setDiscoveredBy] = useState('');
   const [description, setDescription] = useState('');
   const [notesInternal, setNotesInternal] = useState('');
+  const [amountPaid, setAmountPaid] = useState('');
   const [showItemModal, setShowItemModal] = useState(false);
   const [editingItem, setEditingItem] = useState<LineItem | undefined>(undefined);
 
@@ -44,6 +47,7 @@ export function ChangeOrderEditor({ coId, onChanged }: { coId: string; onChanged
         setDiscoveredBy(row.discovered_by || '');
         setDescription(row.description || '');
         setNotesInternal(row.notes_internal || '');
+        setAmountPaid(row.amount_paid ? String(row.amount_paid) : '');
         onChanged?.(row);
       })
       .catch(() => toast('Failed to load change order', true));
@@ -162,6 +166,54 @@ export function ChangeOrderEditor({ coId, onChanged }: { coId: string; onChanged
               <option value="client">Client</option>
               <option value="subcontractor">Subcontractor</option>
             </select>
+          </div>
+        </div>
+      </div>
+
+      <div className="card" style={{ padding: 20, marginBottom: 16 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 14 }}>
+          <div className="ibt" style={{ fontSize: 13, textTransform: 'none', letterSpacing: 0, border: 'none', padding: 0, margin: 0 }}>
+            Payment
+          </div>
+          <span className={`badge ${CO_PAYMENT_BADGE[coPaymentState(co)]}`}>{CO_PAYMENT_LABEL[coPaymentState(co)]}</span>
+          <div style={{ flex: 1 }} />
+          {coPaymentState(co) !== 'paid' && (
+            <button className="btn btn-sm" onClick={() => saveField('amount_paid', paymentPatch(co, true).amount_paid)}>
+              Mark paid in full
+            </button>
+          )}
+          {coPaymentState(co) !== 'unpaid' && (
+            <button className="btn btn-sm" onClick={() => saveField('amount_paid', 0)}>
+              Mark unpaid
+            </button>
+          )}
+        </div>
+        <div className="fr">
+          <div className="fg">
+            <label className="fl">Amount paid ($) of {fmt(co.owner_price)}</label>
+            <input
+              className="fi"
+              type="number"
+              step="0.01"
+              value={amountPaid}
+              placeholder="0.00"
+              onChange={(e) => setAmountPaid(e.target.value)}
+              onBlur={(e) => {
+                const next = e.target.value.trim() === '' ? 0 : parseFloat(e.target.value);
+                if (!Number.isNaN(next) && next !== (co.amount_paid || 0)) saveField('amount_paid', next);
+              }}
+            />
+          </div>
+          <div className="fg">
+            <label className="fl">Paid date</label>
+            <input
+              className="fi"
+              type="date"
+              value={co.paid_date?.slice(0, 10) || ''}
+              onClick={openDatePicker}
+              onChange={(e) => saveField('paid_date', e.target.value || null)}
+            />
+            <div className="m-sub">Filled in with today's date when it's marked paid in full.</div>
           </div>
         </div>
       </div>

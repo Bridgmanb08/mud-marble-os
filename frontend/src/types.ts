@@ -419,6 +419,8 @@ export interface ChangeOrder {
   discovered_by: string | null;
   status: string;
   sent_at: string | null;
+  amount_paid?: number;
+  paid_date?: string | null;
   created_at: string;
   projects: ProjectBrief | null;
   sop_breach: boolean;
