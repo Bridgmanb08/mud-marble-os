@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { IconFileSpreadsheet, IconMicrophone, IconVideo, IconX } from '@tabler/icons-react';
 import { api, ApiError } from '../../api/client';
 import { Modal } from '../ui/Modal';
+import { useForemen } from '../../hooks/useForemen';
 import { useToast } from '../ui/Toast';
 import { isAudioFile, isVideoFile } from '../../lib/siteWalkMedia';
 import { setPendingSiteWalk } from '../../lib/siteWalkHandoff';
@@ -44,6 +45,8 @@ export function NewProjectWizard({
   const [name, setName] = useState('');
   const [nameEdited, setNameEdited] = useState(false);
   const [clientId, setClientId] = useState('');
+  const [foremanId, setForemanId] = useState('');
+  const { foremen } = useForemen();
   const [clients, setClients] = useState<Client[]>([]);
   const [files, setFiles] = useState<PickedFile[]>([]);
   const [dragOver, setDragOver] = useState(false);
@@ -129,6 +132,7 @@ export function NewProjectWizard({
         zip: zip.trim() || null,
         status: 'lead',
         client_id: clientId || null,
+        foreman_id: foremanId || null,
       });
     } catch (e) {
       setError(e instanceof ApiError ? e.message : 'Failed to create the project');
@@ -236,6 +240,19 @@ export function NewProjectWizard({
                 ))}
               </select>
             </div>
+            {foremen.length > 0 && (
+              <div className="fg">
+                <label className="fl">Foreman (optional)</label>
+                <select className="fi" value={foremanId} onChange={(e) => setForemanId(e.target.value)}>
+                  <option value="">— No foreman yet —</option>
+                  {foremen.map((f) => (
+                    <option key={f.id} value={f.id}>
+                      {f.name}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            )}
           </>
         )}
 
