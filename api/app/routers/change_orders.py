@@ -1,5 +1,5 @@
 import io
-from datetime import datetime, timezone
+from datetime import date, datetime, timezone
 from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException
@@ -109,9 +109,31 @@ async def create_change_order(body: ChangeOrderCreate, _: CurrentUser = Depends(
     return _attach_breach(full[0])
 
 
+def payment_state(owner_price: Optional[float], amount_paid: Optional[float]) -> str:
+    """paid / partial / unpaid, the same way an invoice's amount paid reads against its amount due."""
+    paid = amount_paid or 0
+    price = owner_price or 0
+    if paid <= 0:
+        return "unpaid"
+    return "paid" if paid >= price - 0.005 else "partial"
+
+
+def _settle_paid_date(updates: dict, existing: dict) -> None:
+    """Fills in / clears the paid date to match a payment change: becoming fully paid
+    stamps today (unless a date came with the request), and dropping back to nothing
+    paid clears it. Leaves a date someone typed alone."""
+    if "amount_paid" not in updates or "paid_date" in updates:
+        return
+    state = payment_state(existing.get("owner_price"), updates["amount_paid"])
+    if state == "paid" and not existing.get("paid_date"):
+        updates["paid_date"] = date.today().isoformat()
+    elif state == "unpaid":
+        updates["paid_date"] = None
+
+
 @router.patch("/{co_id}", response_model=ChangeOrderOut)
 async def update_change_order(co_id: str, body: ChangeOrderUpdate, _: CurrentUser = Depends(get_current_user)):
-    existing = await db_get("change_orders", f"?id=eq.{co_id}&select=status,project_id,owner_price")
+    existing = await db_get("change_orders", f"?id=eq.{co_id}&select=status,project_id,owner_price,amount_paid,paid_date")
     if not existing:
         raise HTTPException(status_code=404, detail="Change order not found")
     old_status = existing[0]["status"]
@@ -121,7 +143,9 @@ async def update_change_order(co_id: str, body: ChangeOrderUpdate, _: CurrentUse
     # exclude_unset (not exclude_none) -- a caller may need to explicitly clear
     # a field (e.g. an import correction clearing description), and that null
     # has to reach the database instead of being silently dropped.
-    await db_patch("change_orders", co_id, body.model_dump(exclude_unset=True))
+    updates = body.model_dump(exclude_unset=True)
+    _settle_paid_date(updates, existing[0])
+    await db_patch("change_orders", co_id, updates)
 
     # Approving a change order should grow the project's contracted value by
     # its owner price (and shrink it back if it's ever un-approved) -- without

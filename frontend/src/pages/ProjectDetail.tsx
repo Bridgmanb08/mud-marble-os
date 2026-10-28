@@ -27,6 +27,7 @@ import { WeekScrollCalendar } from '../components/schedule/WeekScrollCalendar';
 import { CalendarEventModal } from '../components/schedule/CalendarEventModal';
 import { FathomImportWidget } from '../components/projects/FathomImportWidget';
 import { PhaseTracker } from '../components/projects/PhaseTracker';
+import { CoPaymentSelect } from '../components/change-orders/CoPaymentSelect';
 import { PermitsChecklist } from '../components/projects/PermitsChecklist';
 import { DumpsterCard } from '../components/projects/DumpsterCard';
 
@@ -723,6 +724,7 @@ export default function ProjectDetail() {
                     <th style={{ textAlign: 'right' }}>Invoiced</th>
                     <th style={{ textAlign: 'right' }}>Left to invoice</th>
                     <th>Status</th>
+                    <th>Payment</th>
                     <th></th>
                   </tr>
                 </thead>
@@ -753,6 +755,9 @@ export default function ProjectDetail() {
                         {co.sop_breach && <span className="badge bg-red" style={{ marginLeft: 6 }}>SOP breach</span>}
                       </td>
                       <td>
+                        <CoPaymentSelect co={co} onChanged={loadChangeOrders} />
+                      </td>
+                      <td>
                         <ChangeOrderRowMenu onEdit={() => setSelectedCoId(co.id)} onDelete={() => deleteChangeOrder(co)} />
                       </td>
                     </tr>
@@ -768,12 +773,14 @@ export default function ProjectDetail() {
                     <td style={{ ...TOTAL_CELL_STYLE, textAlign: 'right' }}>{fmt(coBillingTotals.left)}</td>
                     <td style={TOTAL_CELL_STYLE} />
                     <td style={TOTAL_CELL_STYLE} />
+                    <td style={TOTAL_CELL_STYLE} />
                   </tr>
                   <tr style={{ color: 'var(--t3)', fontSize: 12.5 }}>
                     <td style={TOTAL_CELL_STYLE} />
                     <td className="sticky-col" style={TOTAL_CELL_STYLE}>Approved</td>
                     <td style={TOTAL_CELL_STYLE} />
                     <td style={{ ...TOTAL_CELL_STYLE, textAlign: 'right' }}>{fmt(changeOrders.filter((c) => c.status === 'approved').reduce((t, c) => t + (c.owner_price || 0), 0))}</td>
+                    <td style={TOTAL_CELL_STYLE} />
                     <td style={TOTAL_CELL_STYLE} />
                     <td style={TOTAL_CELL_STYLE} />
                     <td style={TOTAL_CELL_STYLE} />

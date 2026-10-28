@@ -7,6 +7,7 @@ import { pdfExportFilename, triggerDownload } from '../lib/download';
 import type { ChangeOrder } from '../types';
 import { NewChangeOrderModal } from '../components/change-orders/NewChangeOrderModal';
 import { ChangeOrderDetailModal } from '../components/change-orders/ChangeOrderDetailModal';
+import { CoPaymentSelect } from '../components/change-orders/CoPaymentSelect';
 
 const TYPE_BADGE: Record<string, string> = { oversight: 'bg-amber', client_addition: 'bg-blue', unforeseen: 'bg-red' };
 const STATUS_BADGE: Record<string, string> = { pending: 'bg-gray', sent: 'bg-amber', approved: 'bg-green', rejected: 'bg-red' };
@@ -149,6 +150,7 @@ export default function ChangeOrders() {
                     </option>
                   ))}
                 </select>
+                <CoPaymentSelect co={co} onChanged={load} />
                 {co.sop_breach && (
                   <span className="badge bg-red">
                     <IconAlertTriangle size={11} style={{ marginRight: 3 }} /> SOP
