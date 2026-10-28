@@ -3,13 +3,16 @@ import { useNavigate } from 'react-router-dom';
 import { DndContext, closestCenter, type DragEndEvent } from '@dnd-kit/core';
 import { SortableContext, verticalListSortingStrategy, useSortable, arrayMove } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
-import { IconPlus, IconBuilding, IconGripVertical, IconChevronDown, IconChevronRight } from '@tabler/icons-react';
+import { IconPlus, IconBuilding, IconGripVertical, IconChevronDown, IconChevronRight, IconHelmet } from '@tabler/icons-react';
 import { api, ApiError } from '../api/client';
 import { useToast } from '../components/ui/Toast';
 import { useDndSensors } from '../hooks/useDndSensors';
 import { fmt } from '../lib/format';
-import type { Project, ProjectBoardLayout } from '../types';
+import type { Foreman, Project, ProjectBoardLayout } from '../types';
 import { NewProjectModal } from '../components/projects/NewProjectModal';
+import { ForemanChip } from '../components/projects/ForemanChip';
+import { ForemenModal } from '../components/projects/ForemenModal';
+import { useForemen } from '../hooks/useForemen';
 import { ProjectRowMenu } from '../components/projects/ProjectRowMenu';
 import { Skeleton } from '../components/ui/Skeleton';
 import { PROJECT_STATUS_OPTIONS as PROJECT_STATUS_ORDER, projectStatusLabel, statusOptionsIncluding } from '../lib/projectStatuses';
@@ -58,6 +61,8 @@ export default function Projects() {
   const [projects, setProjects] = useState<Project[] | null>(null);
   const [filter, setFilter] = useState('all');
   const [showNew, setShowNew] = useState(false);
+  const [showForemen, setShowForemen] = useState(false);
+  const { foremen, byId: foremanById, reload: reloadForemen } = useForemen();
   const [editing, setEditing] = useState<Project | null>(null);
   // Saved section order/collapse state -- fetched once, then kept in sync
   // locally (optimistic) as the user drags/collapses, PUT back to persist.
@@ -177,9 +182,14 @@ export default function Projects() {
           <h1>Projects</h1>
           <p>All active and pipeline projects, grouped by status</p>
         </div>
-        <button className="btn btn-p btn-sm" onClick={() => setShowNew(true)}>
-          <IconPlus size={14} /> New project
-        </button>
+        <div style={{ display: 'flex', gap: 8 }}>
+          <button className="btn btn-sm" onClick={() => setShowForemen(true)} title="Add foremen and set the color for each">
+            <IconHelmet size={14} /> Foremen
+          </button>
+          <button className="btn btn-p btn-sm" onClick={() => setShowNew(true)}>
+            <IconPlus size={14} /> New project
+          </button>
+        </div>
       </div>
 
       <div className="metrics">
@@ -236,6 +246,7 @@ export default function Projects() {
                 collapsed={!!collapsed[status]}
                 dragDisabled={filter !== 'all'}
                 onToggleCollapsed={() => toggleCollapsed(status)}
+                foremanById={foremanById}
                 onNavigate={(id) => navigate(`/projects/${id}`)}
                 onStatusChange={handleStatusChange}
                 onEdit={setEditing}
@@ -258,6 +269,8 @@ export default function Projects() {
         />
       )}
 
+      {showForemen && <ForemenModal foremen={foremen} onClose={() => setShowForemen(false)} onChanged={reloadForemen} />}
+
       {showNew && (
         <NewProjectModal
           onClose={() => setShowNew(false)}
@@ -278,6 +291,7 @@ function ProjectStatusSection({
   collapsed,
   dragDisabled,
   onToggleCollapsed,
+  foremanById,
   onNavigate,
   onStatusChange,
   onEdit,
@@ -285,6 +299,7 @@ function ProjectStatusSection({
 }: {
   status: string;
   items: Project[];
+  foremanById: Map<string, Foreman>;
   collapsed: boolean;
   dragDisabled: boolean;
   onToggleCollapsed: () => void;
@@ -331,6 +346,7 @@ function ProjectStatusSection({
           <ProjectCard
             key={p.id}
             project={p}
+            foreman={p.foreman_id ? foremanById.get(p.foreman_id) : undefined}
             onNavigate={() => onNavigate(p.id)}
             onStatusChange={onStatusChange}
             onEdit={onEdit}
@@ -343,12 +359,14 @@ function ProjectStatusSection({
 
 function ProjectCard({
   project: p,
+  foreman,
   onNavigate,
   onStatusChange,
   onEdit,
   onDelete,
 }: {
   project: Project;
+  foreman?: Foreman;
   onNavigate: () => void;
   onStatusChange: (project: Project, newStatus: string) => void;
   onEdit: (project: Project) => void;
@@ -359,7 +377,13 @@ function ProjectCard({
       className="pc"
       role="link"
       tabIndex={0}
-      style={{ textDecoration: 'none', color: 'inherit', cursor: 'pointer' }}
+      style={{
+        textDecoration: 'none',
+        color: 'inherit',
+        cursor: 'pointer',
+        // The foreman's color down the left edge, matching the CFO spreadsheet.
+        borderLeft: `5px solid ${foreman ? foreman.color : 'transparent'}`,
+      }}
       onClick={onNavigate}
       onKeyDown={(e) => {
         if (e.key === 'Enter') onNavigate();
@@ -373,6 +397,7 @@ function ProjectCard({
         </div>
       </div>
       <div className="pm">
+        <ForemanChip foreman={foreman} />
         {p.contract_value ? <span style={{ fontSize: 12, color: 'var(--t2)' }}>{fmt(p.contract_value)}</span> : null}
         <select
           className={`badge ${STATUS_BADGE[p.status] || 'bg-gray'}`}

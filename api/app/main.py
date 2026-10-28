@@ -17,6 +17,7 @@ from .routers import (
     estimate_text_defaults,
     estimates,
     files,
+    foremen,
     invoices,
     job_import,
     lead_stages,
@@ -76,6 +77,7 @@ app.include_router(users.router, prefix="/api")
 app.include_router(projects.router, prefix="/api")
 app.include_router(project_subcontractor_items.router, prefix="/api")
 app.include_router(clients.router, prefix="/api")
+app.include_router(foremen.router, prefix="/api")
 app.include_router(cost_codes.router, prefix="/api")
 app.include_router(estimates.router, prefix="/api")
 app.include_router(estimate_text_defaults.router, prefix="/api")

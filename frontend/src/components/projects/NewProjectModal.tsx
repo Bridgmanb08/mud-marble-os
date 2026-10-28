@@ -4,6 +4,8 @@ import { Modal } from '../ui/Modal';
 import { openDatePicker } from '../../lib/datePicker';
 import { statusOptionsIncluding } from '../../lib/projectStatuses';
 import { NewProjectWizard } from './NewProjectWizard';
+import { ForemenModal } from './ForemenModal';
+import { useForemen } from '../../hooks/useForemen';
 import type { Client, Project } from '../../types';
 
 interface NewProjectModalProps {
@@ -21,6 +23,7 @@ interface ProjectFormValues {
   status: string;
   projectType: string;
   clientId: string;
+  foremanId: string;
   contractValue: string;
   startDate: string;
   estimatedCompletion: string;
@@ -37,6 +40,7 @@ function valuesFromProject(project: Project): ProjectFormValues {
     status: project.status || 'lead',
     projectType: project.project_type || '',
     clientId: project.client_id || '',
+    foremanId: project.foreman_id || '',
     contractValue: project.contract_value != null ? String(project.contract_value) : '',
     startDate: project.start_date?.slice(0, 10) || '',
     estimatedCompletion: project.estimated_completion?.slice(0, 10) || '',
@@ -56,6 +60,7 @@ function toPayload(v: ProjectFormValues) {
     status: v.status,
     project_type: v.projectType.trim() || null,
     client_id: v.clientId || null,
+    foreman_id: v.foremanId || null,
     contract_value: v.contractValue ? parseFloat(v.contractValue) : null,
     start_date: v.startDate || null,
     estimated_completion: v.estimatedCompletion || null,
@@ -78,6 +83,9 @@ function EditProjectModal({ onClose, onCreated, project }: NewProjectModalProps 
   const [status, setStatus] = useState(project?.status || 'lead');
   const [projectType, setProjectType] = useState(project?.project_type || '');
   const [clientId, setClientId] = useState(project?.client_id || '');
+  const [foremanId, setForemanId] = useState(project?.foreman_id || '');
+  const [showForemen, setShowForemen] = useState(false);
+  const { foremen, reload: reloadForemen } = useForemen();
   const [contractValue, setContractValue] = useState(project?.contract_value != null ? String(project.contract_value) : '');
   const [startDate, setStartDate] = useState(project?.start_date?.slice(0, 10) || '');
   const [estimatedCompletion, setEstimatedCompletion] = useState(project?.estimated_completion?.slice(0, 10) || '');
@@ -107,6 +115,7 @@ function EditProjectModal({ onClose, onCreated, project }: NewProjectModalProps 
       status,
       projectType,
       clientId,
+      foremanId,
       contractValue,
       startDate,
       estimatedCompletion,
@@ -208,6 +217,25 @@ function EditProjectModal({ onClose, onCreated, project }: NewProjectModalProps 
         </div>
         <div className="fr">
           <div className="fg">
+            <label className="fl">
+              Foreman{' '}
+              <button type="button" className="btn-reset" style={{ color: 'var(--blue)', cursor: 'pointer', fontSize: 11, textTransform: 'none', letterSpacing: 0 }} onClick={() => setShowForemen(true)}>
+                (manage foremen & colors)
+              </button>
+            </label>
+            <select className="fi" value={foremanId} onChange={(e) => setForemanId(e.target.value)}>
+              <option value="">— No foreman —</option>
+              {foremen.map((f) => (
+                <option key={f.id} value={f.id}>
+                  {f.name}
+                </option>
+              ))}
+            </select>
+          </div>
+          <div className="fg" />
+        </div>
+        <div className="fr">
+          <div className="fg">
             <label className="fl">Start date</label>
             <input className="fi" type="date" value={startDate} onClick={openDatePicker} onChange={(e) => setStartDate(e.target.value)} />
           </div>
@@ -229,6 +257,7 @@ function EditProjectModal({ onClose, onCreated, project }: NewProjectModalProps 
           </button>
         </div>
       </form>
+      {showForemen && <ForemenModal foremen={foremen} onClose={() => setShowForemen(false)} onChanged={reloadForemen} />}
     </Modal>
   );
 }

@@ -492,6 +492,13 @@ export interface CustomPhase {
   after: string;
 }
 
+export interface Foreman {
+  id: string;
+  name: string;
+  color: string;
+  sort_order: number;
+}
+
 export interface Project {
   id: string;
   name: string;
@@ -505,6 +512,7 @@ export interface Project {
   city: string | null;
   state: string | null;
   client_id: string | null;
+  foreman_id?: string | null;
   contract_value: number | null;
   health_status: string | null;
   is_archived: boolean;

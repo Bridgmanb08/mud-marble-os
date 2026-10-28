@@ -27,6 +27,8 @@ import { WeekScrollCalendar } from '../components/schedule/WeekScrollCalendar';
 import { CalendarEventModal } from '../components/schedule/CalendarEventModal';
 import { FathomImportWidget } from '../components/projects/FathomImportWidget';
 import { PhaseTracker } from '../components/projects/PhaseTracker';
+import { ForemanChip } from '../components/projects/ForemanChip';
+import { useForemen } from '../hooks/useForemen';
 import { PermitsChecklist } from '../components/projects/PermitsChecklist';
 import { DumpsterCard } from '../components/projects/DumpsterCard';
 
@@ -99,6 +101,7 @@ export default function ProjectDetail() {
   const toast = useToast();
   const [searchParams] = useSearchParams();
   const [project, setProject] = useState<Project | null>(null);
+  const { byId: foremanById } = useForemen();
   const [notes, setNotes] = useState<ProjectNote[]>([]);
   const [estimates, setEstimates] = useState<Estimate[]>([]);
   const [changeOrders, setChangeOrders] = useState<ChangeOrder[]>([]);
@@ -365,6 +368,7 @@ export default function ProjectDetail() {
             ) : (
               'No client'
             )}
+            <ForemanChip foreman={project.foreman_id ? foremanById.get(project.foreman_id) : undefined} />
             {project.clients?.is_repeat_client && <span className="badge bg-green">Repeat</span>}
             {project.clients?.is_advocate && <span className="badge bg-blue">Advocate</span>}
             {project.clients?.preferred_contact_method && (
