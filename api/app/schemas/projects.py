@@ -18,6 +18,7 @@ class ProjectCreate(BaseModel):
     city: Optional[str] = "Indianapolis"
     state: Optional[str] = "IN"
     client_id: Optional[str] = None
+    foreman_id: Optional[str] = None
     contract_value: Optional[float] = None
     color: Optional[str] = None
 
@@ -39,6 +40,7 @@ class ProjectUpdate(BaseModel):
     city: Optional[str] = None
     state: Optional[str] = None
     client_id: Optional[str] = None
+    foreman_id: Optional[str] = None
     contract_value: Optional[float] = None
     health_status: Optional[str] = None
     is_archived: Optional[bool] = None
@@ -106,6 +108,7 @@ class ProjectOut(BaseModel):
     city: Optional[str] = None
     state: Optional[str] = None
     client_id: Optional[str] = None
+    foreman_id: Optional[str] = None
     contract_value: Optional[float] = None
     health_status: Optional[str] = None
     is_archived: bool = False
