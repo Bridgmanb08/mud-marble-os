@@ -2,6 +2,8 @@ from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException
 
+from .. import change_log
+from ..activity import Actor, record_calendar_create, record_calendar_delete, record_calendar_update
 from ..calendar_events import SELECT, TABLE
 from ..deps import CurrentUser, get_current_user
 from ..schemas.calendar_events import CalendarEventCreate, CalendarEventOut, CalendarEventUpdate
@@ -28,21 +30,29 @@ async def list_calendar_events(
 
 
 @router.post("", response_model=CalendarEventOut)
-async def create_calendar_event(body: CalendarEventCreate, _: CurrentUser = Depends(get_current_user)):
+async def create_calendar_event(body: CalendarEventCreate, current_user: CurrentUser = Depends(get_current_user)):
     # auto_kind is never accepted from a client (not on CalendarEventCreate at
     # all) -- every manually-created event is a real free-standing event, on
     # purpose, so it can never collide with or masquerade as an auto-synced
     # project/phase marker.
-    rows = await db_post(TABLE, body.model_dump(exclude_none=True))
+    data = body.model_dump(exclude_none=True)
+    rows = await db_post(TABLE, data)
+    await record_calendar_create(rows[0]["id"], data, Actor.human(current_user), data.get("project_id"))
     full = await db_get(TABLE, f"?id=eq.{rows[0]['id']}&select={SELECT}")
     return full[0]
 
 
 @router.patch("/{event_id}", response_model=CalendarEventOut)
-async def update_calendar_event(event_id: str, body: CalendarEventUpdate, _: CurrentUser = Depends(get_current_user)):
+async def update_calendar_event(event_id: str, body: CalendarEventUpdate, current_user: CurrentUser = Depends(get_current_user)):
     updates = body.model_dump(exclude_unset=True)
+    existing = await db_get(TABLE, f"?id=eq.{event_id}&select=id,project_id")
+    if not existing:
+        raise HTTPException(status_code=404, detail="Calendar event not found")
     if updates:
+        before = await change_log.fetch_before(TABLE, event_id, list(updates.keys()) + ["project_id"])
         await db_patch(TABLE, event_id, updates)
+        project_id = (before or {}).get("project_id") or existing[0].get("project_id")
+        await record_calendar_update(event_id, before, updates, Actor.human(current_user), project_id)
     full = await db_get(TABLE, f"?id=eq.{event_id}&select={SELECT}")
     if not full:
         raise HTTPException(status_code=404, detail="Calendar event not found")
@@ -50,6 +60,11 @@ async def update_calendar_event(event_id: str, body: CalendarEventUpdate, _: Cur
 
 
 @router.delete("/{event_id}")
-async def delete_calendar_event(event_id: str, _: CurrentUser = Depends(get_current_user)):
+async def delete_calendar_event(event_id: str, current_user: CurrentUser = Depends(get_current_user)):
+    existing = await db_get(TABLE, f"?id=eq.{event_id}&select=id,title,project_id")
     await db_delete(TABLE, event_id)
+    if existing:
+        await record_calendar_delete(
+            event_id, existing[0].get("title"), Actor.human(current_user), existing[0].get("project_id")
+        )
     return {"ok": True}

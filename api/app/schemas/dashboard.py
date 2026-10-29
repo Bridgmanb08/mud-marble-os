@@ -43,6 +43,10 @@ class UpcomingTask(BaseModel):
     project_name: Optional[str] = None
     assigned_to: Optional[str] = None
     scheduled_end: Optional[str] = None
+    created_by_name: Optional[str] = None
+    created_by_type: Optional[str] = None
+    updated_by_name: Optional[str] = None
+    updated_by_type: Optional[str] = None
 
 
 class ActivityItem(BaseModel):

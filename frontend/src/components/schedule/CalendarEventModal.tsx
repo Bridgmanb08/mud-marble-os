@@ -3,6 +3,7 @@ import { api, ApiError } from '../../api/client';
 import { Modal } from '../ui/Modal';
 import { openDatePicker } from '../../lib/datePicker';
 import type { CalendarEvent, Project } from '../../types';
+import { TaskActorLine } from '../activity/ActivityTrail';
 
 // A calendar entry that is NOT a task -- deliberately never links to one by
 // default (see api/app/calendar_events.py). Used both for a genuine
@@ -80,6 +81,11 @@ export function CalendarEventModal({
     <Modal title={event ? 'Edit event' : 'New calendar event'} onClose={onClose}>
       <form onSubmit={handleSubmit}>
         {error && <div className="merr">{error}</div>}
+        {event && (
+          <div style={{ marginBottom: 12 }}>
+            <TaskActorLine task={event} />
+          </div>
+        )}
         {event?.auto_kind && (
           <div style={{ fontSize: 12, color: 'var(--t2)', marginBottom: 14 }}>
             This date is kept in sync automatically. Changing it here only moves this calendar entry -- use the

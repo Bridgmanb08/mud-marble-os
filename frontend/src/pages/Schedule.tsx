@@ -11,6 +11,8 @@ import { SubcontractorScheduleGrid } from '../components/schedule/SubcontractorS
 import { WeekScrollCalendar } from '../components/schedule/WeekScrollCalendar';
 import { MasterJobFilter } from '../components/schedule/MasterJobFilter';
 import { CalendarEventModal } from '../components/schedule/CalendarEventModal';
+import { BotBadge } from '../components/activity/ActivityTrail';
+import { botTouchName } from '../lib/actor';
 import { IconPlus } from '@tabler/icons-react';
 
 export default function Schedule() {
@@ -190,7 +192,12 @@ export default function Schedule() {
                     {datedSorted.map((t) => (
                       <tr key={t.id} onClick={() => openTask(t.id)} style={{ cursor: 'pointer' }}>
                         <td>{fmtD(t.scheduled_end || t.scheduled_start)}</td>
-                        <td className="sticky-col" style={{ fontWeight: 500 }}>{t.title}</td>
+                        <td className="sticky-col" style={{ fontWeight: 500 }}>
+                          <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
+                            {t.title}
+                            {botTouchName(t) && <BotBadge name={botTouchName(t)!} />}
+                          </span>
+                        </td>
                         <td style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
                           <span
                             style={{

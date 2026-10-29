@@ -22,6 +22,8 @@ import { hasUnseenComment } from '../../lib/commentSeen';
 import { useIsMobile } from '../../hooks/useMediaQuery';
 import { useDndSensors } from '../../hooks/useDndSensors';
 import { ProjectPicker } from './ProjectPicker';
+import { BotBadge } from '../activity/ActivityTrail';
+import { botTouchName } from '../../lib/actor';
 import type { Task, TaskSubtask, Project, UserDirectoryEntry } from '../../types';
 import { taskAssignees } from '../../lib/taskAssignees';
 
@@ -159,6 +161,7 @@ function TaskCard({
   const [pendingChecked, setPendingChecked] = useState<boolean | null>(null);
   const overdue = task.overdue;
   const assignees = taskAssignees(task);
+  const botName = botTouchName(task);
   // A comment counts as "new activity" only if someone else left it and
   // this browser hasn't opened the task since -- your own comment isn't a
   // notification to yourself.
@@ -243,6 +246,11 @@ function TaskCard({
           {task.title}
         </span>
       </div>
+      {botName && (
+        <div style={{ marginTop: 4 }}>
+          <BotBadge name={botName} />
+        </div>
+      )}
       {isMobile && (
         // Mobile-primary way to move a task between columns -- dragging on
         // a phone is unreliable even with TouchSensor tuned, and a native
@@ -405,6 +413,7 @@ function TaskCard({
 // belongs to, so it stays visually continuous through the whole drag.
 function TaskCardPreview({ task }: { task: Task }) {
   const assignees = taskAssignees(task);
+  const botName = botTouchName(task);
   return (
     <div
       className="task-card"
@@ -425,6 +434,11 @@ function TaskCardPreview({ task }: { task: Task }) {
           {task.title}
         </span>
       </div>
+      {botName && (
+        <div style={{ marginTop: 4 }}>
+          <BotBadge name={botName} />
+        </div>
+      )}
       {task.project_id && <div className="task-meta">{task.projects?.name?.replace(/\|.*/, '').trim() || 'No project'}</div>}
       {assignees.length > 0 && (
         <div className="task-meta" style={{ marginTop: 3, display: 'flex', gap: 4, flexWrap: 'wrap' }}>

@@ -29,6 +29,7 @@ Supabase (Postgres via REST) for storage, deployed as a single Vercel project.
 | `TWILIO_AUTH_TOKEN` | api | optional — **secret**; verifies incoming webhook requests are actually from Twilio |
 | `PUBLIC_BASE_URL` | api | optional — your deployed origin (e.g. `https://mudmarbleos.vercel.app`), used to verify Twilio's webhook signature correctly behind Vercel's proxy |
 | `CRON_SECRET` | api | required for email summaries — any long random string; the scheduler sends it as `Authorization: Bearer <secret>` to `/api/cron/notifications-tick` |
+| `BOT_API_KEYS` | api | optional — bot write credentials, `{"Mike Ross":"<token>"}` or `Name=<token>;;Name=<token>`. Prefer a `bot_credentials` row instead (see `docs/bot-write-api.md`). Never commit a token |
 | `RESEND_API_KEY` | api | required to actually send email summaries (without it, previews still work and nothing is sent) |
 | `EMAIL_FROM` | api | optional — defaults to `Mud & Marble OS <notify@notify.mudmarble.com>`; the domain must be verified in Resend |
 

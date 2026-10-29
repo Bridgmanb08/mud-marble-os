@@ -8,6 +8,8 @@ import { useReferenceData } from '../reference-data/ReferenceDataContext';
 import { INVOICE_STATUS_BADGE, invoiceStatusLabel } from '../lib/invoiceStatus';
 import { sortInvoices, unpaidAmount, type InvoiceSortKey, type SortDir } from '../lib/sortInvoices';
 import type { CalendarEvent, ChangeOrder, CostCodeVariance, Estimate, FinancialSummary, Invoice, InvoiceableItem, Project, ProjectNote, Task } from '../types';
+import { ActivityFeed, BotBadge } from '../components/activity/ActivityTrail';
+import { botTouchName } from '../lib/actor';
 import { NewNoteModal } from '../components/projects/NewNoteModal';
 import { NewProjectModal } from '../components/projects/NewProjectModal';
 import { statusOptionsIncluding } from '../lib/projectStatuses';
@@ -511,6 +513,19 @@ export default function ProjectDetail() {
               <p style={{ fontSize: 13, color: 'var(--t2)', lineHeight: 1.5 }}>{project.internal_notes || 'No notes yet.'}</p>
             </div>
           </div>
+
+          {id && (
+            <div className="card" style={{ padding: 16, marginTop: 20 }}>
+              <div className="ibt" style={{ margin: '0 0 4px' }}>Change history</div>
+              <p className="actor-legacy" style={{ marginBottom: 10 }}>
+                Who changed tasks, schedule dates, and calendar events on this project. A robot badge is a bot. Anything
+                without an actor is legacy, not a bot.
+              </p>
+              <div style={{ maxHeight: 360, overflow: 'auto' }}>
+                <ActivityFeed path={`/activity/projects/${id}`} />
+              </div>
+            </div>
+          )}
         </div>
 
         <div id={sectionId('Notes')} style={{ scrollMarginTop: SECTION_SCROLL_MARGIN, paddingBottom: 24, marginBottom: 24, borderBottom: '1px solid var(--border)' }}>
@@ -962,7 +977,12 @@ export default function ProjectDetail() {
                   <tbody>
                     {filteredTasks.map((t) => (
                       <tr key={t.id} onClick={() => openTask(t.id)} style={{ cursor: 'pointer' }}>
-                        <td className="sticky-col" style={{ fontWeight: 500 }}>{t.title}</td>
+                        <td className="sticky-col" style={{ fontWeight: 500 }}>
+                          <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
+                            {t.title}
+                            {botTouchName(t) && <BotBadge name={botTouchName(t)!} />}
+                          </span>
+                        </td>
                         <td>{t.assigned_to || '—'}</td>
                         <td><span className="badge bg-gray">{t.status.replace('_', ' ')}</span></td>
                         <td>{t.priority}</td>

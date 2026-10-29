@@ -70,6 +70,12 @@ export interface Task {
   last_comment_at: string | null;
   blocked: boolean;
   overdue: boolean;
+  // Null means unknown/legacy, never a bot. Stamped when someone edits through the app or the bot write API.
+  created_by_name?: string | null;
+  created_by_type?: string | null;
+  updated_by_name?: string | null;
+  updated_by_type?: string | null;
+  updated_at?: string | null;
 }
 
 export interface TaskSubtask {
@@ -574,7 +580,27 @@ export interface CalendarEvent {
   event_date: string;
   auto_kind: string | null;
   created_at: string;
+  created_by_name?: string | null;
+  created_by_type?: string | null;
+  updated_by_name?: string | null;
+  updated_by_type?: string | null;
   projects: { name: string } | null;
+}
+
+export interface ActivityEntry {
+  id: string;
+  table_name: string;
+  record_id: string;
+  field: string;
+  old_value: unknown;
+  new_value: unknown;
+  actor_name: string | null;
+  actor_type: 'human' | 'bot' | 'legacy' | string;
+  source: string | null;
+  action: string;
+  project_id: string | null;
+  created_at: string;
+  record_title: string | null;
 }
 
 export interface ProjectBoardLayout {
@@ -800,6 +826,10 @@ export interface DashboardSummary {
     project_name: string | null;
     assigned_to: string | null;
     scheduled_end: string | null;
+    created_by_name?: string | null;
+    created_by_type?: string | null;
+    updated_by_name?: string | null;
+    updated_by_type?: string | null;
   }[];
   recent_activity: {
     id: string;
