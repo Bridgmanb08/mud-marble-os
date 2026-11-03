@@ -92,6 +92,7 @@ export default function EstimateWorksheet() {
   const [editingGroupValue, setEditingGroupValue] = useState('');
   const [showNewGroupPrompt, setShowNewGroupPrompt] = useState(false);
   const [newGroupName, setNewGroupName] = useState('');
+  const [newGroupKind, setNewGroupKind] = useState('construction');
   const [showSaveAsTemplate, setShowSaveAsTemplate] = useState(false);
   const [showSiteWalk, setShowSiteWalk] = useState(false);
   // Import an Excel estimate into this estimate; the file may arrive pre-chosen from the site walk window.
@@ -203,11 +204,18 @@ export default function EstimateWorksheet() {
       .patch(`/estimates/${id}`, { group_order: keys })
       .then(() => undefined)
       .catch((e) => {
-        if (!quiet) toast(e instanceof ApiError ? e.message : 'Failed to save the group order', true);
+        if (!quiet) toast(e instanceof ApiError ? e.message : 'Failed to save the bucket order', true);
       });
   }
 
-  const existingGroups = Array.from(new Set(items.map((i) => i.group_name).filter((g): g is string => !!g))).sort();
+  // Custom buckets (anything beyond Construction / Allowance / PM Fee) and what each counts as.
+  const existingBuckets = Array.from(
+    new Map(
+      items
+        .filter((i) => !!i.group_name && !['construction', 'allowance', 'pm fee'].includes(i.group_name.trim().toLowerCase()))
+        .map((i) => [i.group_name as string, { name: i.group_name as string, kind: i.bucket }] as const),
+    ).values(),
+  ).sort((a, b) => a.name.localeCompare(b.name));
   const allCollapsed = groupKeys.length > 0 && groupKeys.every((k) => collapsedGroups[k]);
 
   const query = searchQuery.trim().toLowerCase();
@@ -359,10 +367,10 @@ export default function EstimateWorksheet() {
       await Promise.all(groupItems.map((it) => api.patch(`/estimates/${id}/items/${it.id}`, { group_name: newName })));
       // The renamed group keeps its place.
       await saveGroupOrder(groupKeys.map((k) => (k === oldKey ? newName : k)));
-      toast('Group renamed');
+      toast('Bucket renamed');
       load();
     } catch (e) {
-      toast(e instanceof ApiError ? e.message : 'Failed to rename group', true);
+      toast(e instanceof ApiError ? e.message : 'Failed to rename bucket', true);
     }
   }
 
@@ -371,7 +379,7 @@ export default function EstimateWorksheet() {
     if (!trimmed) return;
     setShowNewGroupPrompt(false);
     setNewGroupName('');
-    openNewItem('construction', trimmed);
+    openNewItem(newGroupKind, trimmed);
   }
 
   return (
@@ -541,7 +549,7 @@ export default function EstimateWorksheet() {
             <IconTemplate size={14} /> Insert from template or job
           </button>
           <button className="btn btn-sm" onClick={() => setShowNewGroupPrompt(true)}>
-            <IconPlus size={14} /> Add group
+            <IconPlus size={14} /> Add bucket
           </button>
           <button className="btn btn-p btn-sm" onClick={() => openNewItem('construction')}>
             <IconPlus size={14} /> Add line item
@@ -554,7 +562,7 @@ export default function EstimateWorksheet() {
           <input
             className="fi"
             autoFocus
-            placeholder="Group name, e.g. Mechanicals"
+            placeholder="Bucket name, e.g. Flooring"
             value={newGroupName}
             onChange={(e) => setNewGroupName(e.target.value)}
             onKeyDown={(e) => {
@@ -564,6 +572,11 @@ export default function EstimateWorksheet() {
               }
             }}
           />
+          <select className="fi" style={{ width: 'auto' }} value={newGroupKind} onChange={(e) => setNewGroupKind(e.target.value)} title="What this bucket counts as in the totals">
+            <option value="construction">Counts as Construction</option>
+            <option value="allowance">Counts as Allowance</option>
+            <option value="pm_fee">Counts as PM Fee</option>
+          </select>
           <button type="button" className="btn btn-p btn-sm" onClick={submitNewGroup}>
             Create
           </button>
@@ -587,7 +600,7 @@ export default function EstimateWorksheet() {
             <input
               className="fi"
               style={{ paddingLeft: 30 }}
-              placeholder="Jump to line items or groups…"
+              placeholder="Jump to line items or buckets…"
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
             />
@@ -690,7 +703,7 @@ export default function EstimateWorksheet() {
           defaultCostCodeId={newItemDefaults?.costCodeId}
           defaultUnitCost={newItemDefaults?.unitCost}
           defaultUnitCostHint={newItemDefaults?.unitCostHint}
-          existingGroups={existingGroups}
+          existingBuckets={existingBuckets}
           onClose={() => setShowItemModal(false)}
           onSaved={() => {
             setShowItemModal(false);

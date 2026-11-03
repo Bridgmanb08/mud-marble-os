@@ -71,7 +71,7 @@ function SortableLineItemRow<T extends LineItemLike>({
             color: dragDisabled ? 'var(--border-md)' : 'var(--t3)',
             touchAction: 'none',
           }}
-          title={dragDisabled ? 'Clear the search to reorder items' : 'Drag to reorder, or drop into another group'}
+          title={dragDisabled ? 'Clear the search to reorder items' : 'Drag to reorder, or drop into another bucket'}
         >
           <IconGripVertical size={14} />
         </button>
@@ -182,7 +182,7 @@ export function LineItemGroupCard<T extends LineItemLike>({
               color: dragDisabled || editing ? 'var(--border-md)' : 'var(--t3)',
               touchAction: 'none',
             }}
-            title={dragDisabled ? 'Clear the search to reorder groups' : 'Drag to reorder this group'}
+            title={dragDisabled ? 'Clear the search to reorder buckets' : 'Drag to reorder this bucket'}
             onClick={(e) => e.stopPropagation()}
           >
             <IconGripVertical size={14} />
@@ -206,7 +206,7 @@ export function LineItemGroupCard<T extends LineItemLike>({
               style={{ maxWidth: 260 }}
             />
           ) : (
-            <div className="ibt" style={{ margin: 0, border: 'none', padding: 0, cursor: 'text' }} onClick={onStartRename} title="Click to rename group">
+            <div className="ibt" style={{ margin: 0, border: 'none', padding: 0, cursor: 'text' }} onClick={onStartRename} title="Click to rename bucket">
               {groupKey}
             </div>
           )}

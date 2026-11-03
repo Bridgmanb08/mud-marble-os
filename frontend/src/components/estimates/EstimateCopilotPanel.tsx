@@ -13,7 +13,7 @@ const SUGGESTIONS = [
   'Check this estimate for gaps',
   'Is this priced in line with our other jobs?',
   'Which active jobs have the thinnest margins?',
-  'Summarize totals, profit, and margin by group',
+  'Summarize totals, profit, and margin by bucket',
 ];
 
 const WRITE_TOOLS = new Set([
@@ -139,7 +139,7 @@ export function EstimateCopilotPanel({
             <p>
               Talk through this estimate with me like you would with Shannon — I can check it for commonly-missed
               scope, add or change line items directly (a whole pasted scope at once, or one change across a whole
-              group), total up profit and margin, and edit the proposal's title and text. I can also look across
+              bucket), total up profit and margin, and edit the proposal's title and text. I can also look across
               every job — how a project is doing, what's outstanding, how this compares to other estimates, what the
               same work cost before. Turn on Think harder for the questions worth a deeper look.
             </p>

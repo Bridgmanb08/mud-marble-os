@@ -22,7 +22,8 @@ interface LineItemModalProps {
   defaultNotesExternal?: string;
   defaultUnitCost?: number;
   defaultUnitCostHint?: string;
-  existingGroups?: string[];
+  // Custom buckets already in use on this estimate (the three defaults are always offered).
+  existingBuckets?: { name: string; kind: string }[];
   onClose: () => void;
   onSaved: () => void;
   onDeleted?: () => void;
@@ -41,7 +42,17 @@ const COST_TYPES = [
   { value: 'subcontractor', label: 'Subcontractor' },
 ];
 
-const NEW_GROUP = '__new_group__';
+const NEW_BUCKET = '__new_bucket__';
+const DEFAULT_LABELS = new Set(BUCKETS.map((b) => b.label.toLowerCase()));
+
+// A bucket is either one of the three defaults (Construction / Allowance / PM
+// Fee -- stored as just the type, no name) or a custom name that counts as one
+// of those types for totals. A name that spells a default ("construction")
+// IS that default, never a second custom bucket.
+function customName(name: string | null | undefined): string {
+  const n = (name || '').trim().replace(/\s+/g, ' ');
+  return DEFAULT_LABELS.has(n.toLowerCase()) ? '' : n;
+}
 
 export function LineItemModal({
   estimateId,
@@ -55,7 +66,7 @@ export function LineItemModal({
   defaultNotesExternal,
   defaultUnitCost,
   defaultUnitCostHint,
-  existingGroups,
+  existingBuckets,
   onClose,
   onSaved,
   onDeleted,
@@ -72,11 +83,12 @@ export function LineItemModal({
   const costCodes = costCodesData ?? [];
   const [costCodeId, setCostCodeId] = useState(item?.cost_code_id || defaultCostCodeId || '');
   const [bucket, setBucket] = useState(item?.bucket || defaultBucket || 'construction');
-  const [groupName, setGroupName] = useState(item?.group_name || defaultGroupName || '');
-  const [newGroup, setNewGroup] = useState(false);
-  // Every group already in use on this estimate, plus this item's own current
-  // group even if nothing else uses it (so it always shows as selected).
-  const groupOptions = Array.from(new Set([...(existingGroups || []), ...(groupName.trim() && !newGroup ? [groupName.trim()] : [])]));
+  const [groupName, setGroupName] = useState(customName(item?.group_name || defaultGroupName));
+  const [newBucket, setNewBucket] = useState(false);
+  // Custom buckets already on this estimate, plus this item's own current one
+  // even if nothing else uses it (so it always shows as selected).
+  const bucketOptions = [...(existingBuckets || [])];
+  if (groupName && !newBucket && !bucketOptions.some((b) => b.name === groupName)) bucketOptions.push({ name: groupName, kind: bucket });
   const [title, setTitle] = useState(item?.title || defaultTitle || '');
   const [quantity, setQuantity] = useState(String(item?.quantity ?? 1));
   const [unit, setUnit] = useState(item?.unit || '');
@@ -205,10 +217,15 @@ export function LineItemModal({
     }
     setSaving(true);
     setError('');
+    // A typed bucket name that matches one already on the estimate (any
+    // capitalization) joins it instead of creating a near-duplicate.
+    const typed = customName(groupName);
+    const match = typed ? (existingBuckets || []).find((o) => o.name.toLowerCase() === typed.toLowerCase()) : undefined;
+    const bucketName = match ? match.name : typed;
     const payload = {
       cost_code_id: costCodeId || null,
-      bucket,
-      group_name: groupName.trim() || null,
+      bucket: match ? match.kind : bucket,
+      group_name: bucketName || null,
       title: title.trim(),
       quantity: qty,
       unit: unit.trim() || null,
@@ -355,58 +372,71 @@ export function LineItemModal({
               <input className="fi" value={title} onChange={(e) => setTitle(e.target.value)} placeholder="e.g. Relocate stairwell framing" />
             </div>
           ) : (
-          <div className="fr3">
+          <div className="fr">
             <div className="fg">
               <label className="fl">Item name</label>
               <input className="fi" value={title} onChange={(e) => setTitle(e.target.value)} placeholder="Vanity" />
             </div>
             <div className="fg">
-              <label className="fl">Group</label>
+              <label className="fl">Bucket</label>
               {/* A real dropdown, not an <input list>: a text box with a
                   suggestion list only suggests names that match what is already
-                  typed, so once a group was filled in it offered just that one
-                  group and switching to another looked impossible. */}
+                  typed, so once a bucket was filled in it offered just that one
+                  and switching to another looked impossible. */}
               <select
                 className="fi"
-                value={newGroup ? NEW_GROUP : groupName}
+                value={newBucket ? NEW_BUCKET : groupName ? `name:${groupName}` : `kind:${bucket}`}
                 onChange={(e) => {
-                  if (e.target.value === NEW_GROUP) {
-                    setNewGroup(true);
+                  const v = e.target.value;
+                  if (v === NEW_BUCKET) {
+                    setNewBucket(true);
                     setGroupName('');
+                  } else if (v.startsWith('kind:')) {
+                    setNewBucket(false);
+                    setGroupName('');
+                    setBucket(v.slice(5));
                   } else {
-                    setNewGroup(false);
-                    setGroupName(e.target.value);
+                    const name = v.slice(5);
+                    setNewBucket(false);
+                    setGroupName(name);
+                    setBucket(bucketOptions.find((o) => o.name === name)?.kind || bucket);
                   }
                 }}
               >
-                <option value="">— No group —</option>
-                {groupOptions.map((g) => (
-                  <option key={g} value={g}>
-                    {g}
-                  </option>
-                ))}
-                <option value={NEW_GROUP}>+ New group…</option>
-              </select>
-              {newGroup && (
-                <input
-                  className="fi"
-                  style={{ marginTop: 6 }}
-                  autoFocus
-                  value={groupName}
-                  onChange={(e) => setGroupName(e.target.value)}
-                  placeholder="New group name, e.g. Mechanicals"
-                />
-              )}
-            </div>
-            <div className="fg">
-              <label className="fl">Bucket</label>
-              <select className="fi" value={bucket} onChange={(e) => setBucket(e.target.value)}>
                 {BUCKETS.map((b) => (
-                  <option key={b.value} value={b.value}>
+                  <option key={b.value} value={`kind:${b.value}`}>
                     {b.label}
                   </option>
                 ))}
+                {bucketOptions.map((o) => (
+                  <option key={o.name} value={`name:${o.name}`}>
+                    {o.name}
+                  </option>
+                ))}
+                <option value={NEW_BUCKET}>+ New bucket…</option>
               </select>
+              {newBucket && (
+                <div style={{ display: 'flex', gap: 6, marginTop: 6 }}>
+                  <input
+                    className="fi"
+                    style={{ flex: 1 }}
+                    autoFocus
+                    value={groupName}
+                    onChange={(e) => setGroupName(e.target.value)}
+                    placeholder="New bucket name, e.g. Flooring"
+                  />
+                  <select className="fi" style={{ flex: '0 0 auto', width: 'auto' }} value={bucket} onChange={(e) => setBucket(e.target.value)} title="What this bucket counts as in the totals">
+                    {BUCKETS.map((b) => (
+                      <option key={b.value} value={b.value}>
+                        Counts as {b.label}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              )}
+              {!newBucket && groupName && (
+                <div style={{ fontSize: 11, color: 'var(--t3)', marginTop: 4 }}>Counts as {BUCKETS.find((b) => b.value === bucket)?.label}</div>
+              )}
             </div>
           </div>
           )}

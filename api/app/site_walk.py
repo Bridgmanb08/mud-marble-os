@@ -81,7 +81,7 @@ DRAFT_TOOL = {
                     "type": "object",
                     "properties": {
                         "title": {"type": "string"},
-                        "group_name": {"type": "string", "description": "How a contractor would group it: Demo, Framing, Flooring, Paint..."},
+                        "group_name": {"type": "string", "description": "The bucket, named the way a contractor would: Demo, Framing, Flooring, Paint..."},
                         "cost_code_id": {"type": "string", "description": "An exact id from the cost code list, only if it clearly fits; otherwise omit."},
                         "quantity": {"type": "number", "description": "Only a stated or computable number. If unknown use 1 and unit LS, and say so in internal_notes."},
                         "unit": {"type": "string", "description": "SF, LF, EA, LS, ..."},
@@ -114,8 +114,8 @@ is missing in internal_notes (e.g. "wall height not stated"). Never guess a meas
 electrical, missing glazing, debris). Add those as separate lines with basis "visual", usually as an allowance \
 (is_allowance true) or a line to verify, and say clearly in internal_notes that it was only seen in the footage. Do \
 not diagnose with certainty (e.g. say "dark staining, possible past moisture", not "mold").
-- Group lines the way a contractor would (Demo, Framing, Flooring, Ceiling & Lighting, Walls & Drywall, Paint, Doors \
-& Trim...). If the estimate already has groups, reuse those exact names.
+- Put lines in buckets the way a contractor would (Demo, Framing, Flooring, Ceiling & Lighting, Walls & Drywall, Paint, Doors \
+& Trim...). If the estimate already has buckets, reuse those exact names.
 - Do not repeat anything already on the estimate (listed below); add only what is new.
 - Cite the source in internal_notes and source as the video and time, e.g. [Video 2 0:30].
 - Use a cost_code_id only when it clearly fits one in the list; otherwise leave it out.
