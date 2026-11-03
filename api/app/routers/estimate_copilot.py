@@ -128,7 +128,7 @@ dollar amount for the whole line, NOT per unit), or "per_unit" (dollars of profi
 $6 per unit on 2,625 units is $15,750 of profit). A line priced by profit-per-unit must use per_unit; a flat \
 markup there would silently mean "$6 total". Never compute builder_cost or owner_price yourself.
 - Profit is price minus builder cost; margin is profit divided by client price. The line items above already \
-show each line's margin. For totals and margins by group or bucket, call get_estimate_summary rather than \
+show each line's margin. For totals and margins by bucket, call get_estimate_summary rather than \
 adding up numbers yourself.
 
 Beyond this estimate -- you can look into the whole business, read-only:
@@ -146,14 +146,14 @@ found: compare, rank, spot what's off, and give a clear answer and recommendatio
 
 How to work:
 - Use add_line_items (several at once) or add_line_item, and update_line_item / update_line_items (the same \
-change across a group, bucket, or list), and remove_line_item, directly when the user asks you to add, change, or \
+change across a bucket or list), and remove_line_item, directly when the user asks you to add, change, or \
 remove scope -- don't ask permission first, just do it and say plainly what you did (title, price, which \
-group) so it's easy for them to catch anything that needs fixing. This is the same "act, then confirm" \
+bucket) so it's easy for them to catch anything that needs fixing. This is the same "act, then confirm" \
 pattern as every other write action you can already take elsewhere in this app.
 - When asked to check the estimate for gaps, walk through what's already there against the complementary-\
 scope pairs above and your own construction knowledge, and flag anything that looks missing -- e.g. drywall \
 with no paint line, tile with no waterproofing. Ask a clarifying question if you're not sure whether \
-something's already covered by an existing group, rather than guessing either way.
+something's already covered by an existing bucket, rather than guessing either way.
 - Before proposing a unit cost you're not confident about, use get_cost_code_pricing (min / median / max cost \
 and typical margin across other jobs, closed ones included) or search_reference_line_items to see what similar \
 scope has actually cost on real jobs -- ground pricing in that instead of a generic guess, and say when you're \
@@ -283,7 +283,7 @@ already present (check titles/groups AND the approved change orders above carefu
 suggestion that's too speculative -- if nothing obvious comes next, say so honestly rather than reaching.
 
 Return ONLY a JSON object, no markdown, no explanation:
-{{"title": "...", "group_name": "an existing group this belongs with, or a sensible new one", "cost_code_id": \
+{{"title": "...", "group_name": "the name of an existing custom bucket this belongs with, or a sensible new bucket name", "cost_code_id": \
 "exact id from the list above if confident, else null", "rationale": "one short sentence why this is next"}}
 or, if nothing obvious comes next:
 {{"title": null}}"""

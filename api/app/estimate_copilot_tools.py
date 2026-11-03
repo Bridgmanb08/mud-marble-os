@@ -112,7 +112,7 @@ def format_line_items(items: list[dict]) -> str:
         unit = f" {i['unit']}" if i.get("unit") else ""
         markup_type = i.get("markup_type") or "percent"
         lines.append(
-            f"- id={i['id']} | \"{i['title']}\" | group: {i.get('group_name') or '—'} | bucket: {i['bucket']} | "
+            f"- id={i['id']} | \"{i['title']}\" | bucket: {i.get('group_name') or i['bucket']} (counts as {i['bucket']}) | "
             f"qty {i['quantity']}{unit} @ {_money(i['unit_cost'])} cost{split} = {_money(i.get('builder_cost'))} builder cost | "
             f"markup: {i.get('markup_value') or 0} ({MARKUP_LABEL.get(markup_type, markup_type)}) | "
             f"{_money(i['owner_price'])} client price, {_margin_pct(i.get('builder_cost'), i['owner_price'])} margin | {cc_label}"
@@ -253,9 +253,9 @@ async def _tool_update_line_items(
     bucket: Optional[str] = None,
     **_ignored,
 ) -> dict:
-    """Applies the same edit to many line items -- every item in a group or
+    """Applies the same edit to many line items -- every item in a bucket or
     bucket, or an explicit list -- e.g. "set every construction item to 25%
-    markup" or "move these into the Exterior group"."""
+    markup" or "move these into the Exterior bucket"."""
     from fastapi import HTTPException
 
     from .routers.estimates import update_line_item
@@ -317,7 +317,7 @@ async def _tool_get_estimate_summary(estimate_id: str, **_ignored) -> dict:
     by_group: dict[str, list[dict]] = {}
     for r in rows:
         by_bucket.setdefault(r.get("bucket") or "construction", []).append(r)
-        by_group.setdefault(r.get("group_name") or "(no group)", []).append(r)
+        by_group.setdefault(r.get("group_name") or "(default)", []).append(r)
     thin = sorted(
         (r for r in rows if r.get("owner_price")),
         key=lambda r: (r["owner_price"] - (r.get("builder_cost") or 0)) / r["owner_price"],
@@ -576,9 +576,9 @@ ESTIMATE_TOOLS: list[dict] = [
                 "title": {"type": "string"},
                 "group_name": {
                     "type": "string",
-                    "description": "Which group/section this belongs under, e.g. 'Kitchen', 'Site Work'. Reuse an existing group name exactly if this belongs with items already there.",
+                    "description": "The name of the bucket this belongs in when it is a custom bucket, e.g. 'Flooring', 'Kitchen'. Reuse an existing bucket name exactly if this belongs with items already there. Leave empty for the plain Construction / Allowance / PM Fee buckets (set by `bucket`).",
                 },
-                "bucket": {"type": "string", "description": "construction, pm_fee, or allowance (default construction)"},
+                "bucket": {"type": "string", "description": "What the bucket counts as in the totals: construction, pm_fee, or allowance (default construction). A custom bucket (group_name) counts as one of these."},
                 "quantity": {"type": "number", "description": "default 1"},
                 "unit": {"type": "string", "description": "e.g. sq ft, linear ft, each"},
                 "unit_cost": {"type": "number", "description": "builder's cost per unit, default 0. Ignored when unit_cost_labor/unit_cost_material are given (their sum is used)."},
@@ -680,7 +680,7 @@ ESTIMATE_TOOLS: list[dict] = [
     },
     {
         "name": "update_line_items",
-        "description": "Apply the SAME change to many existing line items at once -- e.g. set every item in a group to a 25% markup, move several items into another group, or switch a bucket to per-unit profit. Select by item_ids, or by group_name and/or bucket (all matching items).",
+        "description": "Apply the SAME change to many existing line items at once -- e.g. set every item in a bucket to a 25% markup, move several items into another bucket, or switch a bucket to per-unit profit. Select by item_ids, or by group_name and/or bucket (all matching items).",
         "input_schema": {
             "type": "object",
             "properties": {
@@ -689,7 +689,7 @@ ESTIMATE_TOOLS: list[dict] = [
                     "description": "Fields to set on every selected item: title, group_name, bucket, quantity, unit, unit_cost, unit_cost_labor, unit_cost_material, cost_type, markup_type, markup_value, cost_code_id, estimated_days, notes_external, notes_internal.",
                 },
                 "item_ids": {"type": "array", "items": {"type": "string"}},
-                "group_name": {"type": "string", "description": "Select every item currently in this group (exact name)"},
+                "group_name": {"type": "string", "description": "Select every item currently in this named bucket (exact name)"},
                 "bucket": {"type": "string", "description": "Select every item in this bucket: construction, pm_fee, or allowance"},
             },
             "required": ["changes"],
@@ -697,7 +697,7 @@ ESTIMATE_TOOLS: list[dict] = [
     },
     {
         "name": "get_estimate_summary",
-        "description": "Totals for this estimate: builder cost, client price, profit and margin overall, by bucket, and by group, plus the five thinnest-margin items. Use it instead of adding numbers up yourself, and before answering anything about profit or margin.",
+        "description": "Totals for this estimate: builder cost, client price, profit and margin overall, by type (construction / allowance / pm_fee), and by bucket, plus the five thinnest-margin items. Use it instead of adding numbers up yourself, and before answering anything about profit or margin.",
         "input_schema": {"type": "object", "properties": {}},
     },
     {

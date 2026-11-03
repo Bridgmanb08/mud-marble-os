@@ -383,7 +383,7 @@ export function SiteWalkModal({
                 <tr>
                   <th style={{ width: 30 }}></th>
                   <th style={{ minWidth: 230 }}>Line</th>
-                  <th style={{ minWidth: 130 }}>Group</th>
+                  <th style={{ minWidth: 130 }}>Bucket</th>
                   <th style={{ width: 80 }}>Qty</th>
                   <th style={{ width: 64 }}>Unit</th>
                   <th>Basis</th>
