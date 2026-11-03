@@ -9,6 +9,7 @@ const PERMIT_FIELDS = [
   { key: 'permit_plumbing_pulled', dateKey: 'permit_plumbing_date', numberKey: 'permit_plumbing_number', label: 'Plumbing permit pulled' },
   { key: 'permit_electrical_pulled', dateKey: 'permit_electrical_date', numberKey: 'permit_electrical_number', label: 'Electrical permit pulled' },
   { key: 'permit_hvac_pulled', dateKey: 'permit_hvac_date', numberKey: 'permit_hvac_number', label: 'HVAC permit pulled' },
+  { key: 'permit_ilp_pulled', dateKey: 'permit_ilp_date', numberKey: 'permit_ilp_number', label: 'ILP permit pulled' },
   { key: 'foundation_inspection_required', dateKey: 'foundation_inspection_date', numberKey: 'foundation_inspection_number', label: 'Foundation inspection required' },
 ] as const;
 

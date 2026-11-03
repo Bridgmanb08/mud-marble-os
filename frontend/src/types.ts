@@ -535,6 +535,9 @@ export interface Project {
   permit_hvac_pulled: boolean;
   permit_hvac_date: string | null;
   permit_hvac_number: string | null;
+  permit_ilp_pulled: boolean;
+  permit_ilp_date: string | null;
+  permit_ilp_number: string | null;
   foundation_inspection_required: boolean;
   foundation_inspection_date: string | null;
   foundation_inspection_number: string | null;
