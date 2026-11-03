@@ -61,6 +61,9 @@ class ProjectUpdate(BaseModel):
     permit_hvac_pulled: Optional[bool] = None
     permit_hvac_date: Optional[str] = None
     permit_hvac_number: Optional[str] = None
+    permit_ilp_pulled: Optional[bool] = None
+    permit_ilp_date: Optional[str] = None
+    permit_ilp_number: Optional[str] = None
     foundation_inspection_required: Optional[bool] = None
     foundation_inspection_date: Optional[str] = None
     foundation_inspection_number: Optional[str] = None
@@ -129,6 +132,9 @@ class ProjectOut(BaseModel):
     permit_hvac_pulled: bool = False
     permit_hvac_date: Optional[str] = None
     permit_hvac_number: Optional[str] = None
+    permit_ilp_pulled: bool = False
+    permit_ilp_date: Optional[str] = None
+    permit_ilp_number: Optional[str] = None
     foundation_inspection_required: bool = False
     foundation_inspection_date: Optional[str] = None
     foundation_inspection_number: Optional[str] = None
