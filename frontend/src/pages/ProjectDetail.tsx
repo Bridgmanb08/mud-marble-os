@@ -28,8 +28,8 @@ import { CalendarEventModal } from '../components/schedule/CalendarEventModal';
 import { FathomImportWidget } from '../components/projects/FathomImportWidget';
 import { PhaseTracker } from '../components/projects/PhaseTracker';
 import { CoPaymentSelect } from '../components/change-orders/CoPaymentSelect';
-import { ForemanPicker } from '../components/projects/ForemanPicker';
-import { ForemenModal } from '../components/projects/ForemenModal';
+import { ForemanMenu } from '../components/projects/ForemanMenu';
+import { ForemanChip } from '../components/projects/ForemanChip';
 import { useForemen } from '../hooks/useForemen';
 import { PermitsChecklist } from '../components/projects/PermitsChecklist';
 import { DumpsterCard } from '../components/projects/DumpsterCard';
@@ -103,8 +103,7 @@ export default function ProjectDetail() {
   const toast = useToast();
   const [searchParams] = useSearchParams();
   const [project, setProject] = useState<Project | null>(null);
-  const { foremen, reload: reloadForemen } = useForemen();
-  const [showForemen, setShowForemen] = useState(false);
+  const { foremen, byId: foremanById } = useForemen();
   const [notes, setNotes] = useState<ProjectNote[]>([]);
   const [estimates, setEstimates] = useState<Estimate[]>([]);
   const [changeOrders, setChangeOrders] = useState<ChangeOrder[]>([]);
@@ -371,21 +370,7 @@ export default function ProjectDetail() {
             ) : (
               'No client'
             )}
-            <ForemanPicker
-              foremen={foremen}
-              value={project.foreman_id ?? null}
-              onManage={() => setShowForemen(true)}
-              onChange={async (foremanId) => {
-                const prev = project.foreman_id;
-                setProject({ ...project, foreman_id: foremanId });
-                try {
-                  await api.patch(`/projects/${project.id}`, { foreman_id: foremanId });
-                } catch (e) {
-                  setProject({ ...project, foreman_id: prev });
-                  toast(e instanceof ApiError ? e.message : 'Failed to save foreman', true);
-                }
-              }}
-            />
+            <ForemanChip foreman={project.foreman_id ? foremanById.get(project.foreman_id) : undefined} />
             {project.clients?.is_repeat_client && <span className="badge bg-green">Repeat</span>}
             {project.clients?.is_advocate && <span className="badge bg-blue">Advocate</span>}
             {project.clients?.preferred_contact_method && (
@@ -401,6 +386,20 @@ export default function ProjectDetail() {
           <button type="button" className="btn btn-sm" onClick={() => setShowEditProject(true)}>
             <IconPencil size={14} /> Edit project
           </button>
+          <ForemanMenu
+            foremen={foremen}
+            value={project.foreman_id ?? null}
+            onChange={async (foremanId) => {
+              const prev = project.foreman_id ?? null;
+              setProject((p) => (p ? { ...p, foreman_id: foremanId } : p));
+              try {
+                await api.patch(`/projects/${project.id}`, { foreman_id: foremanId });
+              } catch (e) {
+                setProject((p) => (p ? { ...p, foreman_id: prev } : p));
+                toast(e instanceof ApiError ? e.message : 'Failed to save foreman', true);
+              }
+            }}
+          />
           <select
             className="fi"
             style={{ maxWidth: 180, textTransform: 'capitalize' }}
@@ -416,7 +415,6 @@ export default function ProjectDetail() {
         </div>
       </div>
 
-      {showForemen && <ForemenModal foremen={foremen} onClose={() => setShowForemen(false)} onChanged={reloadForemen} />}
       {showEditProject && (
         <NewProjectModal
           project={project}
