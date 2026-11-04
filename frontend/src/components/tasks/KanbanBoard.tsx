@@ -37,6 +37,23 @@ const COLUMNS = [
 ];
 
 const DONE_COLLAPSED_KEY = 'mm.tasks.doneCollapsed';
+const SORT_MODE_KEY = 'mm.tasks.sortMode';
+
+// 'manual' = the saved drag order; 'due' = earliest due date first inside each
+// column (tasks with no due date go last, ties keep their manual order).
+type SortMode = 'manual' | 'due';
+
+function sortIdsByDue(ids: string[], tasksById: Map<string, Task>): string[] {
+  return ids
+    .map((id, index) => ({ id, index, due: tasksById.get(id)?.scheduled_end || '' }))
+    .sort((a, b) => {
+      if (a.due && b.due) return a.due < b.due ? -1 : a.due > b.due ? 1 : a.index - b.index;
+      if (a.due) return -1;
+      if (b.due) return 1;
+      return a.index - b.index;
+    })
+    .map((x) => x.id);
+}
 
 const PRIORITY_COLOR: Record<string, string> = {
   low: 'var(--green)',
@@ -549,6 +566,14 @@ export function KanbanBoard({
   // sections. Session-only (not persisted) -- it's a lightweight view toggle.
   // Defaults to 'in_progress', the column people live in day to day.
   const [activeMobileCol, setActiveMobileCol] = useState('in_progress');
+  const [sortMode, setSortMode] = useState<SortMode>(() => {
+    try {
+      return localStorage.getItem(SORT_MODE_KEY) === 'due' ? 'due' : 'manual';
+    } catch {
+      return 'manual';
+    }
+  });
+  const dueSort = sortMode === 'due';
   // Drives <DragOverlay> -- see TaskCardPreview's comment for why this
   // exists at all.
   const [activeId, setActiveId] = useState<string | null>(null);
@@ -564,6 +589,14 @@ export function KanbanBoard({
   }, [doneCollapsed]);
 
   useEffect(() => {
+    try {
+      localStorage.setItem(SORT_MODE_KEY, sortMode);
+    } catch {
+      // ignore
+    }
+  }, [sortMode]);
+
+  useEffect(() => {
     // Derived from COLUMNS itself, not a hand-copied literal -- a hardcoded
     // `{ upcoming: [], ... }` object here previously went stale the moment
     // a 5th column (urgent_today) was added to COLUMNS: prev[overCol] in
@@ -575,8 +608,12 @@ export function KanbanBoard({
       const col = t.status === 'blocked' ? 'delayed' : grouped[t.status] ? t.status : 'upcoming';
       grouped[col].push(t.id);
     }
+    if (sortMode === 'due') {
+      for (const colId of Object.keys(grouped)) grouped[colId] = sortIdsByDue(grouped[colId], tasksById);
+    }
     setColumns(grouped);
-  }, [tasks]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [tasks, sortMode]);
 
   useEffect(() => {
     api.get<Project[]>('/projects').then(setProjects).catch(() => {});
@@ -658,6 +695,14 @@ export function KanbanBoard({
     }
     const statusChanged = originalCol !== overCol;
 
+    if (dueSort && !statusChanged) {
+      // Order is set by due date here, so dropping a card back in its own
+      // column just snaps it back (change the due date to move it).
+      if (rollback) setColumns(rollback);
+      setActiveId(null);
+      return;
+    }
+
     let finalColumns = columns;
     if (!statusChanged) {
       const ids = columns[overCol] || [];
@@ -676,6 +721,7 @@ export function KanbanBoard({
         cleaned[colId] = columns[colId].filter((id) => id !== active.id);
       }
       cleaned[overCol] = [...(cleaned[overCol] || []), active.id as string];
+      if (dueSort) cleaned[overCol] = sortIdsByDue(cleaned[overCol], tasksById);
       finalColumns = cleaned;
       setColumns(finalColumns);
     }
@@ -701,7 +747,7 @@ export function KanbanBoard({
     // tasks are deliberately left untouched (not renumbered) -- position is
     // a loose sort key, not a required-contiguous sequence, so a gap where
     // the dragged task used to be doesn't break `order=position.asc`.
-    const items = filtersActive
+    const items = filtersActive || dueSort
       ? // Cross-column moves are safe even while filtered -- they only touch
         // the dragged task, not any hidden sibling's position. `position` is
         // omitted (not guessed client-side) since the filtered view can't
@@ -769,6 +815,19 @@ export function KanbanBoard({
           within the same column is disabled until you clear filters (it could scramble the hidden tasks' order).
         </div>
       )}
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: 8, marginBottom: 10, fontSize: 12, color: 'var(--t3)' }}>
+        Sort within columns
+        <select
+          className="fi"
+          style={{ width: 'auto', fontSize: 12, padding: '3px 8px' }}
+          value={sortMode}
+          onChange={(e) => setSortMode(e.target.value as SortMode)}
+          title="How tasks are ordered inside each column"
+        >
+          <option value="manual">My order (drag to reorder)</option>
+          <option value="due">Due date (earliest first)</option>
+        </select>
+      </div>
       <DndContext
         sensors={sensors}
         collisionDetection={collisionDetection}
