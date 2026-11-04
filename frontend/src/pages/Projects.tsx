@@ -159,6 +159,17 @@ export default function Projects() {
     }
   }
 
+  async function handleForemanChange(project: Project, foremanId: string | null) {
+    const previous = project.foreman_id ?? null;
+    setProjects((prev) => prev && prev.map((p) => (p.id === project.id ? { ...p, foreman_id: foremanId } : p)));
+    try {
+      await api.patch(`/projects/${project.id}`, { foreman_id: foremanId });
+    } catch (e) {
+      setProjects((prev) => prev && prev.map((p) => (p.id === project.id ? { ...p, foreman_id: previous } : p)));
+      toast(e instanceof ApiError ? e.message : 'Failed to save foreman', true);
+    }
+  }
+
   async function handleDelete(project: Project) {
     if (
       !window.confirm(
@@ -247,6 +258,8 @@ export default function Projects() {
                 dragDisabled={filter !== 'all'}
                 onToggleCollapsed={() => toggleCollapsed(status)}
                 foremanById={foremanById}
+                foremen={foremen}
+                onForemanChange={handleForemanChange}
                 onNavigate={(id) => navigate(`/projects/${id}`)}
                 onStatusChange={handleStatusChange}
                 onEdit={setEditing}
@@ -292,6 +305,8 @@ function ProjectStatusSection({
   dragDisabled,
   onToggleCollapsed,
   foremanById,
+  foremen,
+  onForemanChange,
   onNavigate,
   onStatusChange,
   onEdit,
@@ -300,6 +315,8 @@ function ProjectStatusSection({
   status: string;
   items: Project[];
   foremanById: Map<string, Foreman>;
+  foremen: Foreman[];
+  onForemanChange: (project: Project, foremanId: string | null) => void;
   collapsed: boolean;
   dragDisabled: boolean;
   onToggleCollapsed: () => void;
@@ -347,6 +364,8 @@ function ProjectStatusSection({
             key={p.id}
             project={p}
             foreman={p.foreman_id ? foremanById.get(p.foreman_id) : undefined}
+            foremen={foremen}
+            onForemanChange={onForemanChange}
             onNavigate={() => onNavigate(p.id)}
             onStatusChange={onStatusChange}
             onEdit={onEdit}
@@ -360,6 +379,8 @@ function ProjectStatusSection({
 function ProjectCard({
   project: p,
   foreman,
+  foremen,
+  onForemanChange,
   onNavigate,
   onStatusChange,
   onEdit,
@@ -367,6 +388,8 @@ function ProjectCard({
 }: {
   project: Project;
   foreman?: Foreman;
+  foremen: Foreman[];
+  onForemanChange: (project: Project, foremanId: string | null) => void;
   onNavigate: () => void;
   onStatusChange: (project: Project, newStatus: string) => void;
   onEdit: (project: Project) => void;
@@ -417,7 +440,13 @@ function ProjectCard({
             </option>
           ))}
         </select>
-        <ProjectRowMenu onEdit={() => onEdit(p)} onDelete={() => onDelete(p)} />
+        <ProjectRowMenu
+          foremen={foremen}
+          foremanId={p.foreman_id ?? null}
+          onForemanChange={(id) => onForemanChange(p, id)}
+          onEdit={() => onEdit(p)}
+          onDelete={() => onDelete(p)}
+        />
       </div>
     </div>
   );
