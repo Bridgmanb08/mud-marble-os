@@ -7,7 +7,17 @@ from pydantic import BaseModel
 # on data already authorized for that user, never a new data source or a new query.
 SOURCE_FIELDS: dict[str, set[str]] = {
     "active_projects": {"id", "name", "client_name", "health_status"},
-    "upcoming_tasks": {"id", "title", "project_name", "assigned_to", "scheduled_end"},
+    "upcoming_tasks": {
+        "id",
+        "title",
+        "project_name",
+        "assigned_to",
+        "scheduled_end",
+        "created_by_name",
+        "created_by_type",
+        "updated_by_name",
+        "updated_by_type",
+    },
     "recent_activity": {"id", "author", "note_type", "project_name", "content", "created_at"},
     "contractor_milestones": {"id", "title", "project_name", "assigned_to", "scheduled_end", "days_until_due", "overdue"},
     "client_communications": {"project_id", "project_name", "last_contact_at", "days_since_contact", "overdue"},

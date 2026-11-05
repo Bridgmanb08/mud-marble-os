@@ -9,6 +9,8 @@ import { api, ApiError } from '../../../api/client';
 import { useToast } from '../../ui/Toast';
 import { useIsMobile } from '../../../hooks/useMediaQuery';
 import type { DashboardSummary } from '../../../types';
+import { BotBadge } from '../../activity/ActivityTrail';
+import { botTouchName } from '../../../lib/actor';
 
 const HEALTH_DOT: Record<string, string> = { green: 'dot-g', yellow: 'dot-a', red: 'dot-r' };
 
@@ -147,7 +149,10 @@ function SortableUpcomingRow({
         style={{ display: 'flex', flex: 1, minWidth: 0, textAlign: 'left', gap: 10, cursor: 'pointer' }}
       >
         <div style={{ flex: 1, minWidth: 0 }}>
-          <div style={{ fontSize: 12, fontWeight: 500 }}>{task.title}</div>
+          <div style={{ fontSize: 12, fontWeight: 500, display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
+            {task.title}
+            {botTouchName(task) && <BotBadge name={botTouchName(task)!} />}
+          </div>
           <div style={{ fontSize: 11, color: 'var(--t2)' }}>
             {task.project_name || ''}
             {task.assigned_to ? ` · ${task.assigned_to}` : ''}

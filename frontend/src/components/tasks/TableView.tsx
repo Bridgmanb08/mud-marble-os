@@ -8,6 +8,8 @@ import { useToast } from '../ui/Toast';
 import { fmtD } from '../../lib/format';
 import type { Task, UserDirectoryEntry } from '../../types';
 import { taskAssignees } from '../../lib/taskAssignees';
+import { BotBadge } from '../activity/ActivityTrail';
+import { botTouchName } from '../../lib/actor';
 
 type SortKey = 'title' | 'status' | 'priority' | 'scheduled_end' | 'assigned_to' | 'manual_position';
 export type TaskGroupBy = 'none' | 'project' | 'assigned_to' | 'status';
@@ -27,6 +29,7 @@ function TaskTableRow({
   onToggleSelect: (id: string) => void;
   onTaskClick: (id: string) => void;
 }) {
+  const botName = botTouchName(task);
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
     id: task.id,
     disabled: !dragEnabled,
@@ -61,7 +64,12 @@ function TaskTableRow({
         <input type="checkbox" checked={selected} onChange={() => onToggleSelect(task.id)} />
       </td>
       <td style={{ color: 'var(--t2)' }}>{displayOrder != null ? displayOrder + 1 : '—'}</td>
-      <td className="sticky-col" style={{ fontWeight: 500 }}>{task.title}</td>
+      <td className="sticky-col" style={{ fontWeight: 500 }}>
+        <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
+          {task.title}
+          {botName && <BotBadge name={botName} />}
+        </span>
+      </td>
       <td>{task.projects?.name?.replace(/\|.*/, '').trim() || '—'}</td>
       <td>{taskAssignees(task).join(', ') || '—'}</td>
       <td>

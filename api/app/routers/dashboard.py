@@ -631,6 +631,10 @@ async def get_dashboard(_: CurrentUser = Depends(get_current_user)):
                 project_name=(t.get("projects") or {}).get("name"),
                 assigned_to=t.get("assigned_to"),
                 scheduled_end=t.get("scheduled_end"),
+                created_by_name=t.get("created_by_name"),
+                created_by_type=t.get("created_by_type"),
+                updated_by_name=t.get("updated_by_name"),
+                updated_by_type=t.get("updated_by_type"),
             )
             for t in incomplete_tasks[:6]
         ],

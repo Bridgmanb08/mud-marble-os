@@ -4,6 +4,8 @@ from fastapi.middleware.cors import CORSMiddleware
 from .config import settings
 from .routers import (
     ai,
+    bot_writes,
+    activity,
     auth,
     calendar_events,
     change_orders,
@@ -70,6 +72,8 @@ async def health():
 
 
 app.include_router(auth.router, prefix="/api")
+app.include_router(activity.router, prefix="/api")
+app.include_router(bot_writes.router, prefix="/api")
 app.include_router(leads.router, prefix="/api")
 app.include_router(dashboard.router, prefix="/api")
 app.include_router(ai.router, prefix="/api")

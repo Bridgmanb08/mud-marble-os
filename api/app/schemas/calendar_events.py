@@ -38,4 +38,8 @@ class CalendarEventOut(BaseModel):
     # create or update, so a client can never fake or clear one.
     auto_kind: Optional[str] = None
     created_at: str
+    created_by_name: Optional[str] = None
+    created_by_type: Optional[str] = None
+    updated_by_name: Optional[str] = None
+    updated_by_type: Optional[str] = None
     projects: Optional[ProjectBrief] = None

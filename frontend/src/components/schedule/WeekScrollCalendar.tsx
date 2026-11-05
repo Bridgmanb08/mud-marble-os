@@ -10,7 +10,9 @@ import {
   IconChevronDown,
   IconChevronsUp,
   IconChevronsDown,
+  IconRobot,
 } from '@tabler/icons-react';
+import { botTouchName } from '../../lib/actor';
 import { api, ApiError } from '../../api/client';
 import { useToast } from '../ui/Toast';
 import type { CalendarEvent, Project, Task, WeatherOut } from '../../types';
@@ -478,7 +480,11 @@ export function WeekScrollCalendar({
                             e.stopPropagation();
                             onOpenEvent?.(ev);
                           }}
-                          title={ev.notes || ev.title}
+                          title={
+                            botTouchName(ev)
+                              ? `${ev.title} · AI bot ${botTouchName(ev)}`
+                              : ev.notes || ev.title
+                          }
                           style={{
                             display: 'flex',
                             alignItems: 'center',
@@ -496,6 +502,7 @@ export function WeekScrollCalendar({
                             textOverflow: 'ellipsis',
                           }}
                         >
+                          {botTouchName(ev) && <IconRobot size={11} aria-hidden />}
                           {ev.title}
                         </div>
                       ))}
@@ -542,7 +549,7 @@ export function WeekScrollCalendar({
                         height: BAR_HEIGHT,
                         background: colorForTask ? colorForTask(s.task) : STATUS_COLOR[s.task.status] || 'var(--border-md)',
                       }}
-                      title={s.task.title}
+                      title={botTouchName(s.task) ? `${s.task.title} · AI bot ${botTouchName(s.task)}` : s.task.title}
                       onPointerDown={(e) => {
                         e.stopPropagation();
                         const anchorKey = keyUnderPoint(e.clientX, e.clientY) || s.startKey;
@@ -563,6 +570,7 @@ export function WeekScrollCalendar({
                         />
                       )}
                       {s.task.is_punch_list && <span className="wcal-punch">Punch</span>}
+                      {botTouchName(s.task) && <IconRobot size={12} aria-hidden style={{ flexShrink: 0 }} />}
                       <span className="wcal-bar-title">{s.task.title}</span>
                       {s.endKey <= weekEndKey && (
                         <span

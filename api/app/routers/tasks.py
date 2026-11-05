@@ -5,6 +5,16 @@ from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException
 
+from .. import change_log
+from ..activity import (
+    SCHEDULE_TRACKED,
+    Actor,
+    audit_schedule_rows,
+    record_comment,
+    record_schedule_create,
+    record_schedule_delete,
+    record_schedule_update,
+)
 from ..deps import CurrentUser, get_current_user
 from ..mentions import create_mention_notifications
 from ..schemas.tasks import (
@@ -154,6 +164,10 @@ async def list_tasks(
 
 @router.post("", response_model=TaskOut)
 async def create_task(body: TaskCreate, current_user: CurrentUser = Depends(get_current_user)):
+    return await create_task_for_actor(body, Actor.human(current_user))
+
+
+async def create_task_for_actor(body: TaskCreate, actor: Actor) -> TaskOut:
     data = body.model_dump(exclude_none=True)
     if data.get("assignees"):
         data["assignees"] = [normalize_assignee_name(a) for a in data["assignees"]]
@@ -169,16 +183,21 @@ async def create_task(body: TaskCreate, current_user: CurrentUser = Depends(get_
     )
     data["position"] = (siblings[0]["position"] - 1) if siblings else 0
     rows = await db_post("schedule_items", data)
-    full = await db_get("schedule_items", f"?id=eq.{rows[0]['id']}&select=*,projects(name),subcontractors(company_name,trade)")
+    created_id = rows[0]["id"]
+    project_id = data.get("project_id")
+    await record_schedule_create(created_id, data, actor, project_id)
+    full = await db_get(
+        "schedule_items", f"?id=eq.{created_id}&select=*,projects(name),subcontractors(company_name,trade)"
+    )
     enriched = await _enrich(full)
     task = enriched[0]
     new_names = data.get("assignees") or ([data["assigned_to"]] if data.get("assigned_to") else [])
-    await _notify_new_assignees([], new_names, task, current_user)
+    await _notify_new_assignees([], new_names, task, actor)
     return task
 
 
 @router.patch("/reorder")
-async def reorder_tasks(body: ReorderRequest, _: CurrentUser = Depends(get_current_user)):
+async def reorder_tasks(body: ReorderRequest, current_user: CurrentUser = Depends(get_current_user)):
     """Bulk status/position update for drag-and-drop, with optimistic concurrency.
 
     Each item may carry the `version` the client last saw for that task. If any
@@ -191,7 +210,9 @@ async def reorder_tasks(body: ReorderRequest, _: CurrentUser = Depends(get_curre
         return {"ok": True}
 
     id_filter = ",".join(ids)
-    current_rows = await db_get("schedule_items", f"?id=in.({id_filter})&select=id,version")
+    current_rows = await db_get(
+        "schedule_items", f"?id=in.({id_filter})&select=id,version,status,title,project_id"
+    )
     current_versions = {r["id"]: r["version"] for r in current_rows}
 
     conflicts = [
@@ -223,6 +244,18 @@ async def reorder_tasks(body: ReorderRequest, _: CurrentUser = Depends(get_curre
         await db_patch("schedule_items", item.id, updates)
 
     await asyncio.gather(*[_apply(item) for item in body.items])
+    # A drag that only reorders within a column isn't an edit. A drag that
+    # changes status is — attribute that to the signed-in person so a bot
+    # badge doesn't linger after someone moves the card.
+    by_id = {r["id"]: r for r in current_rows}
+    status_groups: dict[str, list] = defaultdict(list)
+    for item in body.items:
+        prev = by_id.get(item.id)
+        if prev and prev.get("status") != item.status:
+            status_groups[item.status].append(prev)
+    actor = Actor.human(current_user)
+    for status, rows in status_groups.items():
+        await audit_schedule_rows(rows, {"status": status}, actor)
     return {"ok": True}
 
 
@@ -256,38 +289,39 @@ async def bulk_update_tasks(body: BulkUpdateRequest, current_user: CurrentUser =
         raise HTTPException(status_code=400, detail="No fields to update")
 
     id_filter = ",".join(body.ids)
+    before_rows = await db_get(
+        "schedule_items",
+        f"?id=in.({id_filter})&select=id,status,title,project_id,assigned_to,assignees,completed_at",
+    )
+    before_by_id = {r["id"]: r for r in before_rows}
+    actor = Actor.human(current_user)
     if body.status is None:
         # Old assignees captured before the patch -- the same diff
         # _notify_new_assignees needs elsewhere, just gathered here for a
         # whole batch instead of one task. Single-task assign already
         # notifies; bulk previously didn't at all, which is the one path a
         # newly-assigned person could silently never hear about.
-        old_rows = (
-            await db_get("schedule_items", f"?id=in.({id_filter})&select=id,assigned_to,assignees")
-            if "assignees" in updates
-            else []
-        )
         await db_patch_query("schedule_items", f"?id=in.({id_filter})", updates)
-        if "assignees" in updates and old_rows:
+        await audit_schedule_rows(before_rows, updates, actor)
+        if "assignees" in updates and before_rows:
             full = await db_get(
                 "schedule_items", f"?id=in.({id_filter})&select=*,projects(name),subcontractors(company_name,trade)"
             )
             enriched_by_id = {t.id: t for t in await _enrich(full)}
-            for row in old_rows:
+            for row in before_rows:
                 task = enriched_by_id.get(row["id"])
                 if not task:
                     continue
                 old_names = row.get("assignees") or ([row["assigned_to"]] if row.get("assigned_to") else [])
-                await _notify_new_assignees(old_names, updates["assignees"], task, current_user)
+                await _notify_new_assignees(old_names, updates["assignees"], task, actor)
         return {"ok": True, "updated": len(body.ids)}
 
     # completed_at should only change for tasks actually transitioning into/out
     # of "complete" -- a bulk selection can mix already-complete tasks with
     # incomplete ones, and re-stamping the already-complete ones would silently
     # reset when they "completed" for reporting purposes.
-    current = await db_get("schedule_items", f"?id=in.({id_filter})&select=id,status,title")
-    current_status = {r["id"]: r["status"] for r in current}
-    current_title = {r["id"]: r["title"] for r in current}
+    current_status = {r["id"]: r["status"] for r in before_rows}
+    current_title = {r["id"]: r["title"] for r in before_rows}
     now_iso = datetime.now(timezone.utc).isoformat()
     if body.status == "complete":
         candidates = [tid for tid in body.ids if current_status.get(tid) != "complete"]
@@ -311,9 +345,14 @@ async def bulk_update_tasks(body: BulkUpdateRequest, current_user: CurrentUser =
         to_stamp = [tid for tid in candidates if tid not in blocked]
         already_complete = [tid for tid in body.ids if tid not in candidates and tid not in blocked]
         if to_stamp:
-            await db_patch_query("schedule_items", f"?id=in.({','.join(to_stamp)})", {**updates, "completed_at": now_iso})
+            payload = {**updates, "completed_at": now_iso}
+            await db_patch_query("schedule_items", f"?id=in.({','.join(to_stamp)})", payload)
+            await audit_schedule_rows([before_by_id[i] for i in to_stamp if i in before_by_id], payload, actor)
         if already_complete:
             await db_patch_query("schedule_items", f"?id=in.({','.join(already_complete)})", updates)
+            await audit_schedule_rows(
+                [before_by_id[i] for i in already_complete if i in before_by_id], updates, actor
+            )
         return {
             "ok": True,
             "updated": len(to_stamp) + len(already_complete),
@@ -324,18 +363,41 @@ async def bulk_update_tasks(body: BulkUpdateRequest, current_user: CurrentUser =
         to_clear = [tid for tid in body.ids if current_status.get(tid) == "complete"]
         untouched = [tid for tid in body.ids if tid not in to_clear]
         if to_clear:
-            await db_patch_query("schedule_items", f"?id=in.({','.join(to_clear)})", {**updates, "completed_at": None})
+            payload = {**updates, "completed_at": None}
+            await db_patch_query("schedule_items", f"?id=in.({','.join(to_clear)})", payload)
+            await audit_schedule_rows([before_by_id[i] for i in to_clear if i in before_by_id], payload, actor)
         if untouched:
             await db_patch_query("schedule_items", f"?id=in.({','.join(untouched)})", updates)
+            await audit_schedule_rows(
+                [before_by_id[i] for i in untouched if i in before_by_id], updates, actor
+            )
     return {"ok": True, "updated": len(body.ids)}
 
 
 @router.post("/bulk-delete")
-async def bulk_delete_tasks(body: BulkDeleteRequest, _: CurrentUser = Depends(get_current_user)):
+async def bulk_delete_tasks(body: BulkDeleteRequest, current_user: CurrentUser = Depends(get_current_user)):
     # One DELETE ...?id=in.(...) instead of one request per task -- same
     # batching already used for bulk status/assignee updates just above.
     if body.ids:
+        before = await db_get(
+            "schedule_items", f"?id=in.({','.join(body.ids)})&select=id,title,project_id"
+        )
         await db_delete_query("schedule_items", f"?id=in.({','.join(body.ids)})")
+        actor = Actor.human(current_user)
+        logged = []
+        for row in before:
+            logged.extend(
+                change_log.build_change_rows(
+                    "schedule_items",
+                    row["id"],
+                    {"title": row.get("title")},
+                    {"title": None},
+                    actor,
+                    action="delete",
+                    project_id=row.get("project_id"),
+                )
+            )
+        await change_log.write_change_rows(logged)
     return {"ok": True, "deleted": len(body.ids)}
 
 
@@ -465,9 +527,14 @@ async def list_comments(task_id: str, current_user: CurrentUser = Depends(get_cu
 
 @router.post("/{task_id}/comments", response_model=CommentOut)
 async def create_comment(task_id: str, body: CommentCreate, current_user: CurrentUser = Depends(get_current_user)):
-    rows = await db_post(
-        "task_comments", {"task_id": task_id, "author": current_user.name or current_user.email, "content": body.content}
-    )
+    return await create_comment_for_actor(task_id, body.content, Actor.human(current_user))
+
+
+async def create_comment_for_actor(task_id: str, content: str, actor: Actor) -> dict:
+    # Bots keep the "(AI bot)" suffix the comment thread already uses, so a
+    # comment is obviously a bot's even before the history panel loads.
+    author = f"{actor.name} (AI bot)" if actor.actor_type == "bot" else actor.name
+    rows = await db_post("task_comments", {"task_id": task_id, "author": author, "content": content})
     comment = rows[0]
 
     # The comment is already saved at this point -- everything below is a
@@ -484,13 +551,14 @@ async def create_comment(task_id: str, body: CommentCreate, current_user: Curren
         task_rows = await db_get("schedule_items", f"?id=eq.{task_id}&select=title,project_id")
         task_title = task_rows[0]["title"] if task_rows else "a task"
         project_id = task_rows[0].get("project_id") if task_rows else None
+        await record_comment(task_id, content, actor, project_id)
         await create_mention_notifications(
-            content=body.content,
+            content=content,
             project_id=project_id,
             source_type="task_comment",
             source_id=comment["id"],
-            message=f'{current_user.name or current_user.email} mentioned you on task "{task_title}"',
-            exclude_user_id=current_user.id,
+            message=f'{actor.name} mentioned you on task "{task_title}"',
+            exclude_user_id=actor.id or "",
         )
     except Exception:
         pass
@@ -523,6 +591,10 @@ async def toggle_comment_reaction(
 
 @router.patch("/{task_id}", response_model=TaskOut)
 async def update_task(task_id: str, body: TaskUpdate, current_user: CurrentUser = Depends(get_current_user)):
+    return await update_task_for_actor(task_id, body, Actor.human(current_user))
+
+
+async def update_task_for_actor(task_id: str, body: TaskUpdate, actor: Actor) -> TaskOut:
     current = await db_get("schedule_items", f"?id=eq.{task_id}&select=version,status,assigned_to,assignees")
     if not current:
         raise HTTPException(status_code=404, detail="Task not found")
@@ -566,31 +638,48 @@ async def update_task(task_id: str, body: TaskUpdate, current_user: CurrentUser 
     elif target_status != "complete" and current[0]["status"] == "complete":
         updates["completed_at"] = None
     updates["version"] = current[0]["version"] + 1
+    tracked_keys = [k for k in updates if k in SCHEDULE_TRACKED]
+    before = None
+    if tracked_keys:
+        before = await change_log.fetch_before(
+            "schedule_items", task_id, list(set(tracked_keys) | {"project_id", "title"})
+        )
     await db_patch("schedule_items", task_id, updates)
+    project_id = updates["project_id"] if "project_id" in updates else (before or {}).get("project_id")
+    await record_schedule_update(task_id, before, updates, actor, project_id)
     full = await db_get("schedule_items", f"?id=eq.{task_id}&select=*,projects(name),subcontractors(company_name,trade)")
     enriched = await _enrich(full)
     task = enriched[0]
     if "assignees" in updates or "assigned_to" in updates:
         old_names = current[0].get("assignees") or ([current[0]["assigned_to"]] if current[0].get("assigned_to") else [])
         new_names = updates.get("assignees") or ([updates["assigned_to"]] if updates.get("assigned_to") else [])
-        await _notify_new_assignees(old_names, new_names, task, current_user)
+        await _notify_new_assignees(old_names, new_names, task, actor)
     return task
 
 
 @router.patch("/{task_id}/clarify", response_model=TaskOut)
-async def update_clarify(task_id: str, body: TaskClarifyUpdate, _: CurrentUser = Depends(get_current_user)):
-    """Dedicated endpoint so clearing the flag (clarify_from: null) actually
-    reaches the database -- the generic update_task path uses
-    exclude_none=True, which would silently drop an explicit null."""
+async def update_clarify(task_id: str, body: TaskClarifyUpdate, current_user: CurrentUser = Depends(get_current_user)):
+    """Dedicated endpoint so clearing the flag (clarify_from: null) is an
+    explicit write, and so the history records who set or cleared it."""
+    before = await change_log.fetch_before("schedule_items", task_id, ["clarify_from", "project_id", "title"])
     rows = await db_patch("schedule_items", task_id, {"clarify_from": body.clarify_from})
     if not rows:
         raise HTTPException(status_code=404, detail="Task not found")
+    actor = Actor.human(current_user)
+    await record_schedule_update(
+        task_id, before, {"clarify_from": body.clarify_from}, actor, (before or {}).get("project_id")
+    )
     full = await db_get("schedule_items", f"?id=eq.{task_id}&select=*,projects(name),subcontractors(company_name,trade)")
     enriched = await _enrich(full)
     return enriched[0]
 
 
 @router.delete("/{task_id}")
-async def delete_task(task_id: str, _: CurrentUser = Depends(get_current_user)):
+async def delete_task(task_id: str, current_user: CurrentUser = Depends(get_current_user)):
+    before = await db_get("schedule_items", f"?id=eq.{task_id}&select=id,title,project_id")
     await db_delete("schedule_items", task_id)
+    if before:
+        await record_schedule_delete(
+            task_id, before[0].get("title"), Actor.human(current_user), before[0].get("project_id")
+        )
     return {"ok": True}

@@ -1,5 +1,7 @@
 import { useMemo } from 'react';
 import type { Task } from '../../types';
+import { BotBadge } from '../activity/ActivityTrail';
+import { botTouchName } from '../../lib/actor';
 
 const STATUS_COLOR: Record<string, string> = {
   upcoming: 'var(--border-md)',
@@ -105,7 +107,10 @@ export function TimelineView({ tasks, onTaskClick }: { tasks: Task[]; onTaskClic
                 }}
                 onClick={() => onTaskClick(t.id)}
               >
-                {t.title}
+                <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+                  <span style={{ overflow: 'hidden', textOverflow: 'ellipsis' }}>{t.title}</span>
+                  {botTouchName(t) && <BotBadge name={botTouchName(t)!} />}
+                </span>
               </button>
               <div style={{ position: 'relative', width: rangeDays * dayWidth, flexShrink: 0 }}>
                 {todayOffset >= 0 && todayOffset < rangeDays && (

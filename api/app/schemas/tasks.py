@@ -93,6 +93,13 @@ class TaskOut(BaseModel):
     version: int = 1
     created_at: str
     completed_at: Optional[str] = None
+    # NULL actor fields mean unknown/legacy, never a bot. Present only after
+    # migration 0084; missing keys stay None.
+    created_by_name: Optional[str] = None
+    created_by_type: Optional[str] = None
+    updated_by_name: Optional[str] = None
+    updated_by_type: Optional[str] = None
+    updated_at: Optional[str] = None
     projects: Optional[ProjectBrief] = None
     subcontractors: Optional[SubcontractorBrief] = None
     subtask_total: int = 0

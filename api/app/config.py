@@ -22,6 +22,11 @@ class Settings(BaseSettings):
     public_base_url: str = ""
     # Bearer secret the scheduler (Vercel Cron or Supabase pg_cron) sends to /api/cron/*.
     cron_secret: str = ""
+    # Optional bot write credentials. JSON {"Mike Ross":"<token>"} or
+    # "Mike Ross=<token>;;Louis Litt=<token>". Prefer bot_credentials rows
+    # (see docs/bot-write-api.md) so a new bot doesn't need a redeploy.
+    # Never commit a real token.
+    bot_api_keys: str = ""
     resend_api_key: str = ""
     email_from: str = "Mud & Marble OS <notify@notify.mudmarble.com>"
 
