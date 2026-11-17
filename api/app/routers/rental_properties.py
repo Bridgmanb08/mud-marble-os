@@ -277,12 +277,13 @@ async def list_visits(property_id: str, _: CurrentUser = Depends(get_current_use
 
 
 @router.post("/{property_id}/visits", response_model=RentalPropertyVisitOut)
-async def log_visit(property_id: str, body: RentalPropertyVisitCreate, _: CurrentUser = Depends(get_current_user)):
+async def log_visit(property_id: str, body: RentalPropertyVisitCreate, current_user: CurrentUser = Depends(get_current_user)):
+    visitor = (body.visited_by or "").strip() or (current_user.name or "").strip() or current_user.email
     data = {
         "property_id": property_id,
         "unit_id": await _resolve_visit_unit(property_id, body.unit_id),
         "visited_at": body.visited_at or date.today().isoformat(),
-        "visited_by": body.visited_by,
+        "visited_by": visitor,
         "notes": body.notes,
     }
     rows = await db_post("rental_property_visits", data)

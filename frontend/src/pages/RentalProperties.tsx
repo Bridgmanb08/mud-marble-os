@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { IconPlus, IconHome2, IconMapPin, IconChevronUp, IconChevronDown } from '@tabler/icons-react';
-import { api, ApiError } from '../api/client';
+import { api, ApiError, isApiReadOnly } from '../api/client';
 import { useToast } from '../components/ui/Toast';
 import { fmt, fmtD } from '../lib/format';
 import { NewRentalPropertyModal } from '../components/rentals/NewRentalPropertyModal';
@@ -118,6 +118,7 @@ function EditableCell({
     <div
       onClick={(e) => {
         e.stopPropagation();
+        if (isApiReadOnly()) return;
         setEditing(true);
       }}
       title="Click to edit"

@@ -4,6 +4,7 @@ import { IconAlertTriangle, IconAt, IconChevronLeft, IconChevronRight, IconX } f
 import { api } from '../../api/client';
 import { useAuth } from '../../auth/AuthContext';
 import { DashboardTaskDrawer } from '../dashboard/DashboardTaskDrawer';
+import { notificationPath } from '../../notifications/notificationPath';
 import type { AppNotification, Task } from '../../types';
 
 interface TickerItem {
@@ -72,7 +73,8 @@ export function NotificationTicker() {
         onClick: async () => {
           await api.post(`/notifications/${n.id}/read`).catch(() => {});
           setNotifications((prev) => prev.map((x) => (x.id === n.id ? { ...x, is_read: true } : x)));
-          if (n.project_id) navigate(`/projects/${n.project_id}`);
+          const path = notificationPath(n);
+          if (path) navigate(path);
         },
       }));
 

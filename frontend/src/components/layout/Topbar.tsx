@@ -60,6 +60,7 @@ export function Topbar({ onOpenSidebar }: TopbarProps) {
           <IconSettings size={16} />
         </Link>
         <FathomImportHistoryPanel />
+        {user?.role === 'viewer' && <span className="badge bg-gray">Read-only</span>}
         <NotificationBell />
         <button className="btn btn-sm btn-ghost" onClick={() => setMenuOpen((v) => !v)}>
           {user?.name || user?.email}

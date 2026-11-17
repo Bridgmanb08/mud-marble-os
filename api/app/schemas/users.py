@@ -14,6 +14,7 @@ class UserSummary(BaseModel):
 
 class UserUpdate(BaseModel):
     hide_rental_financials: Optional[bool] = None
+    role: Optional[str] = None
 
 
 class UserCreate(BaseModel):

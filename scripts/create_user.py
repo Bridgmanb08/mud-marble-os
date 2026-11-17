@@ -8,6 +8,7 @@ Usage:
     python ../scripts/create_user.py
 
 Roles used by the dashboard's default widget layout: owner, ops, cfo, assistant, design, member.
+viewer is read-only: every change is rejected by the API, and the account is never an admin.
 """
 
 import getpass
@@ -29,8 +30,12 @@ def main() -> None:
 
     name = input("Name: ").strip()
     email = input("Email: ").strip()
-    role = input("Role [owner/ops/cfo/assistant/design/member] (default: member): ").strip() or "member"
-    is_admin = input("Is this user an admin? (y/N): ").strip().lower() == "y"
+    role = input("Role [owner/ops/cfo/assistant/design/member/viewer] (default: member): ").strip() or "member"
+    if role == "viewer":
+        print("Viewer accounts are read-only and are not admins.")
+        is_admin = False
+    else:
+        is_admin = input("Is this user an admin? (y/N): ").strip().lower() == "y"
     password = getpass.getpass("Password: ")
     confirm = getpass.getpass("Confirm password: ")
     if password != confirm:

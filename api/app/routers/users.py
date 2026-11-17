@@ -25,6 +25,10 @@ async def list_users(_: CurrentUser = Depends(require_admin)):
 @router.patch("/{user_id}", response_model=UserSummary)
 async def update_user(user_id: str, body: UserUpdate, _: CurrentUser = Depends(require_admin)):
     updates = body.model_dump(exclude_unset=True)
+    # A viewer is read-only. Don't leave admin rights on that account, or the
+    # admin-only screens would still open even though every write is rejected.
+    if updates.get("role") == "viewer":
+        updates["is_admin"] = False
     if updates:
         await db_patch("app_users", user_id, updates)
     rows = await db_get("app_users", f"?id=eq.{user_id}&select=id,name,email,role,is_admin,hide_rental_financials")
@@ -46,7 +50,7 @@ async def create_user(body: UserCreate, _: CurrentUser = Depends(require_admin))
             "email": body.email,
             "password_hash": hash_password(body.password),
             "role": body.role,
-            "is_admin": body.is_admin,
+            "is_admin": body.is_admin and body.role != "viewer",
         },
     )
     return rows[0]

@@ -10,6 +10,7 @@ export default function Users() {
   const [users, setUsers] = useState<UserSummary[] | null>(null);
   const [showNew, setShowNew] = useState(false);
   const [resetTarget, setResetTarget] = useState<UserSummary | null>(null);
+  const roles = ['owner', 'ops', 'cfo', 'assistant', 'design', 'member', 'viewer'];
   const toast = useToast();
 
   async function load() {
@@ -26,6 +27,17 @@ export default function Users() {
     load();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  async function changeRole(u: UserSummary, role: string) {
+    setUsers((prev) => prev && prev.map((x) => (x.id === u.id ? { ...x, role, is_admin: role === 'viewer' ? false : x.is_admin } : x)));
+    try {
+      await api.patch(`/users/${u.id}`, { role });
+      toast(role === 'viewer' ? `${u.name} is now read-only` : 'Role updated');
+    } catch (e) {
+      setUsers((prev) => prev && prev.map((x) => (x.id === u.id ? u : x)));
+      toast(e instanceof Error ? e.message : 'Failed to update', true);
+    }
+  }
 
   async function toggleHideRentalFinancials(u: UserSummary) {
     const next = !u.hide_rental_financials;
@@ -70,7 +82,11 @@ export default function Users() {
               <div style={{ fontSize: 12, color: 'var(--t2)', marginTop: 2 }}>{u.email}</div>
             </div>
             <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap', minWidth: 0 }}>
-              <span className="badge bg-blue">{u.role}</span>
+              <select className="fi" style={{ width: 120 }} value={u.role} onChange={(e) => changeRole(u, e.target.value)} aria-label={`Role for ${u.name}`}>
+                {roles.map((r) => (
+                  <option key={r} value={r}>{r}</option>
+                ))}
+              </select>
               {u.is_admin && (
                 <span className="badge bg-green">
                   <IconShieldCheck size={11} style={{ marginRight: 3 }} /> Admin

@@ -4,6 +4,7 @@ import { Modal } from '../ui/Modal';
 import { useToast } from '../ui/Toast';
 import { fmt, fmtD } from '../../lib/format';
 import { NewRentalLeaseModal, type LeaseUnit } from './NewRentalLeaseModal';
+import { EditRentalLeaseModal } from './EditRentalLeaseModal';
 import { LeaseRentLedgerModal } from './LeaseRentLedgerModal';
 import type { RentalLease } from '../../types';
 
@@ -29,6 +30,7 @@ export function RentalUnitModal({
   const [leases, setLeases] = useState<RentalLease[] | null>(null);
   const [showAdd, setShowAdd] = useState<'tenant' | 'lease' | null>(null);
   const [ledgerLease, setLedgerLease] = useState<RentalLease | null>(null);
+  const [editingLease, setEditingLease] = useState<RentalLease | null>(null);
 
   function load() {
     api
@@ -62,6 +64,11 @@ export function RentalUnitModal({
             {current && (
               <button className="btn btn-sm" onClick={() => setLedgerLease(current)}>
                 Rent ledger &amp; lease documents
+              </button>
+            )}
+            {current && (
+              <button className="btn btn-sm" onClick={() => setEditingLease(current)}>
+                Edit lease
               </button>
             )}
             <button className="btn btn-sm btn-p" onClick={() => setShowAdd('tenant')}>
@@ -102,7 +109,10 @@ export function RentalUnitModal({
                           <span className={`badge ${STATUS_BADGE[l.lease_status] || 'bg-gray'}`}>{l.lease_status}</span>
                         </td>
                         <td style={{ textAlign: 'right' }}>
-                          <button className="btn btn-sm" onClick={() => setLedgerLease(l)}>
+                          <button className="btn btn-sm" onClick={() => setEditingLease(l)}>
+                            Edit
+                          </button>
+                          <button className="btn btn-sm" style={{ marginLeft: 6 }} onClick={() => setLedgerLease(l)}>
                             Ledger
                           </button>
                         </td>
@@ -137,6 +147,19 @@ export function RentalUnitModal({
         />
       )}
       {ledgerLease && <LeaseRentLedgerModal lease={ledgerLease} onClose={() => setLedgerLease(null)} />}
+      {editingLease && (
+        <EditRentalLeaseModal
+          lease={editingLease}
+          units={[unit]}
+          onClose={() => setEditingLease(null)}
+          onSaved={() => {
+            setEditingLease(null);
+            toast('Lease updated');
+            load();
+            onChanged();
+          }}
+        />
+      )}
     </>
   );
 }

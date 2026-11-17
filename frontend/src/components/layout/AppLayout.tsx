@@ -1,5 +1,8 @@
 import { useEffect, useState } from 'react';
 import { Outlet, useLocation } from 'react-router-dom';
+import { setApiReadOnly } from '../../api/client';
+import { useAuth } from '../../auth/AuthContext';
+import { isWriteButton } from '../../auth/viewerUi';
 import { Topbar } from './Topbar';
 import { Sidebar } from './Sidebar';
 import { NotificationTicker } from './NotificationTicker';
@@ -10,6 +13,42 @@ import { AskAIWidget } from '../ai/AskAIWidget';
 import { QuickTaskWidget } from '../reminders/QuickTaskWidget';
 
 export function AppLayout() {
+  const { user } = useAuth();
+  const isViewer = user?.role === 'viewer';
+
+  useEffect(() => {
+    const root = document.documentElement;
+    if (!isViewer) {
+      delete root.dataset.access;
+      setApiReadOnly(false);
+      return;
+    }
+    root.dataset.access = 'viewer';
+    setApiReadOnly(true);
+    const mark = (scope: ParentNode) => {
+      scope.querySelectorAll('button').forEach((node) => {
+        if (node instanceof HTMLButtonElement && isWriteButton(node)) node.dataset.viewerWrite = '';
+      });
+    };
+    mark(document.body);
+    const observer = new MutationObserver((records) => {
+      for (const record of records) {
+        record.addedNodes.forEach((node) => {
+          if (!(node instanceof HTMLElement)) return;
+          if (node instanceof HTMLButtonElement && isWriteButton(node)) node.dataset.viewerWrite = '';
+          mark(node);
+        });
+      }
+    });
+    observer.observe(document.body, { childList: true, subtree: true });
+    return () => {
+      observer.disconnect();
+      delete root.dataset.access;
+      setApiReadOnly(false);
+      document.querySelectorAll('[data-viewer-write]').forEach((el) => el.removeAttribute('data-viewer-write'));
+    };
+  }, [isViewer]);
+
   // Lifted here (not local to Sidebar/Topbar) since the hamburger button
   // that opens the drawer lives in Topbar while the drawer itself lives in
   // Sidebar -- they need to share one boolean. Irrelevant above the mobile
@@ -36,8 +75,8 @@ export function AppLayout() {
         </div>
         <Outlet />
       </div>
-      <AskAIWidget />
-      <QuickTaskWidget />
+      {!isViewer && <AskAIWidget />}
+      {!isViewer && <QuickTaskWidget />}
       <TeamReminders />
       <DigestPopup />
       <CommandPalette />

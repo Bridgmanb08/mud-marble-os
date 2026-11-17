@@ -2,6 +2,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from .config import settings
+from .viewer_guard import ViewerReadOnlyMiddleware
 from .routers import (
     ai,
     auth,
@@ -62,6 +63,10 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+# Added after CORS so it runs first: a viewer is rejected before any handler
+# writes a row. GET, including the rental file and work-order media downloads,
+# is allowed. Login and logout are the only mutations a viewer can call.
+app.add_middleware(ViewerReadOnlyMiddleware)
 
 
 @app.get("/api/health")
