@@ -1514,8 +1514,37 @@ export interface RentalFile {
   file_type: string;
   mime_type: string | null;
   size_bytes: number | null;
-  storage_path: string;
+  storage_path: string | null;
+  link_url: string | null;
   created_at: string;
+}
+
+export interface WorkOrderUpdate {
+  id: string;
+  work_order_id: string;
+  author_id: string | null;
+  author_name: string | null;
+  body: string;
+  created_at: string;
+}
+
+export interface WorkOrderMedia {
+  id: string;
+  work_order_id: string;
+  property_id: string;
+  update_id: string | null;
+  uploaded_by: string | null;
+  uploader_name: string | null;
+  created_at: string;
+  kind: 'photo' | 'video' | 'link' | string;
+  file_url: string | null;
+  link_url: string | null;
+  update_text: string | null;
+  file_name: string | null;
+  mime_type: string | null;
+  size_bytes: number | null;
+  storage_path: string | null;
+  download_url: string | null;
 }
 
 export interface RentalDashboardSummary {

@@ -6,6 +6,7 @@ import { loadReminderHistory, removeReminderHistoryEntry, type ReminderHistoryEn
 import { CATEGORY_META, type Category } from './TeamReminders';
 import { useNotifications } from '../../notifications/useNotifications';
 import { markNotificationRead, markAllNotificationsRead } from '../../notifications/notificationsStore';
+import { notificationPath } from '../../notifications/notificationPath';
 import type { AppNotification } from '../../types';
 
 function fmtTime(iso: string): string {
@@ -36,9 +37,8 @@ export function NotificationBell() {
       await markNotificationRead(n.id);
     }
     setOpen(false);
-    if (n.type === 'unclaimed_media') navigate('/review');
-    else if (n.type === 'job_import_conflict' && n.project_id) navigate(`/job-import/${n.project_id}`);
-    else if (n.project_id) navigate(`/projects/${n.project_id}`);
+    const path = notificationPath(n);
+    if (path) navigate(path);
   }
 
   async function markAllRead() {

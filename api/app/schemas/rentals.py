@@ -239,6 +239,7 @@ class RentalLeaseCreate(BaseModel):
 
 
 class RentalLeaseUpdate(BaseModel):
+    unit_id: Optional[str] = None
     tenant_id: Optional[str] = None
     start_date: Optional[str] = None
     end_date: Optional[str] = None
@@ -308,6 +309,9 @@ class RentalWorkOrderCreate(BaseModel):
     description: Optional[str] = None
     priority: str = "normal"
     assigned_to: Optional[str] = None
+    # Pasted links (Google Photos or any https URL) that aren't already in
+    # the description. Stored as text, never as a file.
+    links: list[str] = []
 
 
 class RentalWorkOrderUpdate(BaseModel):
@@ -337,6 +341,55 @@ class RentalWorkOrderOut(BaseModel):
     unit_label: Optional[str] = None
 
 
+class RentalWorkOrderCommentCreate(BaseModel):
+    body: str = ""
+    links: list[str] = []
+
+
+class RentalWorkOrderCommentOut(BaseModel):
+    id: str
+    work_order_id: str
+    author_id: Optional[str] = None
+    author_name: Optional[str] = None
+    body: str
+    created_at: str
+
+
+class RentalWorkOrderMediaCreate(BaseModel):
+    storage_path: str
+    file_name: str
+    mime_type: Optional[str] = None
+    size_bytes: Optional[int] = None
+    update_id: Optional[str] = None
+    update_text: Optional[str] = None
+
+
+class RentalWorkOrderUploadRequest(BaseModel):
+    file_name: str
+    mime_type: Optional[str] = None
+    size_bytes: Optional[int] = None
+
+
+class RentalWorkOrderMediaOut(BaseModel):
+    id: str
+    work_order_id: str
+    property_id: str
+    update_id: Optional[str] = None
+    uploaded_by: Optional[str] = None
+    uploader_name: Optional[str] = None
+    created_at: str
+    kind: str
+    file_url: Optional[str] = None
+    link_url: Optional[str] = None
+    update_text: Optional[str] = None
+    file_name: Optional[str] = None
+    mime_type: Optional[str] = None
+    size_bytes: Optional[int] = None
+    storage_path: Optional[str] = None
+    # Short-lived signed URL for a photo or video. Not stored.
+    download_url: Optional[str] = None
+
+
 class RentalFileCreate(BaseModel):
     property_id: Optional[str] = None
     lease_id: Optional[str] = None
@@ -362,8 +415,18 @@ class RentalFileOut(BaseModel):
     file_type: str
     mime_type: Optional[str] = None
     size_bytes: Optional[int] = None
-    storage_path: str
+    # Null for a pasted link that was never uploaded as a file.
+    storage_path: Optional[str] = None
+    # Plain https URL when this row is a link (or a .webloc we already read).
+    link_url: Optional[str] = None
     created_at: str
+
+
+class RentalLinkCreate(BaseModel):
+    property_id: Optional[str] = None
+    lease_id: Optional[str] = None
+    visit_id: Optional[str] = None
+    link_url: str
 
 
 class RentalPropertyVisitCreate(BaseModel):

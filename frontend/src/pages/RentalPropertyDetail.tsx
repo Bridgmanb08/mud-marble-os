@@ -9,6 +9,9 @@ import { NewRentalUnitModal } from '../components/rentals/NewRentalUnitModal';
 import { NewRentalLeaseModal } from '../components/rentals/NewRentalLeaseModal';
 import { LeaseRentLedgerModal } from '../components/rentals/LeaseRentLedgerModal';
 import { NewRentalWorkOrderModal } from '../components/rentals/NewRentalWorkOrderModal';
+import { EditRentalLeaseModal } from '../components/rentals/EditRentalLeaseModal';
+import { WorkOrderDetailModal } from '../components/rentals/WorkOrderDetailModal';
+import { LinkText } from '../components/rentals/LinkText';
 import { MoneyField } from '../components/rentals/MoneyField';
 import { VisitLogModal } from '../components/rentals/VisitLogModal';
 import { RentalUnitModal } from '../components/rentals/RentalUnitModal';
@@ -83,6 +86,8 @@ export default function RentalPropertyDetail() {
   const [showNewUnit, setShowNewUnit] = useState(false);
   const [showNewLease, setShowNewLease] = useState(false);
   const [showNewWorkOrder, setShowNewWorkOrder] = useState(false);
+  const [editingLease, setEditingLease] = useState<RentalLease | null>(null);
+  const [openWorkOrder, setOpenWorkOrder] = useState<RentalWorkOrder | null>(null);
   const [ledgerLease, setLedgerLease] = useState<RentalLease | null>(null);
   const [editingVisit, setEditingVisit] = useState<RentalPropertyVisit | null>(null);
   const [loggingVisit, setLoggingVisit] = useState(false);
@@ -192,7 +197,10 @@ export default function RentalPropertyDetail() {
     setLoggingVisit(true);
     setPickingVisitUnit(false);
     try {
-      const created = await api.post<RentalPropertyVisit>(`/rental-properties/${id}/visits`, unitId ? { unit_id: unitId } : {});
+      const created = await api.post<RentalPropertyVisit>(`/rental-properties/${id}/visits`, {
+        ...(unitId ? { unit_id: unitId } : {}),
+        ...(user?.name ? { visited_by: user.name } : {}),
+      });
       loadVisits();
       loadProperty();
       setEditingVisit(created);
@@ -493,7 +501,10 @@ export default function RentalPropertyDetail() {
                         <span className={`badge ${LEASE_STATUS_BADGE[l.lease_status] || 'bg-gray'}`}>{l.lease_status}</span>
                       </td>
                       <td>
-                        <button className="btn btn-sm" onClick={() => setLedgerLease(l)}>
+                        <button className="btn btn-sm" onClick={() => setEditingLease(l)}>
+                          Edit
+                        </button>
+                        <button className="btn btn-sm" style={{ marginLeft: 6 }} onClick={() => setLedgerLease(l)}>
                           Rent ledger
                         </button>
                       </td>
@@ -527,7 +538,11 @@ export default function RentalPropertyDetail() {
                     {w.title}
                     {w.unit_label ? ` · ${w.unit_label}` : ''}
                   </div>
-                  {w.description && <div style={{ fontSize: 12, color: 'var(--t2)', marginTop: 2 }}>{w.description}</div>}
+                  {w.description && (
+                    <div style={{ fontSize: 12, color: 'var(--t2)', marginTop: 2, whiteSpace: 'pre-wrap' }}>
+                      <LinkText text={w.description} />
+                    </div>
+                  )}
                   <div style={{ display: 'flex', gap: 6, marginTop: 6, alignItems: 'center' }}>
                     <span className={`badge ${WO_PRIORITY_BADGE[w.priority] || 'bg-gray'}`}>{w.priority}</span>
                     <span className={`badge ${WO_STATUS_BADGE[w.status] || 'bg-gray'}`}>{w.status.replace('_', ' ')}</span>
@@ -535,6 +550,9 @@ export default function RentalPropertyDetail() {
                     <span style={{ fontSize: 11, color: 'var(--t3)' }}>{fmtD(w.created_at)}</span>
                   </div>
                 </div>
+                <button className="btn btn-sm" onClick={() => setOpenWorkOrder(w)}>
+                  Photos &amp; updates
+                </button>
                 {w.status !== 'resolved' && (
                   <select
                     className="fi"
@@ -677,6 +695,20 @@ export default function RentalPropertyDetail() {
         />
       )}
       {ledgerLease && <LeaseRentLedgerModal lease={ledgerLease} onClose={() => setLedgerLease(null)} />}
+      {editingLease && (
+        <EditRentalLeaseModal
+          lease={editingLease}
+          units={property.units}
+          onClose={() => setEditingLease(null)}
+          onSaved={() => {
+            setEditingLease(null);
+            toast('Lease updated');
+            loadLeases();
+            loadProperty();
+          }}
+        />
+      )}
+      {openWorkOrder && <WorkOrderDetailModal workOrder={openWorkOrder} onClose={() => { setOpenWorkOrder(null); loadWorkOrders(); }} />}
       {showNewWorkOrder && (
         <NewRentalWorkOrderModal
           properties={[property]}

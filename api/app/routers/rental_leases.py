@@ -83,6 +83,19 @@ async def get_lease(lease_id: str, _: CurrentUser = Depends(get_current_user)):
 @router.patch("/rental-leases/{lease_id}", response_model=RentalLeaseOut)
 async def update_lease(lease_id: str, body: RentalLeaseUpdate, _: CurrentUser = Depends(get_current_user)):
     updates = body.model_dump(exclude_unset=True)
+    if not updates:
+        raise HTTPException(status_code=400, detail="Nothing to change on this lease.")
+    existing = await db_get("rental_leases", f"?id=eq.{lease_id}&select=id,start_date,end_date")
+    if not existing:
+        raise HTTPException(status_code=404, detail="Lease not found")
+    if updates.get("unit_id"):
+        units = await db_get("rental_units", f"?id=eq.{updates['unit_id']}&select=id")
+        if not units:
+            raise HTTPException(status_code=400, detail="That unit doesn't exist.")
+    start = updates.get("start_date", existing[0]["start_date"])
+    end = updates.get("end_date", existing[0]["end_date"])
+    if start and end and end < start:
+        raise HTTPException(status_code=400, detail="Lease end date cannot be before the start date.")
     await db_patch("rental_leases", lease_id, updates)
     rows = await db_get("rental_leases", f"?id=eq.{lease_id}&select={LEASE_SELECT}")
     if not rows:

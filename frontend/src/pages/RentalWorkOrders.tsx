@@ -1,10 +1,12 @@
 import { useEffect, useMemo, useState } from 'react';
 import { IconPlus, IconClipboardList } from '@tabler/icons-react';
-import { Link } from 'react-router-dom';
+import { Link, useSearchParams } from 'react-router-dom';
 import { api } from '../api/client';
 import { useToast } from '../components/ui/Toast';
 import { fmtD } from '../lib/format';
 import { NewRentalWorkOrderModal } from '../components/rentals/NewRentalWorkOrderModal';
+import { WorkOrderDetailModal } from '../components/rentals/WorkOrderDetailModal';
+import { LinkText } from '../components/rentals/LinkText';
 import type { RentalProperty, RentalWorkOrder } from '../types';
 
 const COLUMNS = [
@@ -21,6 +23,8 @@ export default function RentalWorkOrders() {
   const [properties, setProperties] = useState<RentalProperty[]>([]);
   const [propertyFilter, setPropertyFilter] = useState('');
   const [showNew, setShowNew] = useState(false);
+  const [openId, setOpenId] = useState<string | null>(null);
+  const [searchParams, setSearchParams] = useSearchParams();
 
   function load() {
     api
@@ -33,6 +37,22 @@ export default function RentalWorkOrders() {
     load();
     api.get<RentalProperty[]>('/rental-properties').then(setProperties).catch(() => {});
   }, []);
+
+  useEffect(() => {
+    const requested = searchParams.get('open');
+    if (requested) setOpenId(requested);
+  }, [searchParams]);
+
+  useEffect(() => {
+    if (!openId || workOrders === null) return;
+    if (workOrders.some((w) => w.id === openId)) return;
+    api
+      .get<RentalWorkOrder>(`/rental-work-orders/${openId}`)
+      .then((wo) => setWorkOrders((prev) => (prev ? [wo, ...prev.filter((w) => w.id !== wo.id)] : [wo])))
+      .catch(() => toast('That work order is no longer here', true));
+  }, [openId, workOrders, toast]);
+
+  const openWorkOrder = (workOrders ?? []).find((w) => w.id === openId) || null;
 
   const filtered = useMemo(
     () => (workOrders ?? []).filter((w) => !propertyFilter || w.property_id === propertyFilter),
@@ -99,6 +119,11 @@ export default function RentalWorkOrders() {
                 .map((w) => (
                   <div key={w.id} className="card" style={{ padding: 12, marginBottom: 10 }}>
                     <div style={{ fontSize: 13, fontWeight: 500, marginBottom: 4 }}>{w.title}</div>
+                    {w.description && (
+                      <div style={{ fontSize: 12, color: 'var(--t2)', marginBottom: 6, whiteSpace: 'pre-wrap' }}>
+                        <LinkText text={w.description} />
+                      </div>
+                    )}
                     <div style={{ fontSize: 12, color: 'var(--t2)', marginBottom: 6 }}>
                       <Link to={`/rentals/${w.property_id}`} style={{ color: 'var(--blue)' }}>
                         {w.property_address}
@@ -110,7 +135,10 @@ export default function RentalWorkOrders() {
                       {w.assigned_to && <span style={{ fontSize: 11, color: 'var(--t3)' }}>{w.assigned_to}</span>}
                       <span style={{ fontSize: 11, color: 'var(--t3)' }}>{fmtD(w.created_at)}</span>
                     </div>
-                    <div style={{ marginTop: 8, display: 'flex', gap: 6 }}>
+                    <div style={{ marginTop: 8, display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+                      <button className="btn btn-sm" onClick={() => setOpenId(w.id)}>
+                        Photos &amp; updates
+                      </button>
                       {COLUMNS.filter((c) => c.id !== w.status).map((c) => (
                         <button key={c.id} className="btn btn-sm" onClick={() => changeStatus(w, c.id)}>
                           Move to {c.label}
@@ -122,6 +150,21 @@ export default function RentalWorkOrders() {
             </div>
           ))}
         </div>
+      )}
+
+      {openWorkOrder && (
+        <WorkOrderDetailModal
+          workOrder={openWorkOrder}
+          onClose={() => {
+            setOpenId(null);
+            if (searchParams.get('open')) {
+              const next = new URLSearchParams(searchParams);
+              next.delete('open');
+              setSearchParams(next, { replace: true });
+            }
+            load();
+          }}
+        />
       )}
 
       {showNew && (

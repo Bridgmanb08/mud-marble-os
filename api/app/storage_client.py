@@ -57,5 +57,10 @@ async def create_signed_download_url(bucket: str, path: str, expires_in: int = 3
     return f"{settings.supabase_url}/storage/v1{data['signedURL']}"
 
 
+async def download_object(bucket: str, path: str) -> bytes:
+    r = await _request("GET", f"/object/{bucket}/{_quote_path(path)}")
+    return r.content
+
+
 async def remove_objects(bucket: str, paths: list[str]) -> None:
     await _request("DELETE", f"/object/{bucket}", json={"prefixes": paths})

@@ -5,7 +5,8 @@ import { Modal } from '../ui/Modal';
 import { useToast } from '../ui/Toast';
 import { openDatePicker } from '../../lib/datePicker';
 import { AutoUploadDropzone } from '../ui/AutoUploadDropzone';
-import { uploadRentalVisitFile } from '../../lib/fileUpload';
+import { saveRentalLink, uploadRentalVisitFile } from '../../lib/fileUpload';
+import { UploadProgress } from './UploadProgress';
 import type { DownloadUrlResponse, RentalFile, RentalPropertyVisit, RentalUnit } from '../../types';
 
 // Edits a single logged visit -- a quick pin-icon log from the Rent Roll
@@ -36,6 +37,8 @@ export function VisitLogModal({
   const [notes, setNotes] = useState(visit.notes || '');
   const [saving, setSaving] = useState(false);
   const [files, setFiles] = useState<RentalFile[]>([]);
+  const [linkDraft, setLinkDraft] = useState('');
+  const [progress, setProgress] = useState<{ name: string; pct: number } | null>(null);
 
   function loadFiles() {
     api
@@ -66,16 +69,36 @@ export function VisitLogModal({
 
   async function handleFiles(dropped: File[]) {
     let failed = 0;
+    let lastError = '';
     for (const file of dropped) {
       try {
-        await uploadRentalVisitFile(visit.id, file);
-      } catch {
+        setProgress({ name: file.name, pct: 0 });
+        await uploadRentalVisitFile(visit.id, file, visit.property_id, (pct) => setProgress({ name: file.name, pct }));
+      } catch (err) {
         failed += 1;
+        lastError = err instanceof Error ? err.message : '';
       }
     }
+    setProgress(null);
     loadFiles();
     if (failed === 0) toast(dropped.length === 1 ? 'Saved' : `${dropped.length} files saved`);
-    else toast(`${failed} of ${dropped.length} failed to upload`, true);
+    else toast(lastError || `${failed} of ${dropped.length} failed to upload`, true);
+  }
+
+  async function addLink() {
+    const url = linkDraft.trim();
+    if (!/^https?:\/\//i.test(url)) {
+      toast('Paste a full link starting with https://', true);
+      return;
+    }
+    try {
+      await saveRentalLink({ visit_id: visit.id, property_id: visit.property_id, link_url: url });
+      setLinkDraft('');
+      toast('Link saved');
+      loadFiles();
+    } catch (err) {
+      toast(err instanceof Error ? err.message : 'Failed to save link', true);
+    }
   }
 
   async function downloadFile(f: RentalFile) {
@@ -161,12 +184,18 @@ export function VisitLogModal({
                     cursor: 'pointer',
                     overflow: 'hidden',
                   }}
-                  onClick={() => downloadFile(f)}
-                  title={f.file_name}
+                  onClick={() => (f.link_url ? window.open(f.link_url, '_blank', 'noopener') : downloadFile(f))}
+                  title={f.link_url || f.file_name}
                 >
-                  {f.file_type === 'video' ? <IconPlayerPlay size={20} color="var(--t3)" /> : <IconFile size={20} color="var(--t3)" />}
+                  {f.link_url ? (
+                    <span style={{ fontSize: 11, color: 'var(--blue)', padding: '0 6px', textAlign: 'center' }}>Link</span>
+                  ) : f.file_type === 'video' ? (
+                    <IconPlayerPlay size={20} color="var(--t3)" />
+                  ) : (
+                    <IconFile size={20} color="var(--t3)" />
+                  )}
                   <span style={{ fontSize: 10, color: 'var(--t3)', padding: '0 4px', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', maxWidth: '100%' }}>
-                    {f.file_name}
+                    {f.link_url ? 'Open link' : f.file_name}
                   </span>
                 </button>
                 <button
@@ -197,12 +226,33 @@ export function VisitLogModal({
             ))}
           </div>
         )}
+        {progress && <UploadProgress name={progress.name} pct={progress.pct} />}
         <AutoUploadDropzone
           accept="image/*,video/*"
           multiple
           label="Drop photos or videos here, or click to browse -- they save right away"
           onFiles={handleFiles}
         />
+        <div className="fg" style={{ marginTop: 10 }}>
+          <label className="fl">Or paste a Google Photos link</label>
+          <div style={{ display: 'flex', gap: 8 }}>
+            <input
+              className="fi"
+              value={linkDraft}
+              placeholder="https://photos.google.com/..."
+              onChange={(e) => setLinkDraft(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter') {
+                  e.preventDefault();
+                  void addLink();
+                }
+              }}
+            />
+            <button type="button" className="btn btn-sm" onClick={() => void addLink()}>
+              Add
+            </button>
+          </div>
+        </div>
       </div>
 
       <div className="ma">
