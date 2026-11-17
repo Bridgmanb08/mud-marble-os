@@ -7,7 +7,7 @@ interface NewUserModalProps {
   onCreated: () => void;
 }
 
-const ROLES = ['owner', 'ops', 'cfo', 'assistant', 'design', 'member'];
+const ROLES = ['owner', 'ops', 'cfo', 'assistant', 'design', 'member', 'viewer'];
 
 export function NewUserModal({ onClose, onCreated }: NewUserModalProps) {
   const [name, setName] = useState('');
@@ -68,7 +68,7 @@ export function NewUserModal({ onClose, onCreated }: NewUserModalProps) {
         <div className="fr">
           <div className="fg">
             <label className="fl">Role</label>
-            <select className="fi" value={role} onChange={(e) => setRole(e.target.value)}>
+            <select className="fi" value={role} onChange={(e) => { setRole(e.target.value); if (e.target.value === 'viewer') setIsAdmin(false); }}>
               {ROLES.map((r) => (
                 <option key={r} value={r}>
                   {r}
@@ -78,7 +78,7 @@ export function NewUserModal({ onClose, onCreated }: NewUserModalProps) {
           </div>
           <div className="fg" style={{ display: 'flex', alignItems: 'flex-end', paddingBottom: 8 }}>
             <label style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 13 }}>
-              <input type="checkbox" checked={isAdmin} onChange={(e) => setIsAdmin(e.target.checked)} />
+              <input type="checkbox" checked={isAdmin} disabled={role === 'viewer'} onChange={(e) => setIsAdmin(e.target.checked)} />
               Admin access
             </label>
           </div>

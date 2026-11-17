@@ -22,11 +22,11 @@ export function inferFileType(mime: string, fileName?: string): 'photo' | 'video
   return 'other';
 }
 
-export const MAX_MEDIA_BYTES = 50 * 1024 * 1024;
+export const MAX_MEDIA_BYTES = 150 * 1024 * 1024;
 
 export function mediaTooLargeMessage(file: File): string {
   const mb = file.size / (1024 * 1024);
-  return `${file.name} is ${mb.toFixed(0)} MB. Files over 50 MB can't be uploaded. Try a shorter video or a smaller photo.`;
+  return `${file.name} is ${mb.toFixed(0)} MB. Files over 150 MB can't be uploaded. Try a shorter video or a smaller photo.`;
 }
 
 export function assertMediaSize(file: File): void {
@@ -53,25 +53,33 @@ export function extractUrls(text: string): string[] {
 }
 
 function putToSignedUrl(uploadUrl: string, file: File, onProgress?: (pct: number) => void): Promise<void> {
+  // The file is sent straight to Supabase Storage on the signed URL. It does
+  // not pass through the Vercel function, whose request body is far too small
+  // for a 150 MB video. xhr.upload reports progress for that direct PUT.
+  // timeout 0 means the browser will not give up on a long transfer.
   return new Promise((resolve, reject) => {
     const xhr = new XMLHttpRequest();
     xhr.open('PUT', uploadUrl);
+    xhr.timeout = 0;
     if (SUPABASE_ANON_KEY) {
       xhr.setRequestHeader('apikey', SUPABASE_ANON_KEY);
       xhr.setRequestHeader('Authorization', `Bearer ${SUPABASE_ANON_KEY}`);
     }
+    xhr.setRequestHeader('Content-Type', file.type || 'application/octet-stream');
+    xhr.setRequestHeader('x-upsert', 'true');
     xhr.upload.onprogress = (event) => {
       if (!onProgress || !event.lengthComputable || event.total <= 0) return;
       onProgress(Math.min(100, Math.round((event.loaded / event.total) * 100)));
     };
     xhr.onload = () => {
       if (xhr.status >= 200 && xhr.status < 300) resolve();
-      else reject(new Error('File upload failed'));
+      else if (xhr.status === 413 || /too large|payload|exceeded the maximum/i.test(xhr.responseText || '')) {
+        reject(new Error(`${file.name} was rejected by storage. Files over 150 MB can't be uploaded, and the bucket limit has to allow this size.`));
+      } else reject(new Error('File upload failed'));
     };
     xhr.onerror = () => reject(new Error('File upload failed'));
-    const form = new FormData();
-    form.append('file', file);
-    xhr.send(form);
+    xhr.ontimeout = () => reject(new Error('File upload failed'));
+    xhr.send(file);
   });
 }
 

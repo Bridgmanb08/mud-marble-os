@@ -140,7 +140,7 @@ export default function RentalWorkOrders() {
                         Photos &amp; updates
                       </button>
                       {COLUMNS.filter((c) => c.id !== w.status).map((c) => (
-                        <button key={c.id} className="btn btn-sm" onClick={() => changeStatus(w, c.id)}>
+                        <button key={c.id} className="btn btn-sm" data-viewer-write="" onClick={() => changeStatus(w, c.id)}>
                           Move to {c.label}
                         </button>
                       ))}

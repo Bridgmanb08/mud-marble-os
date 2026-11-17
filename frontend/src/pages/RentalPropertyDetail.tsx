@@ -556,6 +556,7 @@ export default function RentalPropertyDetail() {
                 {w.status !== 'resolved' && (
                   <select
                     className="fi"
+                    data-viewer-lock=""
                     style={{ width: 140 }}
                     value={w.status}
                     onChange={(e) => changeWorkOrderStatus(w, e.target.value)}

@@ -52,6 +52,11 @@ body{font-family:var(--font);background:var(--bg);color:var(--text);font-size:14
 .btn-sm{padding:5px 10px;font-size:12px;}
 .btn-ghost{border-color:transparent;background:transparent;}
 .btn-ghost:hover{background:var(--bg);border-color:var(--border);}
+/* A viewer can look and download, not change anything. Write controls are
+   marked data-viewer-write by AppLayout. File pickers are always a write. */
+html[data-access="viewer"] [data-viewer-write],
+html[data-access="viewer"] input[type="file"]{display:none !important;}
+html[data-access="viewer"] select[data-viewer-lock]{pointer-events:none;}
 
 /* Badges */
 .badge{display:inline-flex;align-items:center;padding:2px 8px;border-radius:20px;font-size:11px;font-weight:500;white-space:nowrap;}

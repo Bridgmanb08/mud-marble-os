@@ -1,4 +1,4 @@
-"""Plain-text links and the 50 MB photo/video cap shared by rental uploads.
+"""Plain-text links and the photo/video size cap shared by rental uploads.
 
 macOS turns a dragged URL into a tiny .webloc plist. Those were being stored
 as files named like "photos.google.com: 4.webloc" instead of the URL inside
@@ -9,9 +9,10 @@ import html
 import re
 from typing import Optional
 
-# Supabase free-plan object cap. Enforced again in the client before the
-# request so a too-large video never starts uploading.
-MAX_MEDIA_BYTES = 50 * 1024 * 1024
+# App-side cap. The Storage bucket limit is set separately and must be at
+# least this high or Storage rejects the upload after the bytes leave the
+# browser. The file itself is PUT to a signed Storage URL, not to this API.
+MAX_MEDIA_BYTES = 150 * 1024 * 1024
 
 _URL_RE = re.compile(r"https?://[^\s<>\"']+", re.IGNORECASE)
 _WEBLOC_URL_RE = re.compile(r"<key>\s*URL\s*</key>\s*<string>([^<]+)</string>", re.IGNORECASE)
@@ -66,6 +67,6 @@ def assert_media_size(size_bytes: Optional[int], file_name: str = "This file") -
     if size_bytes is not None and size_bytes > MAX_MEDIA_BYTES:
         mb = size_bytes / (1024 * 1024)
         raise ValueError(
-            f"{file_name} is {mb:.0f} MB. Files over 50 MB can't be uploaded. "
+            f"{file_name} is {mb:.0f} MB. Files over 150 MB can't be uploaded. "
             "Try a shorter video or a smaller photo."
         )

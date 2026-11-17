@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
+import { isApiReadOnly } from '../../api/client';
 import { fmt } from '../../lib/format';
 
 /** Click-to-edit money field: shows a properly formatted "$1,234" (via the
@@ -63,7 +64,10 @@ export function MoneyField({
       type="button"
       className="btn-reset"
       style={{ width: '100%', textAlign: 'left', padding: '8px 10px', cursor: 'text', border: '1px solid var(--border-md)', borderRadius: 'var(--r)', fontSize: 13 }}
-      onClick={() => setEditing(true)}
+      onClick={() => {
+        if (isApiReadOnly()) return;
+        setEditing(true);
+      }}
     >
       {parsed !== null ? fmt(parsed) : <span style={{ color: 'var(--t3)' }}>{placeholder}</span>}
     </button>
