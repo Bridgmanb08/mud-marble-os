@@ -14,7 +14,7 @@
   --gray-bg:#F1EFE8;--gray-tx:#5F5E5A;
   --purple-bg:#EEEDFE;--purple-tx:#534AB7;
   --brand-tan:#A9A28C;--brand-cream:#F2EFE6;--brand-brown:#7B4B34;--brand-olive:#5F5F52;
-  --r:8px;--rl:12px;--sb:200px;--tb:52px;
+  --r:8px;--rl:12px;--sb:200px;--tb:52px;--page-pad:24px;
   --font:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;
 }
 *{box-sizing:border-box;margin:0;padding:0;}
@@ -26,18 +26,32 @@ body{font-family:var(--font);background:var(--bg);color:var(--text);font-size:14
 
 /* Layout */
 .topbar{position:fixed;top:0;left:0;right:0;height:var(--tb);background:var(--surface);border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;padding:0 20px;z-index:100;}
-.logo{display:flex;align-items:center;gap:10px;}
-.logo-mark{width:28px;height:28px;object-fit:contain;display:block;}
-.logo-name{font-size:14px;font-weight:600;}
-.logo-sub{font-size:12px;color:var(--t2);}
-.topbar-right{display:flex;align-items:center;gap:8px;}
+.topbar-left{display:flex;align-items:center;gap:20px;min-width:0;}
+.logo{display:flex;align-items:center;gap:10px;min-width:0;}
+.logo-mark{width:28px;height:28px;object-fit:contain;display:block;flex-shrink:0;}
+.logo-name{font-size:14px;font-weight:600;white-space:nowrap;}
+.logo-sub{font-size:12px;color:var(--t2);flex-shrink:0;}
+.topbar-right{display:flex;align-items:center;gap:8px;flex-shrink:0;}
+.topbar-user{display:inline-flex;align-items:center;gap:4px;max-width:180px;}
+.topbar-user-name{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+/* Dropdowns anchored to a topbar icon. On a phone these are repositioned
+   to a fixed panel so a 320px menu can't run off the left edge. */
+.topbar-popover{position:absolute;top:110%;right:0;width:min(340px,calc(100vw - 16px));max-height:min(440px,70vh);overflow-y:auto;z-index:120;}
 .sidebar{position:fixed;top:var(--tb);left:0;bottom:0;width:var(--sb);background:var(--surface);border-right:1px solid var(--border);padding:12px 0;overflow-y:auto;z-index:90;transition:transform .18s ease;}
 .nav-section{font-size:10px;font-weight:600;color:var(--t3);padding:14px 16px 4px;letter-spacing:.8px;text-transform:uppercase;}
 .nav-item{display:flex;align-items:center;gap:9px;padding:7px 16px;font-size:13px;color:var(--t2);cursor:pointer;border-left:2px solid transparent;transition:all .1s;text-decoration:none;}
 .nav-item:hover{color:var(--text);background:var(--bg);}
 .nav-item.active{color:var(--text);border-left-color:var(--accent);background:var(--bg);font-weight:500;}
 .nav-item i{font-size:16px;flex-shrink:0;}
-.main{margin-left:var(--sb);margin-top:var(--tb);padding:24px;min-height:calc(100vh - var(--tb));}
+.main{margin-left:var(--sb);margin-top:var(--tb);padding:var(--page-pad);min-height:calc(100vh - var(--tb));}
+/* Notification ticker sits in the page padding. The negative margin tracks
+   --page-pad so it still bleeds edge to edge when the padding changes. */
+.page-ticker{position:sticky;top:0;z-index:95;margin:calc(var(--page-pad) * -1) calc(var(--page-pad) * -1) 16px;}
+.ticker-bar{display:flex;align-items:center;gap:10px;padding:6px 20px;border-bottom:1px solid var(--border);font-size:12.5px;}
+.ticker-text{flex:1;min-width:0;text-align:left;cursor:pointer;overflow-wrap:anywhere;}
+/* Full-bleed strips (project tabs, the leads sticky bar) that cancel the
+   page padding. Pair with --page-pad so mobile padding stays aligned. */
+.bleed-x{margin-left:calc(var(--page-pad) * -1);margin-right:calc(var(--page-pad) * -1);}
 /* Mobile drawer chrome -- hidden/no-op above the mobile breakpoint (see
    the @media block below for the actual off-canvas behavior). */
 .btn.hamburger-btn{display:none;}
@@ -101,15 +115,17 @@ html[data-access="viewer"] select[data-viewer-lock]{pointer-events:none;}
 .dashboard-widgets{display:grid;grid-template-columns:1fr 1fr;gap:16px;}
 
 /* Page header */
-.ph{display:flex;align-items:flex-start;justify-content:space-between;margin-bottom:20px;}
-.ph h1{font-size:18px;font-weight:600;}
+.ph{display:flex;align-items:flex-start;justify-content:space-between;margin-bottom:20px;gap:12px;}
+.ph h1{font-size:18px;font-weight:600;overflow-wrap:anywhere;}
 .ph p{font-size:13px;color:var(--t2);margin-top:2px;}
+.ph-actions{display:flex;align-items:center;gap:8px;flex-wrap:wrap;}
 
 /* Filters */
 .filters{display:flex;gap:6px;flex-wrap:wrap;}
 .fb{padding:4px 12px;font-size:12px;border-radius:20px;border:1px solid var(--border-md);background:var(--surface);color:var(--t2);cursor:pointer;transition:all .1s;}
 .fb:hover{color:var(--text);}
 .fb.on{background:var(--accent);color:#fff;border-color:var(--accent);}
+.filter-sort{width:auto;margin-left:auto;}
 
 /* Section header */
 .sh{display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;}
@@ -171,6 +187,10 @@ html[data-access="viewer"] select[data-viewer-lock]{pointer-events:none;}
 .pn{font-size:13px;font-weight:500;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
 .ps{font-size:12px;color:var(--t2);margin-top:1px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
 .pm{display:flex;align-items:center;gap:16px;flex-shrink:0;}
+/* Size the status pill to the selected label. Without this, WebKit sizes a
+   <select> to its longest option ("pre construction") and the pill eats the
+   address even when the current status is a short word. */
+.pc select.badge{field-sizing:content;}
 .cc{background:var(--surface);border:1px solid var(--border);border-radius:var(--rl);padding:14px 18px;cursor:pointer;display:flex;align-items:center;gap:14px;margin-bottom:6px;}
 .cc:hover{border-color:var(--border-md);}
 .av{width:38px;height:38px;border-radius:50%;background:var(--bbg);display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:600;color:var(--btx);flex-shrink:0;}
@@ -266,6 +286,12 @@ textarea.fi{resize:vertical;min-height:80px;}
 .ik{font-size:12px;color:var(--t2);}
 .iv{font-size:12px;font-weight:500;text-align:right;}
 
+/* Work order columns (RentalWorkOrders.tsx). One column on a phone. */
+.wo-columns{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:16px;}
+.schedule-tools{display:flex;gap:8px;flex-wrap:wrap;align-items:center;justify-content:flex-end;}
+.schedule-tools .fi{width:auto;}
+.command-palette{width:min(560px,calc(100vw - 24px));max-height:65vh;display:flex;flex-direction:column;overflow:hidden;}
+
 /* Board */
 .board{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-top:4px;}
 .col{background:var(--bg);border-radius:var(--rl);padding:12px;}
@@ -298,7 +324,7 @@ textarea.fi{resize:vertical;min-height:80px;}
 
 /* Login */
 .login-wrap{min-height:100vh;display:flex;align-items:center;justify-content:center;background:var(--bg);}
-.login-card{width:360px;background:var(--surface);border:1px solid var(--border);border-radius:var(--rl);padding:32px;}
+.login-card{width:min(360px,calc(100vw - 32px));background:var(--surface);border:1px solid var(--border);border-radius:var(--rl);padding:32px;}
 
 /* Files */
 .file-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(160px,1fr));gap:12px;}
@@ -309,6 +335,7 @@ textarea.fi{resize:vertical;min-height:80px;}
 .file-info{padding:8px 10px;}
 .file-name{font-size:12px;font-weight:500;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
 .file-meta{font-size:11px;color:var(--t2);margin-top:2px;display:flex;align-items:center;gap:4px;}
+.file-delete{margin-left:auto;display:inline-flex;align-items:center;justify-content:center;min-width:32px;min-height:32px;cursor:pointer;color:var(--t2);}
 .file-drop{border:1.5px dashed var(--border-md);border-radius:var(--rl);padding:20px;text-align:center;color:var(--t2);font-size:13px;cursor:pointer;transition:all .1s;}
 .file-drop:hover,.file-drop.over{border-color:var(--accent);color:var(--text);background:var(--bg);}
 /* Small CSS-only hover tooltip -- put class="hover-tip" data-tip="..." on any
@@ -337,9 +364,18 @@ textarea.fi{resize:vertical;min-height:80px;}
 .file-link-row{display:flex;align-items:center;gap:8px;padding:6px 0;border-bottom:1px solid var(--border);}
 .file-link-row:last-child{border-bottom:none;}
 
-.ai-fab{position:fixed;bottom:24px;right:24px;width:52px;height:52px;border-radius:50%;background:var(--accent);color:#fff;border:none;display:flex;align-items:center;justify-content:center;cursor:pointer;box-shadow:0 4px 14px rgba(0,0,0,.2);z-index:300;transition:transform .1s;}
+.ai-fab{position:fixed;bottom:24px;right:24px;width:52px;height:52px;border-radius:50%;background:var(--accent);color:#fff;border:none;display:flex;align-items:center;justify-content:center;cursor:pointer;box-shadow:0 4px 14px rgba(0,0,0,.2);z-index:160;transition:transform .1s;}
+/* Project-page Fathom button. Sits left of the Ask button on desktop and
+   stacks above it on a phone (see the mobile block). */
+.fathom-fab{right:92px;}
+.fathom-panel{position:fixed;bottom:88px;right:92px;width:360px;max-height:70vh;overflow-y:auto;padding:16px;box-shadow:0 8px 30px rgba(0,0,0,.18);z-index:170;}
 .ai-fab:hover{transform:scale(1.06);}
-.ai-panel{position:fixed;bottom:88px;right:24px;width:360px;height:520px;max-height:70vh;background:var(--surface);border:1px solid var(--border);border-radius:var(--rl);box-shadow:0 8px 30px rgba(0,0,0,.18);display:flex;flex-direction:column;overflow:hidden;z-index:300;}
+/* A dialog sits above these, but the buttons still showed through the dim
+   overlay and covered Skip / Next. Hide them while a modal is open. */
+body:has(.mo) .ai-fab,
+body:has(.mo) .qr-stack,
+body:has(.mo) .tr-stack{visibility:hidden;}
+.ai-panel{position:fixed;bottom:88px;right:24px;width:360px;height:520px;max-height:70vh;background:var(--surface);border:1px solid var(--border);border-radius:var(--rl);box-shadow:0 8px 30px rgba(0,0,0,.18);display:flex;flex-direction:column;overflow:hidden;z-index:170;}
 .ai-header{display:flex;align-items:center;justify-content:space-between;padding:12px 14px;border-bottom:1px solid var(--border);flex-shrink:0;}
 .ai-title{display:flex;align-items:center;gap:6px;font-size:13px;font-weight:600;}
 .ai-body{flex:1;overflow-y:auto;padding:14px;display:flex;flex-direction:column;gap:10px;}
@@ -394,5 +430,85 @@ textarea.fi{resize:vertical;min-height:80px;}
      viewport. */
   .cc{flex-wrap:wrap;}
   .ai-panel{width:calc(100vw - 24px);right:12px;bottom:80px;height:60vh;}
-  .ai-fab{right:16px;bottom:16px;}
+  .ai-fab{right:16px;bottom:16px;width:48px;height:48px;}
+  /* Ask, then the quick-task bell, then Fathom, stacked on the right. */
+  .fathom-fab{right:16px;bottom:124px;}
+  .fathom-panel{left:12px;right:12px;bottom:136px;width:auto;max-height:60vh;}
+
+  /* Keep the page from scrolling sideways when one control is a few pixels
+     too wide. Fixed overlays (the drawer, FABs) are outside this clip. */
+  body{overflow-x:clip;}
+  :root{--page-pad:14px;}
+  .main{margin-left:0;padding-bottom:168px;}
+  .metric{padding:14px;min-width:0;}
+  .m-val{overflow-wrap:anywhere;}
+
+  /* Top bar: the account name and the "OS" suffix are what push the bell
+     and the logout menu off an iPhone. Icon buttons stay, with a larger hit area. */
+  .topbar{padding:0 4px;}
+  .topbar-left{gap:0;flex:1;}
+  .logo{gap:6px;}
+  .logo-name{font-size:13px;}
+  .logo-sub{display:none;}
+  .topbar-right{gap:0;}
+  .topbar-user{max-width:none;}
+  .topbar-user-name{display:none;}
+  .topbar-left > .btn.btn-sm,
+  .topbar-right > .btn.btn-sm,
+  .topbar-right > a.btn.btn-sm,
+  .topbar-right > div > .btn.btn-sm{min-width:36px;min-height:40px;padding:8px 6px;justify-content:center;}
+  .topbar-popover{position:fixed;top:calc(var(--tb) + 8px);left:8px;right:8px;width:auto;}
+
+  /* Page chrome */
+  .ph{flex-direction:column;align-items:flex-start;}
+  .ph-actions{width:100%;}
+  .ph-actions .fi{max-width:100%;}
+  .sh{flex-wrap:wrap;align-items:flex-start;gap:8px;}
+  .sh .filters{flex:1 1 100%;}
+  .filters .filter-sort{margin-left:0;width:100%;flex:1 1 100%;}
+  .fb{min-height:36px;padding:8px 12px;}
+  .nav-item{padding:12px 16px;min-height:44px;}
+  .tab{min-height:44px;padding:12px 14px;}
+  .tabs{scrollbar-width:none;-webkit-overflow-scrolling:touch;}
+  .tabs::-webkit-scrollbar{display:none;}
+  .tb{padding:14px;}
+
+  /* Project cards: the address is the thing you're scanning for. Give it
+     the full row, and put the foreman / status / menu on the line below. */
+  .pc{flex-direction:column;align-items:stretch;gap:8px;padding:12px 14px;max-width:none;}
+  .pc .pn,.pc .ps{white-space:normal;overflow:visible;text-overflow:unset;overflow-wrap:break-word;line-height:1.35;}
+  .pc .pn{font-size:15px;}
+  .pc .ps{margin-top:2px;}
+  .pc .pm{flex-wrap:wrap;gap:8px;width:100%;}
+  .pc .pm > :last-child{margin-left:auto;}
+  .pc select.badge{min-height:32px;padding:5px 12px;}
+  .pc .pm .btn{min-width:40px;min-height:40px;}
+
+  /* Detail grids and info rows */
+  .ig{grid-template-columns:1fr;gap:16px;}
+  .ir{gap:8px;align-items:flex-start;}
+  .ik{flex-shrink:0;}
+  .iv{min-width:0;overflow-wrap:anywhere;}
+  .ir .fi{max-width:100%;}
+
+  /* Forms: 16px inputs so iOS doesn't zoom the page on focus. Action rows wrap. */
+  .fi,select.fi,textarea.fi{font-size:16px;}
+  .ma{flex-wrap:wrap;}
+  .ma .btn{min-height:40px;}
+  .mb,.mb.wide,.mb.xl,.mb.xxl{width:calc(100vw - 16px);max-height:calc(100vh - 16px);}
+  .mo{padding:8px;}
+  .login-card{padding:24px 18px;}
+
+  /* Tables keep their columns and scroll inside the card, with the
+     identifying column pinned and capped so it can't eat the whole phone. */
+  .tbl-scroll td.sticky-col,.tbl-scroll th.sticky-col{max-width:46vw;}
+  .file-grid{grid-template-columns:repeat(2,minmax(0,1fr));}
+  .lightbox{padding:8px;}
+  .lightbox-body{width:100%;max-width:100%;}
+  .wo-columns{grid-template-columns:1fr;}
+  .schedule-tools{width:100%;justify-content:flex-start;}
+  .schedule-tools .fi{flex:1 1 100%;width:100%;}
+  .command-palette{max-height:80vh;}
+  .tw{left:12px;right:auto;bottom:84px;max-width:calc(100vw - 96px);}
+  .ticker-bar{padding:6px 12px;}
 }

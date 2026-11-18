@@ -252,7 +252,7 @@ export default function RentalPropertyDetail() {
         </div>
       </div>
 
-      <div className="tabs" style={{ margin: '0 -24px 0', borderRadius: 0, position: 'sticky', top: 'var(--tb)', zIndex: 50 }}>
+      <div className="tabs bleed-x" style={{ borderRadius: 0, position: 'sticky', top: 'var(--tb)', zIndex: 50 }}>
         {TABS.map((t) => (
           <button key={t} type="button" className={`tab${activeTab === t ? ' on' : ''}`} onClick={() => scrollToSection(t)}>
             {t}

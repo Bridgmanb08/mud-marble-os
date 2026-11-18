@@ -70,7 +70,7 @@ export function AppLayout() {
       <Sidebar isOpen={sidebarOpen} onClose={() => setSidebarOpen(false)} />
       {sidebarOpen && <div className="sidebar-backdrop" onClick={() => setSidebarOpen(false)} />}
       <div className="main">
-        <div style={{ position: 'sticky', top: 0, zIndex: 95, margin: '-24px -24px 16px' }}>
+        <div className="page-ticker">
           <NotificationTicker />
         </div>
         <Outlet />

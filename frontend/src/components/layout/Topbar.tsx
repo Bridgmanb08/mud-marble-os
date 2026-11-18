@@ -18,7 +18,7 @@ export function Topbar({ onOpenSidebar }: TopbarProps) {
 
   return (
     <div className="topbar">
-      <div style={{ display: 'flex', alignItems: 'center', gap: 20 }}>
+      <div className="topbar-left">
         <button
           type="button"
           className="btn btn-sm btn-ghost hamburger-btn"
@@ -55,21 +55,21 @@ export function Topbar({ onOpenSidebar }: TopbarProps) {
           </span>
         </button>
       </div>
-      <div className="topbar-right" style={{ position: 'relative', display: 'flex', alignItems: 'center', gap: 10 }}>
+      <div className="topbar-right" style={{ position: 'relative' }}>
         <Link to="/settings" className="btn btn-sm btn-ghost" title="Settings">
           <IconSettings size={16} />
         </Link>
         <FathomImportHistoryPanel />
         {user?.role === 'viewer' && <span className="badge bg-gray">Read-only</span>}
         <NotificationBell />
-        <button className="btn btn-sm btn-ghost" onClick={() => setMenuOpen((v) => !v)}>
-          {user?.name || user?.email}
+        <button className="btn btn-sm btn-ghost topbar-user" onClick={() => setMenuOpen((v) => !v)} aria-label="Account menu">
+          <span className="topbar-user-name">{user?.name || user?.email}</span>
           <IconChevronDown size={14} />
         </button>
         {menuOpen && (
           <div
             className="card"
-            style={{ position: 'absolute', top: '110%', right: 0, padding: 6, minWidth: 140 }}
+            style={{ position: 'absolute', top: '110%', right: 0, padding: 6, minWidth: 180, maxWidth: 'calc(100vw - 16px)' }}
             onMouseLeave={() => setMenuOpen(false)}
           >
             <button

@@ -110,8 +110,7 @@ export default function Clients() {
             Gift pending
           </button>
           <select
-            className="fi"
-            style={{ width: 'auto', marginLeft: 'auto' }}
+            className="fi filter-sort"
             value={sort}
             onChange={(e) => setSort(e.target.value as 'name-asc' | 'name-desc')}
           >

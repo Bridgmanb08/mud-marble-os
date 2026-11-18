@@ -437,7 +437,7 @@ export default function Leads() {
         </div>
       </div>
 
-      <div style={{ position: 'sticky', top: 'var(--tb)', zIndex: 50, background: 'var(--bg)', margin: '0 -24px' }}>
+      <div className="bleed-x" style={{ position: 'sticky', top: 'var(--tb)', zIndex: 50, background: 'var(--bg)' }}>
         <div className="tabs" style={{ borderRadius: 0 }}>
           <div className="tab on">List view</div>
           <div className="tab disabled">Activity view</div>
@@ -448,9 +448,9 @@ export default function Leads() {
           <div className="tab disabled">Map</div>
         </div>
 
-        <div className="sh" style={{ margin: 0, padding: '12px 24px' }}>
+        <div className="sh" style={{ margin: 0, padding: '12px var(--page-pad)' }}>
           <div className="st">All leads</div>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+          <div className="ph-actions">
             <div className="filters">
               {filterOptions.map((f) => (
                 <button key={f.key} className={`fb${filter === f.key ? ' on' : ''}`} onClick={() => setFilter(f.key)}>
@@ -595,10 +595,10 @@ function LeadStageSection({
     disabled: dragDisabled,
   });
 
-  function SortTh({ label, sortKeyValue }: { label: string; sortKeyValue: SortKey }) {
+  function SortTh({ label, sortKeyValue, sticky }: { label: string; sortKeyValue: SortKey; sticky?: boolean }) {
     const active = sortKey === sortKeyValue;
     return (
-      <th className="sortable" onClick={() => toggleSort(sortKeyValue)}>
+      <th className={`sortable${sticky ? ' sticky-col' : ''}`} onClick={() => toggleSort(sortKeyValue)}>
         <span style={{ display: 'inline-flex', alignItems: 'center', gap: 3, whiteSpace: 'nowrap' }}>
           {label}
           {active ? (sortDir === 'asc' ? <IconChevronUp size={12} /> : <IconChevronDown size={12} />) : null}
@@ -641,7 +641,7 @@ function LeadStageSection({
             <table className="tbl tbl-zebra">
               <thead>
                 <tr>
-                  <SortTh label="Lead" sortKeyValue="title" />
+                  <SortTh label="Lead" sortKeyValue="title" sticky />
                   <SortTh label="Project scope" sortKeyValue="project_scope" />
                   <SortTh label="Sales stage" sortKeyValue="status" />
                   <SortTh label="Lead temp" sortKeyValue="lead_temp" />
@@ -710,7 +710,7 @@ function LeadRow({
   const isConverted = !!l.converted_client_id;
   return (
     <tr style={{ cursor: 'pointer' }} onClick={() => onOpenLead(l)}>
-      <td style={{ fontWeight: 500, color: 'var(--blue)' }}>
+      <td className="sticky-col" style={{ fontWeight: 500, color: 'var(--blue)' }}>
         <EditableCell
           value={l.first_name || ''}
           displayValue={leadTitle(l)}

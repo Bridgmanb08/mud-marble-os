@@ -382,7 +382,7 @@ export default function ProjectDetail() {
             <p style={{ fontSize: 12, color: 'var(--t3)', fontStyle: 'italic' }}>"{project.clients.notes}"</p>
           )}
         </div>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+        <div className="ph-actions">
           <button type="button" className="btn btn-sm" onClick={() => setShowEditProject(true)}>
             <IconPencil size={14} /> Edit project
           </button>
@@ -428,8 +428,8 @@ export default function ProjectDetail() {
       )}
 
       <div
-        className="tabs"
-        style={{ margin: '0 -24px 0', borderRadius: 0, position: 'sticky', top: 'var(--tb)', zIndex: 50 }}
+        className="tabs bleed-x"
+        style={{ borderRadius: 0, position: 'sticky', top: 'var(--tb)', zIndex: 50 }}
       >
         {TABS.map((t) => (
           <button key={t} type="button" className={`tab${activeTab === t ? ' on' : ''}`} onClick={() => scrollToSection(t)}>
@@ -910,8 +910,8 @@ export default function ProjectDetail() {
           <div>
             <div className="sh">
               <div className="st">{filteredTasks.length} tasks</div>
-              <div style={{ display: 'flex', gap: 8 }}>
-                <select className="fi" style={{ width: 'auto' }} value={subFilter} onChange={(e) => setSubFilter(e.target.value)}>
+              <div className="schedule-tools">
+                <select className="fi" value={subFilter} onChange={(e) => setSubFilter(e.target.value)}>
                   <option value="">All subcontractors</option>
                   {subcontractors.map((s) => (
                     <option key={s.id} value={s.id}>

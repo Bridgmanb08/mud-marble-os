@@ -192,7 +192,7 @@ export function FilesTab({ projectId, tasks }: FilesTabProps) {
                       <IconPaperclip size={11} /> {f.task_ids.length}
                     </span>
                   )}
-                  <span style={{ marginLeft: 'auto', cursor: 'pointer' }} onClick={(e) => handleDelete(f, e)}>
+                  <span className="file-delete" onClick={(e) => handleDelete(f, e)} role="button" aria-label={`Delete ${f.file_name}`}>
                     <IconTrash size={12} />
                   </span>
                 </div>

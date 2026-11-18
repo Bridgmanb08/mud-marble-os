@@ -49,7 +49,7 @@
 
 /* --- Global quick-reminder widget (mounted in AppLayout, all pages) --- */
 .qr-stack{
-  position:fixed;bottom:92px;right:24px;z-index:250;
+  position:fixed;bottom:92px;right:24px;z-index:150;
   display:flex;flex-direction:column-reverse;gap:8px;
   width:260px;max-height:50vh;overflow-y:auto;align-items:flex-end;
 }
@@ -106,8 +106,9 @@
   .job-sidebar{width:100%;position:static;max-height:none;}
   .job-sidebar-list{display:flex;flex-direction:row;overflow-x:auto;gap:6px;padding-bottom:2px;}
   .job-sidebar-item{white-space:nowrap;flex-shrink:0;width:auto;}
-  .qr-stack{right:12px;bottom:78px;width:calc(100vw - 24px);}
-  .qr-add{width:100%;}
+  /* Stack above the Ask button, on the right, so the address on a card stays clear. */
+  .qr-stack{left:auto;right:12px;bottom:72px;width:auto;max-width:calc(100vw - 24px);align-items:flex-end;}
+  .qr-add{width:min(280px,calc(100vw - 88px));}
   .task-tabs{overflow-x:auto;}
 }
 
