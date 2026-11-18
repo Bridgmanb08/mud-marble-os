@@ -112,18 +112,7 @@ export function FathomImportWidget({
     <>
       {open && (
         <div
-          className="card"
-          style={{
-            position: 'fixed',
-            bottom: 88,
-            right: 92,
-            width: 360,
-            maxHeight: '70vh',
-            overflowY: 'auto',
-            padding: 16,
-            boxShadow: '0 8px 30px rgba(0,0,0,.18)',
-            zIndex: 300,
-          }}
+          className="card fathom-panel"
         >
           <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
             <IconFileImport size={16} color="var(--blue)" />
@@ -223,8 +212,7 @@ export function FathomImportWidget({
 
       <button
         type="button"
-        className="ai-fab"
-        style={{ right: 92 }}
+        className="ai-fab fathom-fab"
         onClick={() => setOpen((o) => !o)}
         aria-label={open ? 'Close Fathom import' : 'Import Fathom transcript'}
         title={open ? 'Close Fathom import' : 'Import Fathom transcript'}

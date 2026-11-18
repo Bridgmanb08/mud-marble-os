@@ -193,7 +193,7 @@ export default function Projects() {
           <h1>Projects</h1>
           <p>All active and pipeline projects, grouped by status</p>
         </div>
-        <div style={{ display: 'flex', gap: 8 }}>
+        <div className="ph-actions">
           <button className="btn btn-sm" onClick={() => setShowForemen(true)} title="Add foremen and set the color for each">
             <IconHelmet size={14} /> Foremen
           </button>

@@ -169,8 +169,7 @@ export function CommandPalette() {
       }}
     >
       <div
-        className="card"
-        style={{ width: 560, maxHeight: '65vh', display: 'flex', flexDirection: 'column', overflow: 'hidden' }}
+        className="card command-palette"
       >
         <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '10px 14px', borderBottom: '1px solid var(--border)' }}>
           <IconSearch size={16} style={{ color: 'var(--t3)' }} />

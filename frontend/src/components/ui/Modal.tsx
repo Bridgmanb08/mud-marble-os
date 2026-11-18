@@ -45,11 +45,13 @@ export function Modal({ title, onClose, children, wide, xl, xxl, resizable }: Mo
     if (!start) return;
     const dx = e.clientX - start.x;
     const dy = e.clientY - start.y;
-    const maxWidth = window.innerWidth - VIEWPORT_MARGIN;
-    const maxHeight = window.innerHeight - VIEWPORT_MARGIN;
+    const maxWidth = Math.max(280, window.innerWidth - VIEWPORT_MARGIN);
+    const maxHeight = Math.max(200, window.innerHeight - VIEWPORT_MARGIN);
+    const minWidth = Math.min(MIN_WIDTH, maxWidth);
+    const minHeight = Math.min(MIN_HEIGHT, maxHeight);
     setSize({
-      width: Math.min(maxWidth, Math.max(MIN_WIDTH, start.width + dx * 2)),
-      height: Math.min(maxHeight, Math.max(MIN_HEIGHT, start.height + dy * 2)),
+      width: Math.min(maxWidth, Math.max(minWidth, start.width + dx * 2)),
+      height: Math.min(maxHeight, Math.max(minHeight, start.height + dy * 2)),
     });
   }
 

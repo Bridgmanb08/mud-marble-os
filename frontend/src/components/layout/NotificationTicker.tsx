@@ -98,15 +98,8 @@ export function NotificationTicker() {
   return (
     <>
       <div
-        style={{
-          display: 'flex',
-          alignItems: 'center',
-          gap: 10,
-          padding: '6px 20px',
-          background: current.urgent ? 'var(--rbg)' : 'var(--bbg)',
-          borderBottom: '1px solid var(--border)',
-          fontSize: 12.5,
-        }}
+        className="ticker-bar"
+        style={{ background: current.urgent ? 'var(--rbg)' : 'var(--bbg)', color: current.urgent ? 'var(--rtx)' : 'var(--btx)' }}
       >
         {current.kind === 'task' ? (
           <IconAlertTriangle size={14} style={{ color: current.urgent ? 'var(--rtx)' : 'var(--btx)', flexShrink: 0 }} />
@@ -115,8 +108,8 @@ export function NotificationTicker() {
         )}
         <button
           type="button"
-          className="btn-reset"
-          style={{ flex: 1, textAlign: 'left', cursor: 'pointer', color: current.urgent ? 'var(--rtx)' : 'var(--btx)' }}
+          className="btn-reset ticker-text"
+          style={{ color: 'inherit' }}
           onClick={current.onClick}
         >
           {current.text}

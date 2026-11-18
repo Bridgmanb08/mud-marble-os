@@ -108,7 +108,7 @@ export default function RentalWorkOrders() {
           <div className="empty-s">Create one to track a maintenance request per property.</div>
         </div>
       ) : (
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 16 }}>
+        <div className="wo-columns">
           {COLUMNS.map((col) => (
             <div key={col.id}>
               <div style={{ fontSize: 11, fontWeight: 600, color: 'var(--t2)', textTransform: 'uppercase', marginBottom: 8 }}>

@@ -49,6 +49,31 @@
 .phase-legend span{display:inline-flex;align-items:center;gap:4px;}
 .phase-legend-dot{width:8px;height:8px;border-radius:50%;display:inline-block;}
 
+/* Eleven phases do not fit a phone. Scroll the track sideways with a
+   readable label under each dot, and open the add-a-phase form as a
+   bottom sheet so the scroll container doesn't clip it. */
+@media(max-width:768px){
+  .phase-tracker{overflow-x:auto;-webkit-overflow-scrolling:touch;padding-bottom:4px;}
+  .phase-tracker-track{width:max-content;min-width:100%;}
+  .phase-segment{flex:0 0 156px;width:156px;min-width:156px;}
+  .phase-manual-date{
+    display:block;width:100% !important;max-width:100% !important;min-width:0 !important;
+    box-sizing:border-box;margin-top:4px;
+  }
+  .phase-segment::before{top:16px;}
+  .phase-dot-btn{width:32px;height:32px;}
+  .phase-segment.current .phase-dot-btn{width:34px;height:34px;}
+  .phase-insert-btn{opacity:1;top:16px;width:22px;height:22px;}
+  .phase-badge{top:0;}
+  .phase-label{max-width:88px;overflow-wrap:break-word;}
+  .phase-dates{white-space:normal;overflow-wrap:anywhere;max-width:88px;}
+  .phase-quick-add{
+    position:fixed !important;top:auto !important;bottom:12px !important;
+    left:12px !important;right:12px !important;width:auto !important;
+    transform:none !important;margin:0 !important;max-height:70vh;overflow-y:auto;z-index:180;
+  }
+}
+
 /* Permit checklist -- fixed "boxes" per permit, matching the established
    Financials/Home Details convention (checkbox + date, not an open log). */
 .permit-box{
@@ -58,6 +83,11 @@
 .permit-box label{display:flex;align-items:center;gap:8px;font-size:13px;font-weight:500;cursor:pointer;flex:1;min-width:0;}
 .permit-box input[type="date"]{max-width:150px;}
 .permit-box input.permit-number{flex:0 0 170px;width:170px;min-width:0;}
+@media(max-width:768px){
+  .permit-box{flex-wrap:wrap;align-items:flex-start;}
+  .permit-box label{flex:1 1 100%;}
+  .permit-box input.permit-number,.permit-box input[type="date"]{flex:1 1 140px;width:auto;max-width:none;}
+}
 
 /* Dumpster status card */
 .dumpster-card{display:flex;flex-wrap:wrap;gap:14px;align-items:flex-end;}

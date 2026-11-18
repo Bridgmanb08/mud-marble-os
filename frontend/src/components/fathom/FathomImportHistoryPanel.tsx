@@ -41,8 +41,7 @@ export function FathomImportHistoryPanel() {
       </button>
       {open && (
         <div
-          className="card"
-          style={{ position: 'absolute', top: '110%', right: 0, width: 340, maxHeight: 440, overflowY: 'auto', zIndex: 30 }}
+          className="card topbar-popover"
           onMouseLeave={() => setOpen(false)}
         >
           <div style={{ padding: '10px 12px', borderBottom: '1px solid var(--border)' }}>

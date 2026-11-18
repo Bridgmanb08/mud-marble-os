@@ -193,7 +193,7 @@ export function PhaseTracker({
   const rowByPhase = new Map((progress?.phases || []).map((r) => [r.phase, r]));
 
   return (
-    <div onPointerDownCapture={() => holdScroll()}>
+    <div className="phase-tracker" onPointerDownCapture={() => holdScroll()}>
       <div className="phase-tracker-track">
         {phaseKeys.map((phase, i) => {
           const row = rowByPhase.get(phase);
