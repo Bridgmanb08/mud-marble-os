@@ -2,9 +2,10 @@ import re
 from datetime import date
 from typing import Optional
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException
 
 from .. import calendar_events
+from ..agent_bots import AgentMentionContext, record_agent_mentions
 from ..deps import CurrentUser, get_current_user
 from ..mentions import create_mention_notifications
 from ..project_phases import merge_custom_phases
@@ -606,18 +607,41 @@ async def list_project_notes(project_id: str, _: CurrentUser = Depends(get_curre
 
 @router.post("/{project_id}/notes", response_model=ProjectNoteOut)
 async def create_project_note(
-    project_id: str, body: ProjectNoteCreate, current_user: CurrentUser = Depends(get_current_user)
+    project_id: str,
+    body: ProjectNoteCreate,
+    background_tasks: BackgroundTasks,
+    current_user: CurrentUser = Depends(get_current_user),
 ):
     rows = await db_post("project_notes", {"project_id": project_id, **body.model_dump()})
     note = rows[0]
     proj = await db_get("projects", f"?id=eq.{project_id}&select=name")
     project_name = proj[0]["name"].split("|")[0].strip() if proj else "a project"
-    await create_mention_notifications(
-        content=body.content,
-        project_id=project_id,
-        source_type="project_note",
-        source_id=note["id"],
-        message=f"{current_user.name or current_user.email} mentioned you in a note on {project_name}",
-        exclude_user_id=current_user.id,
-    )
+    author = current_user.name or current_user.email
+    # Human notifications keep their existing error behavior. Bot delivery is
+    # recorded either way, and record_agent_mentions never raises, so a
+    # missing agent_mentions table cannot turn a saved note into an error.
+    try:
+        await create_mention_notifications(
+            content=body.content,
+            project_id=project_id,
+            source_type="project_note",
+            source_id=note["id"],
+            message=f"{author} mentioned you in a note on {project_name}",
+            exclude_user_id=current_user.id,
+        )
+    finally:
+        await record_agent_mentions(
+            AgentMentionContext(
+                comment_id=note["id"],
+                source_type="project_note",
+                author=author,
+                author_id=current_user.id,
+                text=body.content,
+                created_at=note.get("created_at") or "",
+                link_path=f"/projects/{project_id}?tab=Notes",
+                project_id=project_id,
+                project_name=project_name if proj else None,
+            ),
+            background_tasks,
+        )
     return note

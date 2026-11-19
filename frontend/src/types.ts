@@ -988,6 +988,13 @@ export interface UserDirectoryEntry {
   name: string;
 }
 
+export interface MentionDirectoryEntry {
+  id: string;
+  name: string;
+  is_bot?: boolean;
+  bot_role?: string | null;
+}
+
 export interface InboundMedia {
   id: string;
   from_phone: string;

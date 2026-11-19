@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState, type ChangeEvent, type CSSProperties, type KeyboardEvent } from 'react';
 import { api } from '../../api/client';
-import type { UserDirectoryEntry } from '../../types';
+import type { MentionDirectoryEntry } from '../../types';
 
 interface MentionTextareaProps {
   value: string;
@@ -15,14 +15,16 @@ interface MentionTextareaProps {
 }
 
 export function MentionTextarea({ value, onChange, placeholder, style, onSubmit }: MentionTextareaProps) {
-  const [directory, setDirectory] = useState<UserDirectoryEntry[]>([]);
-  const [suggestions, setSuggestions] = useState<UserDirectoryEntry[]>([]);
+  const [directory, setDirectory] = useState<MentionDirectoryEntry[]>([]);
+  const [suggestions, setSuggestions] = useState<MentionDirectoryEntry[]>([]);
   const [mentionStart, setMentionStart] = useState<number | null>(null);
   const [highlighted, setHighlighted] = useState(0);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
   useEffect(() => {
-    api.get<UserDirectoryEntry[]>('/users/directory').then(setDirectory).catch(() => {});
+    // Mention directory, not the assignee directory: the five AI bots are
+    // included here and nowhere a task can be assigned.
+    api.get<MentionDirectoryEntry[]>('/users/mention-directory').then(setDirectory).catch(() => {});
   }, []);
 
   function handleChange(e: ChangeEvent<HTMLTextAreaElement>) {
@@ -36,7 +38,16 @@ export function MentionTextarea({ value, onChange, placeholder, style, onSubmit 
       const query = match[1].toLowerCase();
       const matches = directory.filter((u) => u.name.toLowerCase().includes(query));
       if (matches.length > 0) {
-        setSuggestions(matches.slice(0, 6));
+        // Keep every matching bot inside the window. A short query like
+        // "@m" matches most of the team; without a reserved slot Mike Ross
+        // would be the name the cap drops.
+        const cap = 12;
+        const bots = matches.filter((u) => u.is_bot);
+        const people = matches.filter((u) => !u.is_bot);
+        const keptBots = bots.slice(0, cap);
+        const keptPeople = people.slice(0, Math.max(0, cap - keptBots.length));
+        const shown = [...keptPeople, ...keptBots].sort((a, b) => a.name.localeCompare(b.name));
+        setSuggestions(shown);
         setMentionStart(cursor - match[0].length);
         setHighlighted(0);
         return;
@@ -113,7 +124,7 @@ export function MentionTextarea({ value, onChange, placeholder, style, onSubmit 
       {suggestions.length > 0 && (
         <div
           className="card"
-          style={{ position: 'absolute', zIndex: 20, top: '100%', left: 0, right: 0, marginTop: 2, maxHeight: 160, overflowY: 'auto' }}
+          style={{ position: 'absolute', zIndex: 20, top: '100%', left: 0, right: 0, marginTop: 2, maxHeight: 240, overflowY: 'auto' }}
         >
           {suggestions.map((u, i) => (
             <button
@@ -121,7 +132,9 @@ export function MentionTextarea({ value, onChange, placeholder, style, onSubmit 
               type="button"
               className="btn-reset"
               style={{
-                display: 'block',
+                display: 'flex',
+                alignItems: 'center',
+                gap: 8,
                 width: '100%',
                 textAlign: 'left',
                 padding: '7px 10px',
@@ -132,7 +145,13 @@ export function MentionTextarea({ value, onChange, placeholder, style, onSubmit 
               onMouseEnter={() => setHighlighted(i)}
               onClick={() => selectMention(u.name)}
             >
-              @{u.name}
+              <span style={{ flex: 1, minWidth: 0 }}>
+                <span>@{u.name}</span>
+                {u.is_bot && u.bot_role && (
+                  <span style={{ display: 'block', fontSize: 11, color: 'var(--t3)', fontWeight: 400 }}>{u.bot_role}</span>
+                )}
+              </span>
+              {u.is_bot && <span className="badge bg-purple">AI bot</span>}
             </button>
           ))}
         </div>

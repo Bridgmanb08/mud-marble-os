@@ -4,8 +4,9 @@ import uuid
 from datetime import datetime, timezone
 from typing import Optional
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException
 
+from ..agent_bots import AgentMentionContext, record_agent_mentions
 from ..config import settings
 from ..deps import CurrentUser, get_current_user
 from ..media_links import assert_media_size, clean_link, extract_urls, media_kind
@@ -162,7 +163,11 @@ async def list_all_media(property_id: Optional[str] = None, _: CurrentUser = Dep
 
 
 @router.post("", response_model=RentalWorkOrderOut)
-async def create_work_order(body: RentalWorkOrderCreate, current_user: CurrentUser = Depends(get_current_user)):
+async def create_work_order(
+    body: RentalWorkOrderCreate,
+    background_tasks: BackgroundTasks,
+    current_user: CurrentUser = Depends(get_current_user),
+):
     if not (body.title or "").strip():
         raise HTTPException(status_code=400, detail="A title is required.")
     if not body.property_id:
@@ -238,14 +243,31 @@ async def create_work_order(body: RentalWorkOrderCreate, current_user: CurrentUs
         raise
 
     if body.description:
-        await create_mention_notifications(
-            content=body.description,
-            project_id=None,
-            source_type="rental_work_order",
-            source_id=created["id"],
-            message=f"{current_user.name or current_user.email} mentioned you on a work order at {address}: {body.title.strip()}",
-            exclude_user_id=current_user.id,
-        )
+        author = current_user.name or current_user.email
+        try:
+            await create_mention_notifications(
+                content=body.description,
+                project_id=None,
+                source_type="rental_work_order",
+                source_id=created["id"],
+                message=f"{author} mentioned you on a work order at {address}: {body.title.strip()}",
+                exclude_user_id=current_user.id,
+            )
+        finally:
+            await record_agent_mentions(
+                AgentMentionContext(
+                    comment_id=created["id"],
+                    source_type="rental_work_order",
+                    author=author,
+                    author_id=current_user.id,
+                    text=body.description,
+                    created_at=created.get("created_at") or "",
+                    link_path=f"/rentals/work-orders?open={created['id']}",
+                    task_id=task.id,
+                    task_name=task.title,
+                ),
+                background_tasks,
+            )
     enriched = await _enrich(rows)
     return enriched[0]
 
@@ -268,9 +290,12 @@ async def list_updates(work_order_id: str, _: CurrentUser = Depends(get_current_
 
 @router.post("/{work_order_id}/updates", response_model=RentalWorkOrderCommentOut)
 async def create_update(
-    work_order_id: str, body: RentalWorkOrderCommentCreate, current_user: CurrentUser = Depends(get_current_user)
+    work_order_id: str,
+    body: RentalWorkOrderCommentCreate,
+    background_tasks: BackgroundTasks,
+    current_user: CurrentUser = Depends(get_current_user),
 ):
-    existing = await db_get("rental_work_orders", f"?id=eq.{work_order_id}&select=id,property_id,title")
+    existing = await db_get("rental_work_orders", f"?id=eq.{work_order_id}&select=id,property_id,title,task_id")
     if not existing:
         raise HTTPException(status_code=404, detail="Work order not found")
     current = existing[0]
@@ -314,14 +339,30 @@ async def create_update(
     if text:
         address_rows = await db_get("rental_properties", f"?id=eq.{current['property_id']}&select=address")
         address = address_rows[0]["address"] if address_rows else "a rental"
-        await create_mention_notifications(
-            content=text,
-            project_id=None,
-            source_type="rental_work_order",
-            source_id=work_order_id,
-            message=f"{current_user.name or current_user.email} mentioned you on a work order at {address}: {current['title']}",
-            exclude_user_id=current_user.id,
-        )
+        author = current_user.name or current_user.email
+        try:
+            await create_mention_notifications(
+                content=text,
+                project_id=None,
+                source_type="rental_work_order",
+                source_id=work_order_id,
+                message=f"{author} mentioned you on a work order at {address}: {current['title']}",
+                exclude_user_id=current_user.id,
+            )
+        finally:
+            await record_agent_mentions(
+                AgentMentionContext(
+                    comment_id=comment["id"],
+                    source_type="rental_work_order_update",
+                    author=author,
+                    author_id=current_user.id,
+                    text=text,
+                    created_at=comment.get("created_at") or "",
+                    link_path=f"/rentals/work-orders?open={work_order_id}",
+                    task_id=current.get("task_id"),
+                ),
+                background_tasks,
+            )
     return RentalWorkOrderCommentOut(**comment, author_name=current_user.name)
 
 

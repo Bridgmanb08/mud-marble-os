@@ -24,6 +24,11 @@ class Settings(BaseSettings):
     cron_secret: str = ""
     resend_api_key: str = ""
     email_from: str = "Mud & Marble OS <notify@notify.mudmarble.com>"
+    # Server-only. When a comment @-mentions an AI bot, the API POSTs the note
+    # to this URL and sends MMOS_AGENT_WEBHOOK_AUTH verbatim as Authorization.
+    # Both empty means "keep the agent_mentions row and do not call out".
+    mmos_agent_webhook_url: str = ""
+    mmos_agent_webhook_auth: str = ""
 
 
 settings = Settings()

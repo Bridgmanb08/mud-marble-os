@@ -31,6 +31,8 @@ Supabase (Postgres via REST) for storage, deployed as a single Vercel project.
 | `CRON_SECRET` | api | required for email summaries — any long random string; the scheduler sends it as `Authorization: Bearer <secret>` to `/api/cron/notifications-tick` |
 | `RESEND_API_KEY` | api | required to actually send email summaries (without it, previews still work and nothing is sent) |
 | `EMAIL_FROM` | api | optional — defaults to `Mud & Marble OS <notify@notify.mudmarble.com>`; the domain must be verified in Resend |
+| `MMOS_AGENT_WEBHOOK_URL` | api | optional — when a comment @-mentions an AI bot, the API POSTs one JSON body here. If this or `MMOS_AGENT_WEBHOOK_AUTH` is unset, the `agent_mentions` row is still saved and nothing is sent. |
+| `MMOS_AGENT_WEBHOOK_AUTH` | api | optional **secret** — sent verbatim as the `Authorization` header on that POST. Do not add `Bearer ` unless the receiver expects the header to contain those characters. Never put either value in a `VITE_` variable. |
 
 ## First-time setup
 
@@ -60,6 +62,35 @@ npm run dev
 ```
 
 Visit `http://localhost:5173`.
+
+## AI bot @-mentions
+
+Donna Paulsen, Mike Ross, Rachel Zane, Jessica Pearson, and Louis Litt show up in every comment box that already has @-mentions (task comments, project notes, rental work orders). They are labeled "AI bot". They are not login accounts, they are not in `app_users`, and they do not appear in the assignee picker.
+
+1. Run `supabase/migrations/0091_agent_mentions.sql` in the Supabase SQL editor. Nothing in this repo applies SQL for you. Until it has been run, a comment still saves; the bot row is skipped and the API logs the failure.
+2. In Vercel → Project → Settings → Environment Variables, set `MMOS_AGENT_WEBHOOK_URL` and `MMOS_AGENT_WEBHOOK_AUTH` on the **API** (Production, and Preview if a preview deployment should deliver). These stay on the server. Do not create Supabase Edge Function secrets for them — there is no edge function. The FastAPI app POSTs the JSON after the comment is saved.
+3. Redeploy so the running API sees the new variables.
+4. Deep links use `PUBLIC_BASE_URL` when it is set, otherwise `FRONTEND_ORIGIN`. Set `PUBLIC_BASE_URL` to the deployed origin (for example `https://mudmarbleos.vercel.app`) if the link should not point at localhost.
+
+One comment that mentions two bots writes two `agent_mentions` rows and one POST:
+
+```json
+{
+  "comment_id": "...",
+  "mentioned_bots": ["Mike Ross", "Rachel Zane"],
+  "author": "Brent Bridgman",
+  "text": "...",
+  "task": {"id": "...", "name": "..."},
+  "job": {"id": "...", "name": "..."},
+  "project": {"id": "...", "name": "..."},
+  "link": "https://<origin>/tasks?task=...",
+  "created_at": "..."
+}
+```
+
+`job` and `project` are the same project. A rental mention with no project sends `null` for both. `delivered` becomes true after a 2xx response. `acked` stays false; nothing sets it yet. If the webhook is down, the API retries twice more, logs the status, and leaves `delivered` false. The comment response does not wait on that POST and does not fail when it fails.
+
+A human @-mention still writes a `notifications` row and does not write `agent_mentions`.
 
 ## Twilio MMS setup (optional)
 

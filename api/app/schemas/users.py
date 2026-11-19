@@ -34,6 +34,13 @@ class UserDirectoryEntry(BaseModel):
     name: str
 
 
+class MentionDirectoryEntry(BaseModel):
+    id: str
+    name: str
+    is_bot: bool = False
+    bot_role: Optional[str] = None
+
+
 class UserPreferences(BaseModel):
     quick_task_widget_enabled: bool = False
 
