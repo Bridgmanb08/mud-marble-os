@@ -1,7 +1,9 @@
 from fastapi import APIRouter, Depends, HTTPException
 
+from ..agent_bots import build_mention_directory
 from ..deps import CurrentUser, get_current_user, require_admin
 from ..schemas.users import (
+    MentionDirectoryEntry,
     PasswordReset,
     UserCreate,
     UserDirectoryEntry,
@@ -81,6 +83,18 @@ async def list_user_directory(_: CurrentUser = Depends(get_current_user)):
             entries.append({"id": f"roster:{name}", "name": name})
     entries.sort(key=lambda u: u["name"])
     return entries
+
+
+@router.get("/mention-directory", response_model=list[MentionDirectoryEntry])
+async def list_mention_directory(_: CurrentUser = Depends(get_current_user)):
+    """Assignee directory plus the five AI bots.
+
+    Mention boxes call this. The assignee pickers keep using /users/directory,
+    which does not include the bots, so a bot cannot be assigned a task or
+    given a login.
+    """
+    real_users = await db_get("app_users", "?select=id,name&order=name.asc")
+    return build_mention_directory(real_users)
 
 
 @router.get("/me/preferences", response_model=UserPreferences)

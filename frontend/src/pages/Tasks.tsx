@@ -122,6 +122,24 @@ export default function Tasks() {
     if (t) setDetailTask(t);
   }
 
+  // /tasks?task=<id> opens that task's comment thread. Bot mention webhooks
+  // use this link. Closing the drawer drops the param so it doesn't reopen.
+  useEffect(() => {
+    const taskId = searchParams.get('task');
+    if (!taskId || !tasks) return;
+    const match = tasks.find((t) => t.id === taskId);
+    if (match) setDetailTask((current) => current ?? match);
+  }, [searchParams, tasks]);
+
+  function closeDetail() {
+    setDetailTask(undefined);
+    if (searchParams.has('task')) {
+      const next = new URLSearchParams(searchParams);
+      next.delete('task');
+      setSearchParams(next, { replace: true });
+    }
+  }
+
   function applyView(v: BoardView) {
     setActiveViewId(v.id);
     setView(v.view_type === 'table' ? 'table' : v.view_type === 'timeline' ? 'timeline' : 'kanban');
@@ -363,15 +381,15 @@ export default function Tasks() {
         <TaskDetailDrawer
           task={detailTask}
           allTasks={tasks || []}
-          onClose={() => setDetailTask(undefined)}
+          onClose={closeDetail}
           onChanged={load}
           onSaved={() => {
-            setDetailTask(undefined);
+            closeDetail();
             toast('Task updated');
             load();
           }}
           onDeleted={() => {
-            setDetailTask(undefined);
+            closeDetail();
             toast('Task deleted');
             load();
           }}

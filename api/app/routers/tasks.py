@@ -3,8 +3,9 @@ from collections import defaultdict
 from datetime import datetime, timezone
 from typing import Optional
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException
 
+from ..agent_bots import AgentMentionContext, record_agent_mentions
 from ..deps import CurrentUser, get_current_user
 from ..mentions import create_mention_notifications
 from ..schemas.tasks import (
@@ -464,36 +465,60 @@ async def list_comments(task_id: str, current_user: CurrentUser = Depends(get_cu
 
 
 @router.post("/{task_id}/comments", response_model=CommentOut)
-async def create_comment(task_id: str, body: CommentCreate, current_user: CurrentUser = Depends(get_current_user)):
+async def create_comment(
+    task_id: str,
+    body: CommentCreate,
+    background_tasks: BackgroundTasks,
+    current_user: CurrentUser = Depends(get_current_user),
+):
+    author = current_user.name or current_user.email
     rows = await db_post(
-        "task_comments", {"task_id": task_id, "author": current_user.name or current_user.email, "content": body.content}
+        "task_comments", {"task_id": task_id, "author": author, "content": body.content}
     )
     comment = rows[0]
 
     # The comment is already saved at this point -- everything below is a
-    # best-effort side effect (notifying anyone @mentioned). If it throws for
-    # any reason (a malformed mention, a transient DB hiccup scanning
-    # app_users), the whole request must not come back as a failure: from the
+    # best-effort side effect (notifying anyone @mentioned, including an AI
+    # bot). If it throws for any reason (a malformed mention, a transient DB
+    # hiccup scanning app_users, the agent_mentions migration not applied
+    # yet), the whole request must not come back as a failure: from the
     # caller's side that looks exactly like "I posted a comment and it
     # disappeared" -- the comment is really sitting in the DB the whole time,
     # but the client never sees the success response and never refreshes to
     # show it. Isolate it the same way every other non-critical-path AI/side
     # effect in this codebase degrades gracefully instead of sinking the
     # primary action.
+    task_title = None
+    project_id = None
     try:
         task_rows = await db_get("schedule_items", f"?id=eq.{task_id}&select=title,project_id")
-        task_title = task_rows[0]["title"] if task_rows else "a task"
+        task_title = task_rows[0]["title"] if task_rows else None
         project_id = task_rows[0].get("project_id") if task_rows else None
         await create_mention_notifications(
             content=body.content,
             project_id=project_id,
             source_type="task_comment",
             source_id=comment["id"],
-            message=f'{current_user.name or current_user.email} mentioned you on task "{task_title}"',
+            message=f'{author} mentioned you on task "{task_title or "a task"}"',
             exclude_user_id=current_user.id,
         )
     except Exception:
         pass
+    await record_agent_mentions(
+        AgentMentionContext(
+            comment_id=comment["id"],
+            source_type="task_comment",
+            author=author,
+            author_id=current_user.id,
+            text=body.content,
+            created_at=comment.get("created_at") or "",
+            link_path=f"/tasks?task={task_id}",
+            task_id=task_id,
+            task_name=task_title,
+            project_id=project_id,
+        ),
+        background_tasks,
+    )
     return comment
 
 
